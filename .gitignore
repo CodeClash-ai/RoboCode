@@ -19,5 +19,6 @@
 hs_err_pid*
 replay_pid*
 
-# custom
+# CodeClash
 .claude/
+logs/
