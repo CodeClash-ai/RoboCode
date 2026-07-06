@@ -1,13 +1,15 @@
+// CodeClash ladder import
+// Source: https://github.com/alpian/robocode/blob/HEAD/src/main/java/com/github/alpian/robocode/tanks/TarekTank.java
+// Author: alpian   License: unspecified
+// Imported verbatim; only repackaged to the arena package + main class renamed to MyTank.
 package custom;
 
 import robocode.Robot;
 import robocode.ScannedRobotEvent;
 
-import java.awt.*;
-
 public class MyTank extends Robot {
     public void run() {
-        while(true) {
+        while (true) {
             ahead(100);
             turnGunRight(360);
             back(100);
