@@ -1,21 +1,64 @@
+// CodeClash ladder import
+// Source: https://github.com/0x65-e/Kokomo/blob/HEAD/src/california/surf/Kokomo.java
+// Author: 0x65-e   License: unspecified
+// Imported verbatim; only repackaged to the arena package + main class renamed to MyTank (+ helper files flattened).
 package custom;
 
-import robocode.Robot;
+import java.awt.Color;
+import java.awt.geom.Point2D;
+
+import robocode.BulletHitBulletEvent;
+import robocode.HitByBulletEvent;
 import robocode.ScannedRobotEvent;
+import robocode.util.Utils;
 
-import java.awt.*;
-
-public class MyTank extends Robot {
-    public void run() {
-        while(true) {
-            ahead(100);
-            turnGunRight(360);
-            back(100);
-            turnGunRight(360);
-        }
+/**
+ * A Wave-surfing bot that uses GuessFactors with Dynamic Segmentation (using a regression tree) for shooting
+ * @author CaliforniaCraig
+ *
+ */
+public class MyTank extends RobotBase {
+	
+	private DSVCSGun _gun;
+	private Surfer _surfer;
+	
+	
+    @Override
+    public void initComponents() {
+    	System.out.println("Initializing components...");
+    	_gun = new DSVCSGun(this);
+    	_surfer = new Surfer(this);
+    }
+    
+    @Override
+    public void setColors() {
+    	// Surf-themed/woodie colors
+    	Color aqua = new Color(65, 101, 150);
+    	Color teal = new Color(65, 150, 148);
+    	Color chestnut = new Color(152, 91, 39);
+    	Color sandy = new Color(210, 151, 73);
+    	
+    	setColors(aqua, chestnut, sandy, null, teal);
+    }
+    
+    public void onScannedRobot(ScannedRobotEvent e) {	
+    	// Fixed-width radar scan lock (wiki)
+        double absBearing = e.getBearingRadians() + getHeadingRadians();
+        setTurnRadarRightRadians(Utils.normalRelativeAngle(absBearing - getRadarHeadingRadians()) * 2);
+        
+    	_surfer.onScannedRobot(e);
+        _gun.onScannedRobot(e);
+    }
+    
+    /* Pass-through events to relevant component handlers */
+    
+    public void onHitByBullet(HitByBulletEvent e) {
+    	_surfer.onHitByBullet(e);
+    }
+    
+    public void onBulletHitBulletEvent(BulletHitBulletEvent e) {
+    	_gun.onBulletHitBulletEvent(e);
+    	_surfer.onBulletHitBulletEvent(e);
     }
 
-    public void onScannedRobot(ScannedRobotEvent e) {
-        fire(1);
-    }
 }
