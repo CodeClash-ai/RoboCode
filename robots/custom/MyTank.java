@@ -1,21 +1,57 @@
+// CodeClash ladder import
+// Source: https://github.com/vftheodoro/BarbieScript-RoboCode/blob/HEAD/Source Code BarbieScript/BarbieScript.java
+// Author: vftheodoro   License: unspecified
+// Imported verbatim; only repackaged to the arena package + main class renamed to MyTank.
 package custom;
+import robocode.*;
+import java.awt.Color;
 
-import robocode.Robot;
-import robocode.ScannedRobotEvent;
-
-import java.awt.*;
-
-public class MyTank extends Robot {
+public class MyTank extends AdvancedRobot
+{
+  int moveDirection=1;
     public void run() {
-        while(true) {
-            ahead(100);
-            turnGunRight(360);
-            back(100);
-            turnGunRight(360);
-        }
+        setAdjustRadarForRobotTurn(true);
+        setBodyColor(Color.magenta);
+        setGunColor(Color.white);
+        setRadarColor(Color.magenta);
+        setScanColor(Color.white);
+        setBulletColor(Color.magenta);
+        setAdjustGunForRobotTurn(true);
+        turnRadarRightRadians(Double.POSITIVE_INFINITY); 
     }
 
+   
     public void onScannedRobot(ScannedRobotEvent e) {
-        fire(1);
+        double absBearing=e.getBearingRadians()+getHeadingRadians();
+        double latVel=e.getVelocity() * Math.sin(e.getHeadingRadians() -absBearing);
+        double gunTurnAmt;
+        setTurnRadarLeftRadians(getRadarTurnRemainingRadians());
+        if(Math.random()>.9){
+            setMaxVelocity((12*Math.random())+12);
+        }
+        if (e.getDistance() > 150) {
+            gunTurnAmt = robocode.util.Utils.normalRelativeAngle(absBearing- getGunHeadingRadians()+latVel/22);
+            setTurnGunRightRadians(gunTurnAmt);  
+            setTurnRightRadians(robocode.util.Utils.normalRelativeAngle(absBearing-getHeadingRadians()+latVel/getVelocity()));
+            setAhead((e.getDistance() - 140)*moveDirection);
+            setFire(3);
+        }
+        else{
+            gunTurnAmt = robocode.util.Utils.normalRelativeAngle(absBearing- getGunHeadingRadians()+latVel/15);
+            setTurnGunRightRadians(gunTurnAmt);
+            setTurnLeft(-90-e.getBearing());
+            setAhead((e.getDistance() - 140)*moveDirection);
+            setFire(3);
+        }
+    }
+    public void onHitWall(HitWallEvent e){
+        moveDirection=-moveDirection;
+    }
+   
+    public void onWin(WinEvent e) {
+        for (int i = 0; i < 50; i++) {
+            turnRight(30);
+            turnLeft(30);
+        }
     }
 }
