@@ -1,21 +1,30 @@
+// CodeClash ladder import
+// Source: https://github.com/WouterJoosse/Robocode/blob/HEAD/src/wiki/InfinityLock.java
+// Author: WouterJoosse   License: unspecified
+// Imported verbatim; only repackaged to the arena package + main class renamed to MyTank.
 package custom;
 
-import robocode.Robot;
-import robocode.ScannedRobotEvent;
+import robocode.*;
 
 import java.awt.*;
 
-public class MyTank extends Robot {
+/***
+ *  http://robowiki.net/wiki/One_on_One_Radar
+ */
+public class MyTank extends AdvancedRobot{
+
+
     public void run() {
-        while(true) {
-            ahead(100);
-            turnGunRight(360);
-            back(100);
-            turnGunRight(360);
-        }
+
+        setRadarColor(Color.ORANGE);
+
+        // This doesn't work if you put the setTurnRadar... in the
+        // while (true) - loop...
+        setTurnRadarRightRadians(Double.POSITIVE_INFINITY);
+        execute();
     }
 
     public void onScannedRobot(ScannedRobotEvent e) {
-        fire(1);
+        setTurnRadarLeftRadians(getRadarTurnRemainingRadians());
     }
 }
