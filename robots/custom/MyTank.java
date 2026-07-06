@@ -1,21 +1,23 @@
+// CodeClash ladder import
+// Source: https://github.com/PEZ/Bots/blob/HEAD/pez/femto/WallsPoetHaiku.java
+// Author: PEZ (Peter Strömberg) et al.   License: RWPCL
+// Imported verbatim; only repackaged to the arena package + main class renamed to MyTank.
 package custom;
+import robocode.*;
 
-import robocode.Robot;
-import robocode.ScannedRobotEvent;
+// By Peter Stromberg, http://robowiki.dyndns.org/?PEZ
+// Haiku wall avoidance. Renamed WallsPoetHaiku -> MyTank.
 
-import java.awt.*;
-
-public class MyTank extends Robot {
+public class MyTank extends AdvancedRobot {
     public void run() {
-        while(true) {
-            ahead(100);
-            turnGunRight(360);
-            back(100);
-            turnGunRight(360);
+        setTurnGunRight(Double.POSITIVE_INFINITY);
+        while (true) {
+            ahead(getBattleFieldHeight() - 100);
+            setTurnRight(90 - getHeading() % 90);
         }
     }
 
     public void onScannedRobot(ScannedRobotEvent e) {
-        fire(1);
+        fire(e.getEnergy() / 4);
     }
 }
