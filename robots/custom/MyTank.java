@@ -1,21 +1,23 @@
+// CodeClash ladder import
+// Source: https://github.com/PEZ/Bots/blob/HEAD/pez/femto/Poet.java
+// Author: PEZ (Peter Strömberg) et al.   License: RWPCL
+// Imported verbatim; only repackaged to the arena package + main class renamed to MyTank.
 package custom;
+import robocode.*;
+import java.awt.geom.Point2D;
 
-import robocode.Robot;
-import robocode.ScannedRobotEvent;
+// Poet, just for fun
+// By Peter Strmberg, http://robowiki.dyndns.org/?PEZ
 
-import java.awt.*;
-
-public class MyTank extends Robot {
+public class MyTank extends AdvancedRobot {
     public void run() {
-        while(true) {
-            ahead(100);
-            turnGunRight(360);
-            back(100);
-            turnGunRight(360);
-        }
+       turnGunRightRadians(Double.POSITIVE_INFINITY);
     }
 
     public void onScannedRobot(ScannedRobotEvent e) {
-        fire(1);
+        setTurnRight(Point2D.Double.distance(400, 300, getX(), getY()) - 150);
+        setAhead(100);
+        setFire(3);
+        setTurnGunLeftRadians(getGunTurnRemainingRadians());
     }
 }
