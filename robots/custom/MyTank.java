@@ -1,21 +1,96 @@
+// CodeClash ladder import
+// Source: https://github.com/it-economics/robocode/blob/HEAD/src/main/java/com/ite/robocode/BomaxBot.java
+// Author: it-economics   License: unspecified
+// Imported verbatim; only repackaged to the arena package + main class renamed to MyTank.
+/**
+ * Copyright (c) 2001-2019 Mathew A. Nelson and Robocode contributors
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v1.0
+ * which accompanies this distribution, and is available at
+ * https://robocode.sourceforge.io/license/epl-v10.html
+ */
 package custom;
 
+import robocode.*;
 import robocode.Robot;
-import robocode.ScannedRobotEvent;
 
 import java.awt.*;
+import java.util.Random;
 
 public class MyTank extends Robot {
-    public void run() {
-        while(true) {
-            ahead(100);
-            turnGunRight(360);
-            back(100);
-            turnGunRight(360);
-        }
-    }
+	private final Random random = new Random();
 
-    public void onScannedRobot(ScannedRobotEvent e) {
-        fire(1);
-    }
+	/**
+	  Mit der Hauptmethode run() wird das Standardverhalten des Roboters definiert, das unabhängig von aufgetretenen Ereignissen ist.
+	  Die Methode wird genau einmal beim Rundenstart aufgerufen. Die Aktionen des Roboters sollten hier innerhalb einer Endlosschleife definiert werden.
+	  Die Befehle werden dabei sequentiell und nicht parallel abgearbeitet. Im Code-Beispiel wird die Farbe des Roboters auf grün gesetzt.
+	  Danach fährt der Roboter zuerst 20 Pixel nach vorne, dreht sich dann um 45 Grad
+	  nach links, scannt die Umgebung nach anderen Robotern und feuert anschließend mit einer Stärke von 1. Dieser Vorgang wiederholt sich zum Spielende.
+
+	  In den nächsten Posts gehen wir auf verschiedene Ereignisse ein, auf die ein Roboter reagieren kann.
+	 */
+	@Override
+	public void run() {
+		setBodyColor(Color.GREEN);
+		setBulletColor(Color.RED);
+		setGunColor(Color.BLUE);
+		setRadarColor(Color.YELLOW);
+		while (getEnergy() > 0) {
+			ahead(Rules.MAX_VELOCITY);
+			turnLeft(Rules.MAX_TURN_RATE);
+			fire(3);
+			scan();
+		}
+	}
+
+	@Override
+	public void onScannedRobot(ScannedRobotEvent event) {
+		if(event.getDistance() >= 20) {
+			fire(1);
+		} else if(event.getDistance() < 20) {
+			fire(2);
+		} else if(event.getDistance() < 10) {
+			fire(3);
+		}
+		scan();
+	}
+
+	@Override
+	public void onBulletHit(BulletHitEvent event) {
+		fire(event.getBullet().getPower());
+		ahead(Rules.MAX_VELOCITY);
+		scan();
+	}
+
+	@Override
+	public void onHitByBullet(HitByBulletEvent event) {
+		turnLeft(90 - event.getBearing());
+		back(Rules.MAX_VELOCITY);
+		scan();
+	}
+
+	@Override
+	public void onHitRobot(HitRobotEvent event) {
+		// event.getBearing() == 0 means enemy straight ahead
+		if(event.getBearing() < -90 || event.getBearing() > 90) {
+			back(Rules.MAX_VELOCITY);
+		} else {
+			ahead(Rules.MAX_VELOCITY);
+		}
+		scan();
+	}
+
+	@Override
+	public void onHitWall(HitWallEvent event) {
+		if(event.getBearing() < -90 || event.getBearing() > 90) {
+			turnLeft(90 - event.getBearing());
+			back(Rules.MAX_VELOCITY);
+		} else {
+			turnLeft(90 + event.getBearing());
+			ahead(Rules.MAX_VELOCITY);
+		}
+		scan();
+	}
+
+
 }
