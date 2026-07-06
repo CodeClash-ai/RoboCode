@@ -1,21 +1,84 @@
+// CodeClash ladder import
+// Source: https://github.com/it-economics/robocode/blob/HEAD/src/main/java/com/ite/robocode/CtBot.java
+// Author: it-economics   License: unspecified
+// Imported verbatim; only repackaged to the arena package + main class renamed to MyTank.
 package custom;
 
+import robocode.HitByBulletEvent;
+import robocode.HitRobotEvent;
+import robocode.HitWallEvent;
 import robocode.Robot;
+import robocode.Rules;
 import robocode.ScannedRobotEvent;
 
 import java.awt.*;
+import java.util.Random;
 
 public class MyTank extends Robot {
+
+    /**
+     * run:  Fire's main run function
+     */
+    @Override
     public void run() {
-        while(true) {
-            ahead(100);
-            turnGunRight(360);
-            back(100);
-            turnGunRight(360);
+        // Set colors
+        setBodyColor(Color.black);
+        setGunColor(Color.black);
+        setRadarColor(Color.black);
+
+        // This will be the default behaviour of your robot
+        while (true) {
+            ahead(40);
+            turnGunLeft(30);
+            scan();
         }
     }
 
+    /**
+     * onScannedRobot: if our robot sees another robot
+     */
+    @Override
     public void onScannedRobot(ScannedRobotEvent e) {
-        fire(1);
+        if (e.getDistance() < 100) {
+            fire(Rules.MAX_BULLET_POWER);
+        } else if (e.getDistance() < 400) {
+            fire(2);
+        }
+    }
+
+    /**
+     * onHitByBullet:  Ouch...our robot was hit by a bullet
+     */
+    @Override
+    public void onHitByBullet(HitByBulletEvent e) {
+        // run....
+        switchColor();
+        double bearing = e.getBearing();
+        turnRight(-bearing + 10);
+        ahead(30);
+    }
+
+    @Override
+    public void onHitWall(HitWallEvent event) {
+        back(50);
+        turnLeft(45);
+    }
+
+    /**
+     * onHitRobot:  Yes, we hit a robot
+     */
+    @Override
+    public void onHitRobot(HitRobotEvent e) {
+        // fire again
+        fire(3);
+    }
+
+    private void switchColor() {
+        Color[] colors = {Color.BLACK, Color.WHITE, Color.RED, Color.GREEN};
+        Color c = colors[new Random().nextInt(3) + 1];
+        System.out.println("CtBot: set color to " + c);
+        setBodyColor(c);
+        setGunColor(c);
+        setRadarColor(c);
     }
 }
