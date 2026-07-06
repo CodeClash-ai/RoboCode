@@ -1,21 +1,20 @@
+// CodeClash ladder import
+// Source: https://github.com/PEZ/Bots/blob/HEAD/pez/femto/SmallPoet.java
+// Author: PEZ (Peter Strömberg) et al.   License: RWPCL
+// Imported verbatim; only repackaged to the arena package + main class renamed to MyTank.
 package custom;
+import robocode.*;
 
-import robocode.Robot;
-import robocode.ScannedRobotEvent;
+// MyTank, by PEZ
 
-import java.awt.*;
+public class MyTank extends AdvancedRobot {
+    public void run() { 
+        setTurnGunRight(Double.POSITIVE_INFINITY); 
+    } 
 
-public class MyTank extends Robot {
-    public void run() {
-        while(true) {
-            ahead(100);
-            turnGunRight(360);
-            back(100);
-            turnGunRight(360);
-        }
-    }
-
-    public void onScannedRobot(ScannedRobotEvent e) {
-        fire(1);
-    }
+    public void onScannedRobot(ScannedRobotEvent e) { 
+        setTurnRight(90 + e.getBearing());
+        setAhead(200 * Math.sin(getTime())); 
+        fire(3); 
+    } 
 }
