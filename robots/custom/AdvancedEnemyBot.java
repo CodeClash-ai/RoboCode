@@ -1,0 +1,99 @@
+// CodeClash ladder import
+// Source: https://github.com/winstliu/robocode/blob/HEAD/exam2016/BobTheBuilder.java
+// Author: winstliu   License: unspecified
+// Imported verbatim; only repackaged to the arena package + main class renamed to MyTank (+ helper files flattened).
+package custom;
+
+import robocode.*;
+
+public class AdvancedEnemyBot extends EnemyBot
+{
+	private double x;
+	private double y;
+	private double cachedEnergy;
+	private double cachedVelocity;
+	private long lastUpdateTime;
+
+	public AdvancedEnemyBot()
+	{
+		reset();
+	}
+
+	public AdvancedEnemyBot(ScannedRobotEvent event, AdvancedRobot robot)
+	{
+		reset();
+		update(event, robot);
+	}
+
+	public void reset()
+	{
+		super.reset();
+
+		x = 0.0;
+		y = 0.0;
+		cachedEnergy = 100.0;
+		cachedVelocity = 0.0;
+		lastUpdateTime = 0;
+	}
+
+	public void update(ScannedRobotEvent e, AdvancedRobot robot)
+	{
+		super.update(e);
+
+		double absoluteBearing = robot.getHeadingRadians() + e.getBearingRadians();
+		if(absoluteBearing < 0)
+		{
+			absoluteBearing += 2 * Math.PI;
+		}
+
+		x = robot.getX() + Math.sin(absoluteBearing) * e.getDistance();
+		y = robot.getY() + Math.cos(absoluteBearing) * e.getDistance();
+
+		lastUpdateTime = robot.getTime();
+	}
+
+	public double getX()
+	{
+		return x;
+	}
+
+	public double getY()
+	{
+		return y;
+	}
+
+	public double getFutureX(long when)
+	{
+		return x + Math.sin(getHeadingRadians()) * getVelocity() * when;
+	}
+
+	public double getFutureY(long when)
+	{
+		return y + Math.cos(getHeadingRadians()) * getVelocity() * when;
+	}
+
+	public double getCachedEnergy()
+	{
+		return cachedEnergy;
+	}
+
+	public void setCachedEnergy(double energy)
+	{
+		cachedEnergy = energy;
+	}
+
+	public double getCachedVelocity()
+	{
+		return cachedVelocity;
+	}
+
+	public void setCachedVelocity(double velocity)
+	{
+		cachedVelocity = velocity;
+	}
+
+	public long getLastUpdateTime()
+	{
+		return lastUpdateTime;
+	}
+}
