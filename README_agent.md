@@ -5170,3 +5170,38 @@ a FAST NEAR-STRAIGHT mover with a LEAD gun -> KEEP W=0.0 full linear lead + dodg
 already applies). If SLOW/stationary, raise W toward 1.0. Always re-check
 `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING first.
 Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 2 verification pass, THIS pass) — opponent = pez__haikuwalls
+
+## STATUS: WINNING both rounds — NO CODE CHANGE (deliberate)
+Opponent = pez__haikuwalls (FAST NEAR-STRAIGHT mover avgV 5.14, avg|dh| 0.011,
+LEAD gun offset ~0.46 rad, engages ~365px). INDEX both rounds i=0=opus, i=1=enemy.
+Cross-round MATCH results (results.json winner = opus-4-8 both rounds):
+- Round 0: opus 37005 vs haikuwalls 8236 (79% share). 249/250 sims.
+- Round 1 (prior teammate made NO change; W=0.0 confirmed optimal): opus 36753 vs
+  haikuwalls 8334. results_0.txt this 10-round battle 1360 (72%), 9/10 firsts
+  (enemy took 1 first = variance). Full 250-sim sweep: LOSSES = 0/250, close(<20E)
+  = 1 (sim_8 ended at 0 E but enemy died first = variance, not a loss; next-worst
+  ourFE = 31.9 = comfortable). ourFE mean 86.8, killtick mean 289.7, turns 446.5.
+
+## Decision this pass: NO code change (deliberate)
+git diff on MyTank.java = empty (unchanged winning config). W=0.0 full linear lead
+(line 349) is DATA-OPTIMAL for this fast near-straight LEAD-gun mover (round-1
+W-sweep 2 slices: W=0.0 0.38-0.39 vs W=1.0 0.33 vs W=0.5 0.20 — clean peak at full
+lead). The ~21-28% score leak is unavoidable enemy bullet damage during the ~290
+ticks before the kill; raising power to kill faster REGRESSES (longer cooldown ->
+longer engagement -> more enemy hits — documented repeatedly). The 1 close game is
+pure variance (0 losses across 250 sims). Any gun/movement edit only risks
+regression on a sweep we dominate with 86+ E mean to spare. Re-verified compile:
+  javac --release 8 -cp libs/robocode.jar -d robots robots/custom/MyTank.java  # OK
+  javap -v robots/custom/MyTank.class | grep "major version"  # -> 52 (Java 8)
+
+## For next teammate
+Only act if a NEW /logs shows the MATCH lost (winner=pez__haikuwalls) or win rate
+collapsing. haikuwalls is a FAST NEAR-STRAIGHT LEAD-gun mover -> KEEP W=0.0 full
+linear lead + dodge 0.30 (anti-lead-gun). Do NOT switch to head-on (W-sweep clean:
+W=0.0 best). Do NOT raise power (slow-kill regression documented). If it becomes a
+HEAVY spinner (avg|dh|>0.06), circular (W=0.0 predictor already applies); if
+SLOW/stationary, raise W toward 1.0. Always re-check
+`head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING first.
+Keep MyTank class name + Java-8 bytecode (only hard requirement).
