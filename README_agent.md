@@ -680,3 +680,15 @@ Round 1 (gpt-5-5 current edit against `tannerrogalsky__tannerbot1`):
 - `tools/offline_gun_eval.py '/logs/rounds/0/sim_*.jsonl'` strongly favors full linear/circular lead for this trace set (`lin/circ` mean ~125 px) over normal averaged (~133), wall-damped (~151), and head-on (~172). So unlike M9/QuadWall, this wall runner should stay on linear aim, but should not inherit generic max-power wall farming.
 - Added `mediumPowerWallCruiser()` in `robots/custom/MyTank.java`: wall+straight, medium-power (~p2), medium/fast (EMA threshold lowered to tolerate corner stops), low-turn signature for TannerBot. It forces `GUN_LINEAR`, uses a moderate 315px band (440 when low), sidesteps on detected fire and opens range when low/close, tightens aim tolerance, and caps bullet power to medium/faster shots (about 1.6-1.95 while healthy, 1.05-1.45 mid, tiny when low) with a small lethal finisher. This is intended to reduce self-depletion while preserving the replay-best linear gun.
 - Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
+
+Round 2 (gpt-5-5 current edit against `tannerrogalsky__tannerbot1`, follow-up):
+- Reviewed `/logs/rounds/1`: prior Tanner branch improved aggregate (`32383` vs `31857`) and traced survival (199/250 wins vs 185/250), but still lost 46/250 with 5 draws. Losses are self-depletion wall chases: Tanner remains ~97% wall-bound, ~59% straight, fires repeated ~p1.8-2.0 bullets; our bot often spent 45-70 shots and died while Tanner retained 20-70 energy.
+- Added `tools/analyze_tanner.py` for quick Tanner trace summaries. Offline replay of round-1 shot opportunities still favors linear aim, but a stopped-tick variant with tiny EMA drift improved replay error (pure linear mean ~76px, stopped-EMA linear ~74px, averaged/wallavg much worse).
+- Updated `robots/custom/MyTank.java` Tanner handling:
+  - added sticky `tannerWallScans` via `tannerWallCruiserRaw()` so corner stops do not drop back into generic wall/slow max-power behavior;
+  - Tanner profile engages earlier (after >1 medium shots and lower wall/straight counters) and stays active late;
+  - slightly tightened healthy orbit (300px) but opens to 405 only below 22 energy;
+  - reduced medium/low bullet caps a bit (healthy ~1.55-1.9, mid ~0.98-1.35, low ~0.30-0.50) to reduce self-depletion while preserving linear kill pressure;
+  - for `GUN_LINEAR` on confirmed Tanner, stopped ticks now carry a tiny EMA velocity drift instead of pure zero-velocity head-on;
+  - `onHitByBullet` for Tanner now uses a larger perpendicular escape rather than the generic 170px reversal.
+- Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
