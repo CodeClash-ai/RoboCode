@@ -189,7 +189,7 @@ public class MyTank extends AdvancedRobot {
         // approaches separately from harmless field-crossing straight runners.
         if (e.getDistance() < 430.0 && enemyRadialVelocity < -2.0
                 && Math.abs(e.getVelocity()) > 3.5 && Math.abs(scanTurnRate) < 0.030
-                && wallEnemyScans <= 8 && crazyEnemyScans <= 4 && enemyFireCount <= 8) {
+                && wallEnemyScans <= 8 && crazyEnemyScans <= 4 && enemyFireCount <= 12) {
             trackerApproachScans = Math.min(50, trackerApproachScans + 2);
         } else {
             trackerApproachScans = Math.max(0, trackerApproachScans - 1);
@@ -244,11 +244,13 @@ public class MyTank extends AdvancedRobot {
             drivePerpendicularEscape(absBearing, 260.0);
             return;
         }
-        if (lowFireTracker() && e.getDistance() < 390.0) {
+        if (lowFireTracker() && e.getDistance() < 415.0) {
             // Tracker-like chasers deliberately close the bearing line.  Keep a wider
             // direct separation band than RamFire so its occasional power-3 shots do
             // not become point-blank trades while our linear gun farms the approach.
-            driveAwayFrom(absBearing, 380.0);
+            // Round-1 still showed >100/250 traces dipping under 100px; stretch this
+            // escape a little more while the target remains a clean radial charger.
+            driveAwayFrom(absBearing, 405.0);
             return;
         }
         if (lowFireRammer() && e.getDistance() < 300.0) {
@@ -343,7 +345,7 @@ public class MyTank extends AdvancedRobot {
             // Tracker-like chasers fire more often than RamFire and intentionally
             // close on our current position.  A wider band cuts their close-range
             // power-3 leakage while still keeping linear bullet flight short.
-            preferredDistance = 355.0;
+            preferredDistance = 380.0;
         } else if (lowFireRammer()) {
             // RamFire-like opponents try to close directly.  Keep a short bullet
             // flight but maintain just enough spacing to avoid long pin loops.
@@ -911,7 +913,7 @@ public class MyTank extends AdvancedRobot {
     private boolean lowFireTracker() {
         return trackerApproachScans > 5
                 && straightEnemyScans > 2
-                && enemyFireCount <= 8
+                && enemyFireCount <= 12
                 && wallEnemyScans <= 8
                 && crazyEnemyScans <= 4
                 && Math.abs(enemyTurnRateAvg) < 0.035
