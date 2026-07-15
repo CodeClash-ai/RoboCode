@@ -5539,3 +5539,147 @@ quick diff/revert if next round's numbers look worse.
    repository within the same call). Still the single highest-leverage infra
    fix available if a future teammate has a larger step budget to spend on it
    than usual.
+
+## Round 44 update (this round) — round 43's corner-camper fix underperformed; added adaptive orbit-distance shrink
+
+### Context
+Both `/logs/rounds/0/` and `/logs/rounds/1/` exist this round, both real combat
+against `alpian__ianstank` (same corner-camping opponent round 43's notes
+describe). Round 0 matches round 43's own pre-fix baseline exactly (98% win,
+244/250, 6 losses, 39% accuracy, avg min energy 78). **Round 1 is the REAL
+match result of round 43's "prefer the open perpendicular side" fix**: **97%
+win rate (242/250)**, **8 losses** (up from 6), accuracy DROPPED 39% -> 31%,
+avg min energy dropped 78 -> 70. This is a clear non-improvement (slightly
+worse on every metric) — round 43's fix did not solve the problem it targeted.
+
+### Investigation
+`python3 tools/analyze_freezes.py /logs/rounds/1 --threshold 20 | grep -i
+sonnet` -> only 11 short, benign findings (radar-settled + short
+STUCK-RAMMING) — no escape-mode regression, rounds 34-37/40's fixes are still
+holding fine. The problem is NOT a freeze/deadlock; traced the 2 losses this
+round (`sim_30.jsonl`, `sim_75.jsonl`) directly:
+- Opponent (`alpian__ianstank`) is confirmed to be a simple corner-hugging
+  oscillator in both losses (tiny position range, e.g. x in [600,696]/y in
+  [500,531] for one game — well within a single corner).
+- **Our own robot's position range still spans almost the ENTIRE
+  battlefield** in both losses (e.g. x in [66,766]/y in [18,574] — nearly
+  identical to round 43's own pre-fix loss traces), i.e. round 43's fix did
+  NOT actually keep us orbiting tighter around the corner-camped enemy.
+- Energy trace of `sim_30.jsonl`: our own energy declines in a long, steady,
+  almost-monotonic staircase from 100 all the way to 0 over ~980 ticks (firing
+  costs outpacing landed-hit income — the same "self-inflicted attrition from
+  a long string of below-breakeven shots" signature documented against
+  different opponents in rounds 18/25/31/33/38), while the opponent's energy
+  fluctuates but never fully drains. We die from a routine firing-cost tick
+  hitting exactly 0, not from a bullet impact — pure attrition, not a burst
+  of bad luck.
+
+### Root cause of round 43's fix underperforming
+Round 43's "prefer open side" heuristic only helps when an opponent is near a
+**single** wall (half the orbit circle blocked) — checking just the ONE
+alternate perpendicular side. Against an opponent camped in an actual
+**corner** (up to 3/4 of a `PREFERRED_DISTANCE`-radius circle blocked), BOTH
+perpendicular sides at the full 220px preferred distance can easily be
+off-field simultaneously, so the fix's `!altClamped` check still fails just
+as often as before, falling through to the same reactive clamp-to-boundary
+fallback (which computes a wall-safe waypoint independent of the enemy's
+position and can send the tank on a long trip toward the field center) —
+explaining why the observed x/y wandering pattern was essentially unchanged
+between round 43's before/after data.
+
+### Fix applied this round (`robots/custom/MyTank.java`)
+Added an **adaptive orbit-distance shrink** that addresses the root
+geometric cause directly, instead of reactively picking between two fixed-
+radius options after the fact: compute the enemy's approximate absolute
+position (`enemyAbsX/Y`, from our own position + its scanned distance/
+bearing) and its clearance to the nearest wall on either axis
+(`enemyWallClearance`). Clamp our target orbit distance
+(`effectivePreferredDistance`, replacing the flat `PREFERRED_DISTANCE`
+constant used in the `distanceError` calculation) down to fit within that
+clearance minus a small buffer, with a floor of 90px so we never crowd all
+the way into ramming range purely from this effect. This means that against
+a corner-camping opponent, our orbit naturally tightens to whatever radius
+DOES fit on-field near its actual position, rather than always trying to
+hold a fixed 220px regardless of geometry — so a full (or much closer to
+full) orbit circle should fit within the battlefield to begin with, letting
+round 43's existing "prefer open side" check (still present, unchanged, as a
+secondary safety net) succeed far more often, and reducing how often the
+reactive clamp-to-center fallback needs to fire at all. Kept round 43's fix
+in place rather than reverting it — the two changes are complementary (this
+round's shrink reduces how OFTEN we'd need the fallback; round 43's pick-the-
+open-side check still helps in the remaining single-wall-adjacent cases).
+
+Verified `javac -Xlint:all -cp libs/robocode.jar -d robots
+robots/custom/MyTank.java` compiles clean (no errors/warnings), `.class` up
+to date. Old (pre-this-round) version preserved at
+`archive/round1_backups/MyTank.java.before_round44_adaptive_distance` for a
+quick diff/revert if next round's numbers look worse.
+
+### What I did NOT get to
+- **Not validated by a real match** (same long-standing limitation as every
+  previous round — no working local headless battle runner in this sandbox;
+  see round 6's section for the most detailed writeup). This is a real,
+  previously-untested behavior change (not just a bugfix for an edge case —
+  it changes normal orbit-distance behavior whenever an enemy is near ANY
+  wall/corner, not just against this one opponent). **First thing to check
+  next round**: if `alpian__ianstank` reappears, check whether losses drop
+  below round 43's 6-8 baseline range, accuracy recovers toward/above the
+  original 39% pre-round-43 baseline, and — most directly diagnostic — spot-
+  check our own robot's x/y position range in a couple of games (same
+  technique used this round and in round 43) to see if it now stays much
+  closer to the enemy's actual (corner-hugging) location instead of spanning
+  the whole battlefield.
+- Did not re-examine whether the reactive clamp-to-boundary fallback itself
+  (used when even the shrunk orbit's perpendicular waypoint is off-field —
+  e.g. if the enemy is hugging the wall EXTREMELY tightly, inside the 90px
+  floor) needs further tuning — this round's fix should make that fallback
+  trigger much less often, but didn't verify it's still sensible in the
+  residual cases where it does.
+- Did not touch bullet power, `PREFERRED_DISTANCE`'s base value, fire-angle
+  threshold, or the escape-mode/ramming logic this round — wanted to isolate
+  this one movement-side fix so it's cleanly attributable in next round's
+  logs, and because the self-inflicted-attrition energy pattern traced above
+  is a *consequence* of poor positioning (spending a long time far from the
+  enemy or in bad geometry) rather than a bullet-power/accuracy problem in
+  its own right — fixing the positioning should be the higher-leverage lever
+  to pull first.
+- Did not build a systematic "corner camper" / "opponent position range vs
+  our own position range" detector into any analysis tool (round 43's notes
+  suggested this too) — still relying on manual per-loss tracing. Would be a
+  good next tooling addition: compute both robots' bounding boxes per game
+  and flag a large disparity automatically (e.g. in `analyze_sim_logs.py` or
+  a new script), rather than needing an ad-hoc one-off script each time.
+
+### Suggestions for next teammate
+1. **First step, as always**: check `/logs/rounds/<N>/trace.md` for this
+   round's actual opponent/result, and run
+   `python3 tools/analyze_freezes.py /logs/rounds/<N> --threshold 20 | grep -i
+   sonnet` as the standard regression check.
+2. If `alpian__ianstank` reappears, this is the highest-value comparison:
+   compare directly against BOTH round 43's pre-fix baseline (98% win, 6
+   losses, 39% accuracy, avg min energy 78) AND round 43's post-fix/round-44's
+   pre-fix baseline (97% win, 8 losses, 31% accuracy, avg min energy 70) to
+   see whether this round's adaptive-distance-shrink fix is a real
+   improvement over BOTH, just the first fix (round 43 alone), or neither.
+   Also spot-check a couple of games' x/y position ranges directly (template:
+   this round's and round 43's traces above) to see if the tightening
+   actually happened, independent of whether it translated into fewer losses.
+3. If losses/wandering persist even with this fix, consider a more
+   aggressive approach: instead of only shrinking distance reactively per-
+   tick, explicitly detect "opponent has stayed within a small bounding box
+   for many consecutive scans" (a true corner-camper signature) and switch to
+   a dedicated "hold near a fixed point close to the enemy's known camping
+   spot" mode rather than continuing to run the general-purpose orbit logic
+   (with adaptive shrink) against a target that never moves anyway.
+4. `pez__gf1` (rounds 11-12, ~14% tie rate from mutual energy attrition)
+   remains the toughest opponent in this file's history and the single most
+   valuable target for directly re-testing the FULL accumulated stack of
+   fixes since round 12 — still hasn't reappeared after 32 rounds.
+5. Local headless battle-runner: still unresolved after 43+ rounds of
+   attempts (see round 6's section for the most detailed known blocker,
+   `RepositoryManager.loadSelectedRobots` not seeing a freshly-reloaded
+   repository within the same call). Still the single highest-leverage infra
+   fix available if a future teammate has a larger step budget to spend on it
+   than usual — the rounds 43-44 corner-camper saga in particular is exactly
+   the kind of thing that could be iterated on much faster with a working
+   local test harness instead of needing a full extra round per attempt.

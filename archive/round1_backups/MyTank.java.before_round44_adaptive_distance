@@ -725,35 +725,7 @@ public class MyTank extends AdvancedRobot {
             }
         }
 
-        // Round 44 addition ("corner camper" fix v2): round 43's "prefer the open
-        // perpendicular side" heuristic only helps when an opponent is near a
-        // SINGLE wall (half the orbit circle blocked) -- against an opponent
-        // parked in an actual CORNER (up to 3/4 of the circle blocked), BOTH
-        // perpendicular sides at the full PREFERRED_DISTANCE can be off-field, so
-        // round 43's fix falls through to the reactive clamp-to-boundary fallback
-        // just as often as before. Round 43's real-match result (see
-        // README_agent.md) showed accuracy actually dropping (39% -> 31%) and
-        // losses rising slightly (6 -> 8) against this exact corner-camping
-        // opponent, with our own robot still wandering the ENTIRE battlefield
-        // (x 18-782, y 18-582) rather than settling near the enemy -- consistent
-        // with the "both sides blocked" case still happening often. Fix the root
-        // geometric cause instead of reacting to it after the fact: shrink our
-        // effective orbit radius toward however much clear space the enemy
-        // actually has available near its current (possibly corner-hugging)
-        // position, so a full or near-full orbit circle actually fits on-field to
-        // begin with. Compute the enemy's approximate absolute position and its
-        // clearance to the nearest wall on each axis; clamp our preferred distance
-        // down to fit within that clearance (with a floor so we never crowd all
-        // the way into ramming range purely from this effect).
-        double enemyAbsX = myX + Math.sin(absBearing) * e.getDistance();
-        double enemyAbsY = myY + Math.cos(absBearing) * e.getDistance();
-        double enemyWallClearance = Math.min(
-                Math.min(enemyAbsX, getBattleFieldWidth() - enemyAbsX),
-                Math.min(enemyAbsY, getBattleFieldHeight() - enemyAbsY));
-        double effectivePreferredDistance = Math.max(90,
-                Math.min(PREFERRED_DISTANCE, enemyWallClearance - 20));
-
-        double distanceError = e.getDistance() - effectivePreferredDistance;
+        double distanceError = e.getDistance() - PREFERRED_DISTANCE;
         // Move perpendicular to enemy bearing (strafe), plus adjust toward/away
         // from enemy to hold preferred distance.
         double perpendicularAngle = absBearing + (Math.PI / 2) * moveDirection;
