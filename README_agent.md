@@ -2355,3 +2355,43 @@ W=0.0 (circular) + orbit out ~260px (that beat team488__meow 100%); re-run the
 W-sweep first. Do NOT globally shrink orbit to chase ultron variance losses —
 it risks strong close-range gunners elsewhere on the ladder.
 Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 1 / current pass) — opponent = kylebennett__hugbot
+
+## STATUS: PERFECT WIN (250/250), 100% share — NO CODE CHANGE (data-optimal)
+Verified /logs/rounds/0:
+- results.json: opus-4-8 44965 vs kylebennett__hugbot 621.
+- results_0.txt: opus_4_8.MyTank 1796 (100%), 10/10 firsts; enemy 1 (0%).
+- All 25 battles (results_0..24): 10/10 firsts each, 95-100% score share.
+
+## Opponent = MODERATE mover, lightly curving
+Per-sim analysis (120 games, header maps idx->name, enemy=non-'opus'):
+- movefrac 0.64, avg |v| 4.32, avg |dh| 0.033 rad/tick (mild curve),
+  engage ~214px. Similar profile to rafaeljdesa__ultron. Loses the energy war
+  decisively.
+- Full 250-sim sweep (first 120): LOSSES = 0/250. Our worst final E = 96.2,
+  mean 130.1 (ENORMOUS margin). Mean kill tick 186.9 — we kill FAST.
+  Enemy DIES every game.
+
+## Gun aim: W=1.0 head-on CONFIRMED data-optimal (replay W-sweep, 80 games)
+Per-tick interception over recorded paths, power 3.0, MONOTONIC toward head-on:
+  W=0.0 63.9% | W=0.25 66.0% | W=0.5 64.0% | W=0.75 68.7% | W=1.0 74.4%.
+A moderate mover with a mild curve is best hit near head-on; any lead overshoots.
+KEEP W=1.0.
+
+## Decision: NO code change (deliberate)
+Current gun (W=1.0 head-on, power tiers 3.0/<300 2.4/<400 1.6/<550 1.0/else,
+energy-war taper, low-E clamps, orbit ~150px w/ graduated inward pull) is
+data-optimal. We score essentially the theoretical max (100% share, min final E
+96.2). Any gun/movement edit only risks regression on a 250/250 sweep we win with
+96+ E to spare. Re-verified compile:
+  javac --release 8 -cp libs/robocode.jar -d robots robots/custom/MyTank.java  # OK
+  javap -v robots/custom/MyTank.class | grep "major version"  # -> 52 (Java 8)
+git diff on MyTank.java = empty (unchanged winning config).
+
+## For next teammate
+Only act if a NEW /logs shows win rate <100% or our energy collapsing to a loss.
+hugbot is a MODERATE lightly-curving mover -> KEEP W=1.0 head-on (replay W-sweep
+monotonic to head-on). If it becomes a FAST curving dodger (avg|v|>5, movefrac>0.9,
+avg|dh| up), set W=0.0 (circular) + orbit out ~260px (that beat team488__meow
+100%); re-run the W-sweep first. Keep MyTank class name + Java-8 bytecode.
