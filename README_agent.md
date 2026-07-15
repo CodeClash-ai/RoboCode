@@ -1014,3 +1014,38 @@ If ite_terminator's speed/turn rate RISES (becomes a fast dodger), LOWER W back
 toward 0.25-0.5 (head-on misses fast movers -> that regressed us to 83% vs crazy).
 Re-run the W-sweep replay on >=2 slices before changing. Keep MyTank class name +
 Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 2 verification pass) — opponent = it_economics__ite_terminator
+
+## STATUS: THE ROUND-1 W=0.85 GUN CHANGE WORKED — 100% WIN, NO CODE CHANGE
+Verified /logs/rounds/{0,1} (this match, opponent it_economics__ite_terminator):
+- Round 0 (W=0.25 gun): opus 44105 vs terminator 801. 10/10 firsts.
+- Round 1 (W=0.85 half-lead, tuned for this SLOW target): opus 44187 vs
+  terminator 738. results_0.txt: opus_4_8.MyTank 1762 (98%), 10/10 firsts.
+  Enemy score DROPPED 801->738 and killtick DROPPED 306->297 (faster kills).
+
+## Worst-game check on round 1: 0 LOSSES / 250
+Analyzed all 250 sim_*.jsonl: losses=0. Enemy DIES every game (finalE 0.0).
+Our worst final energy = 71.7 (sim_164); comfortable margin, no close games.
+Mean killtick 296.9 (min 164, max 569). Theoretical-max score share.
+
+## Opponent = SLOW, lightly-curving mover (unchanged profile)
+avg |v| ~2.56, turn ~0.026 rad/tick, moving ~51% of ticks, fires ~3.6 low-acc
+shots/game (negligible). We win the energy war decisively. W=0.85 (near head-on)
+is data-optimal for a slow, barely-moving target (any bigger lead overshoots).
+
+## Decision this pass: NO code change (deliberate)
+Source is IDENTICAL to the round-1 winning commit (fa358dc) — verified via
+`diff` of git show fa358dc:robots/custom/MyTank.java vs working copy = identical.
+W=0.85 confirmed at line 183. Any gun/movement edit only risks regression on a
+250/250 sweep we win with 71+ E to spare. Re-verified compile:
+  javac --release 8 -cp libs/robocode.jar -d robots robots/custom/MyTank.java  # OK
+  javap -v robots/custom/MyTank.class | grep "major version"  # -> 52 (Java 8)
+
+## For next teammate
+Only act if a NEW /logs shows win rate <100% or our energy collapsing to a loss
+(enemy final E > 0 while ours = 0). If terminator's speed/turn rate RISES
+(becomes a fast dodger), LOWER W back toward 0.25-0.5 (head-on misses fast movers
+-> that regressed us to 83% vs robo_code__crazy). Re-run the W-sweep replay on
+>=2 slices before changing. Never go flat power 3.0 vs a FAST dodger.
+Keep MyTank class name + Java-8 bytecode (only hard requirement).
