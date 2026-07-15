@@ -6074,3 +6074,47 @@ Backup of prior source: /tmp/MyTank.bak.java. Compiles Java 8 (major version 52)
   to head-on off the W-sweep replay. Re-run the UNBIASED hit-density-by-distance analysis
   on NEW logs to confirm the win zone. Always re-check `head -1 /logs/rounds/0/sim_0.jsonl`
   for opponent + INDEX MAPPING first. Keep MyTank class name + Java-8 bytecode.
+
+# Agent Notes (Round 2 verification pass, THIS pass) — opponent = lucasgch__bt7274
+
+## STATUS: THE ROUND-1 ORBIT-WIDER CHANGE WORKED — NO CODE CHANGE THIS PASS
+Opponent = lucasgch__bt7274 (VERY FAST mover avgV 6.39, avg|dh| 0.046 moderate
+curve, MILD-LEAD gun offset ~0.226 rad, engages ~200px). INDEX both rounds
+i=0=bt7274, i=1=opus. Cross-round MATCH results (results.json winner = opus both):
+- Round 0 (dodgebot2-leftover ~120px close orbit): opus 37253 vs bt7274 13317
+  (74% share). Full sweep: 10 LOSSES, 11 close, ourFE mean 62.0, engage ~200px.
+- Round 1 (prior teammate: orbit target ~120px -> ~250px, rangeBias >400 -1.0,
+  >300 -0.6, >250 -0.2, <150 +0.6 push-out, <210 +0.25, hold ~250px): opus 38224
+  vs bt7274 9831 (enemy score DOWN 26%). Full 250-sim sweep: LOSSES = 1/250 (down
+  from 10!), close(<20E) = 7, ourFE mean 74.2 (up from 62), engage dist 267.7px,
+  killtick 264.9 (kill speed PRESERVED). The orbit-wider change is confirmed correct.
+
+## Distance/hit-density analysis (R1 150 sims, UNBIASED) CONFIRMS the ~250px orbit
+Tick distribution: 55.9% of ticks now in the 200-300px zone. Hit-density ratio
+(our hits / enemy hits per 1k):
+  0-100px 0.78 | 100-200px 0.75 (LOSING, 10589 ticks) | 200-300px 3.99 (WIN zone,
+  34755 ticks — our 21.6/1k vs enemy 5.4/1k) | 300-400px 2.85 | 400-500px 2.0.
+200-300px is BOTH better offense AND much less enemy damage -> the ~250px orbit is
+data-optimal. Unlike the wilde R1 wider-orbit REGRESSION (no defensive benefit +
+doubled kill time), here killtick stayed flat (262->265) so no slow-kill downside.
+
+## Decision this pass: NO code change (deliberate)
+Source is IDENTICAL to the round-1 winning commit 3876d5b (git diff HEAD on
+MyTank.java = empty). W=0.0 full linear lead (line 349, correct for a FAST mover;
+do NOT switch to head-on off the biased W-sweep replay — documented trap), orbit
+~250px (rangeBias lines 671-676), dodge-on-fire 0.30 (anti-mild-lead-gun), power
+tiers. Considered pushing orbit even wider to further avoid the 100-200px losing
+zone, but REJECTED: (a) we win 74% share with only 1 loss; (b) the enemy is VERY
+fast (avgV 6.39) so a wider orbit risks corner-jamming + slower kills (the wilde
+regression); (c) README documents movement changes REPEATEDLY backfiring. Any edit
+only risks regression on a match we now win decisively. Re-verified compile:
+  javac --release 8 -cp libs/robocode.jar -d robots robots/custom/MyTank.java  # OK
+  javap -v robots/custom/MyTank.class | grep "major version"  # -> 52 (Java 8)
+
+## For next teammate
+Only act if a NEW /logs shows the MATCH lost (winner=lucasgch__bt7274) or win rate
+collapsing. bt7274 is a VERY FAST mild-lead-gun mover -> KEEP W=0.0 full lead +
+orbit ~250px + dodge 0.30. Do NOT switch to head-on off the W-sweep replay (biased,
+documented trap). Do NOT push orbit wider without confirming killtick stays flat
+(the wilde slow-kill regression). Always re-check `head -1 /logs/rounds/0/sim_0.jsonl`
+for opponent + INDEX MAPPING first. Keep MyTank class name + Java-8 bytecode.
