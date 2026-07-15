@@ -260,3 +260,9 @@ Round 2 (gpt-5-5 current edit against `robo_code__regullarmonk`, follow-up):
   - healthy-energy bullet cap is slightly more assertive at close/normal range (1.65 under 430px, 1.35 farther), with lower caps only when our energy drops;
   - added a tighter firing tolerance for active stop/go shooter so even low-power conservation shots are not sprayed when the head-on gun is off.
 - This is an informed retune without local battle execution; recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
+
+Round 1 (gpt-5-5 current edit against `andrekorol__oppswantmedead`):
+- `/logs/rounds/0` shows `andrekorol__oppswantmedead.MyTank`, a weak fixed-heading stop/go shooter. We swept all 250 games (`results.json` 43141 vs 637), avg traced round length ~494, opponent fires ~8 weak power-1 shots/game, stops ~52% of ticks, body turn rate is essentially 0, and our end energy was very high (~102 avg) despite some low-power conservation behavior inherited from the RegullarMonk branch.
+- `tools/offline_gun_eval.py '/logs/rounds/0/sim_*.jsonl'` says head-on is best by a clear margin (head mean ~54px, wallavg ~62, averaged ~72, linear/circular ~82). A quick power replay showed lower-power bullets have slightly smaller geometric error, but since the opponent is harmless and our energy surplus is large, max-power head-on pressure should improve kill speed/score.
+- Added `fixedHeadingStopGoEnemy()` in `robots/custom/MyTank.java`: repeated stops + enemy fire + near-zero enemy turn-rate. This excludes the broader RegullarMonk `activeStopGoShooter()` conservation branch. For this signature, we use a closer ~305px orbit, force `GUN_HEAD_ON`, use high/max bullet power while energy is safe, and a moderate alignment tolerance. Other stop/go shooters with nonzero turn/noisier movement still use prior conservative/damped logic.
+- Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.

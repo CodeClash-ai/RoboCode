@@ -211,6 +211,11 @@ public class MyTank extends AdvancedRobot {
         double preferredDistance;
         if (crazyEnemyScans > 4) {
             preferredDistance = 305.0;
+        } else if (fixedHeadingStopGoEnemy()) {
+            // Current OppsWantMeDead-style bot keeps an almost perfectly fixed
+            // body heading while alternating stops/straight bursts and weak shots.
+            // It scores very little, so stay closer and shorten head-on flights.
+            preferredDistance = 305.0;
         } else if (activeStopGoShooter()) {
             // RegullarMonk-style bots stop/reverse constantly but fire repeated
             // weak bullets.  They are easiest to hit with fast head-on shots;
@@ -337,7 +342,18 @@ public class MyTank extends AdvancedRobot {
                 power = Math.min(power, 1.25);
             }
         }
-        if (activeStopGoShooter()) {
+        if (fixedHeadingStopGoEnemy()) {
+            // This fixed-heading stop/go shooter is much less dangerous than
+            // RegullarMonk.  Head-on is geometrically best and our end energy in
+            // traces is high, so keep max-pressure bullets until energy is low.
+            if (getEnergy() > 18 && distance < 680) {
+                power = Math.max(power, distance < 500 ? 3.0 : 2.45);
+            } else if (getEnergy() < 10) {
+                power = Math.min(power, 0.55);
+            } else {
+                power = Math.min(Math.max(power, 1.65), 2.2);
+            }
+        } else if (activeStopGoShooter()) {
             // RegullarMonk-like active stop/go shooters made us lose games by
             // self-depleting with repeated power-3 misses.  Head-on replay is
             // best and lower-power bullets are both faster and much safer.
@@ -394,6 +410,11 @@ public class MyTank extends AdvancedRobot {
             gun = GUN_HEAD_ON;
         } else if (crazyEnemyScans > 4) {
             gun = GUN_CIRCULAR;
+        } else if (fixedHeadingStopGoEnemy()) {
+            // Fixed-heading stop/go movement has no lateral turn component; the
+            // simple head-on gun beats our averaged/linear predictors in trace
+            // replay and should be used as soon as the signature is clear.
+            gun = GUN_HEAD_ON;
         } else if (activeStopGoShooter()) {
             // Current RegullarMonk traces: very frequent stops/reverses and
             // power-1 firing.  Offline shot replay favored head-on over linear,
@@ -455,6 +476,11 @@ public class MyTank extends AdvancedRobot {
             // spend even the small conservation bullets when the head-on gun is
             // closely aligned.
             tolerance = Math.min(tolerance, Math.atan2(15.0, distance));
+        } else if (fixedHeadingStopGoEnemy()) {
+            // Max-power farming still benefits from clean alignment, but keep a
+            // little more width than the conservative RegullarMonk branch so we
+            // do not miss firing windows against a harmless fixed-heading bot.
+            tolerance = Math.min(tolerance, Math.atan2(22.0, distance));
         }
         if (getGunHeat() == 0
                 && Math.abs(getGunTurnRemainingRadians()) < tolerance && getEnergy() > 0.25) {
@@ -498,12 +524,27 @@ public class MyTank extends AdvancedRobot {
         // RegullarMonk-style movement in the latest logs: half the time stopped,
         // small low-turn bursts, and many weak shots.  Treat it separately from
         // harmless stop/go bots and fast dangerous wall runners: conserve energy,
-        // aim head-on, and stay wider.
+        // aim head-on, and stay wider.  The fixed-heading variant below is less
+        // dangerous and can be pressured harder.
         return stopGoEnemyScans > 8
                 && enemyFireCount > 3
+                && !fixedHeadingStopGoEnemy()
                 && crazyEnemyScans <= 4
                 && Math.abs(enemyVelocityAvg) < 3.8
                 && Math.abs(enemyTurnRateAvg) < 0.035;
+    }
+
+    private boolean fixedHeadingStopGoEnemy() {
+        // OppsWantMeDead-style signature from /logs/rounds/0: the opponent never
+        // really turns its body (turn-rate EMA ~0), but repeatedly stops, moves
+        // straight forward/back along that heading, and fires weak power-1 shots.
+        // This is much easier to farm with head-on/max-pressure fire than the
+        // broader activeStopGoShooter class, where max-power caused self-depletion.
+        return stopGoEnemyScans > 8
+                && enemyFireCount > 1
+                && crazyEnemyScans <= 4
+                && Math.abs(enemyVelocityAvg) < 3.8
+                && Math.abs(enemyTurnRateAvg) < 0.004;
     }
 
     private boolean activeStopGoEnemy() {
