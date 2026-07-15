@@ -3062,3 +3062,40 @@ fire_rate*(hr*3*power-power) - enemyhit_rate*8.
   a HEAVY spinner (avg|dh|>0.06), set W=0.0 (circular). Always re-check
   `head -1 /logs/rounds/0/sim_0.jsonl` for the opponent name + INDEX MAPPING first.
 - Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 1 / current pass) — opponent = gabriel_lw__quadwall
+
+## STATUS: PERFECT WIN (250/250), 92% share — NO CODE CHANGE (data-optimal)
+Opponent CHANGED to gabriel_lw__quadwall. Verified /logs/rounds/0:
+- results.json: opus-4-8 45262 vs gabriel_lw__quadwall 5095.
+- results_0.txt: opus_4_8.MyTank 1787 (92%), 10/10 firsts; enemy 152 (8%).
+
+## Opponent = SLOW, NEAR-STATIONARY mover (barely moves, near-straight)
+Per-sim analysis (250 games, header maps idx->name, enemy=non-'opus'; i=0=quadwall):
+- movefrac 0.248, avg|v| 1.32 (SLOW), avg|dh| 0.016 (near-straight, minimal turn),
+  engages ~248px. Loses the energy war decisively.
+- Full 250-sim sweep: LOSSES = 0/250, close(<20E) = 0/250. Our final energy
+  min/mean = 57.6/110.8 (large margin). Mean killtick 239, turns mean 390 (max 721).
+  Enemy DIES every game.
+
+## Gun aim W=1.0 head-on CONFIRMED near-optimal (fresh W-sweep, 80 games)
+Per-tick interception over recorded paths, power 3.0:
+  W=0.0 69.3% | W=0.25 70.6% | W=0.5 71.9% | W=0.75 73.7% | W=1.0 72.6%.
+W=0.75 marginally higher than W=1.0 (73.7 vs 72.6, within noise) but for a slow
+near-stationary target head-on is theoretically correct and matches all prior
+slow-mover findings. The ~1pt diff is not worth touching a 250/250 config.
+
+## Decision: NO code change (deliberate)
+Gun was already at W=1.0 head-on (from npcsniper round). It's data-optimal for this
+slow near-stationary target. The ~8% leak is unavoidable enemy survival-bullet
+damage during the ~239 ticks before the kill. Raising power to kill faster REGRESSES
+(longer cooldown -> longer engagement -> MORE enemy hits, documented repeatedly).
+Any edit only risks regression on a 250/250 sweep we win with 57+ E to spare.
+Re-verified compile: javac --release 8 ... -> major version 52 (Java 8). rc=0.
+
+## For next teammate
+Only act if a NEW /logs shows win rate <100% or our energy collapsing to a loss.
+quadwall is SLOW/near-stationary -> KEEP W=1.0 head-on. If it becomes a FAST curving
+dodger (avg|v|>4, movefrac>0.7, avg|dh|>0.06), set W=0.0 (circular) + orbit out ~260px.
+Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for the current opponent name first.
+Keep MyTank class name + Java-8 bytecode (only hard requirement).
