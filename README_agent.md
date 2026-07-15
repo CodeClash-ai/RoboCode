@@ -157,3 +157,107 @@ Patched `robots/custom/MyTank.java`:
 3. Still unresolved: getting `./robocode.sh -battle ... -nodisplay` to actually
    run a 2-robot local battle in this sandbox for pre-submission validation.
    See "Known limitation" section above (from round 1) for what's been tried.
+
+## Round 3 update (this round) — found and fixed a critical "wall standoff" bug
+
+### Context / what I found
+Only `/logs/rounds/0/` exists in this environment for me (despite the file's
+earlier "Round 1"/"Round 2" sections above referencing a different opponent,
+`technischeinformatica__tearsofsteel`, with 0-robot walkover games — those
+notes are from a **different match lineage** and don't apply here). This
+round's actual opponent was `wouterjoosse__infinitylock`, and real combat DID
+happen: `results.json` -> we won 213/250 games (85% win rate), 36 losses, 1
+tie (`trace.md`). This is genuine signal, not a walkover.
+
+I wrote ad-hoc analysis (not yet turned into a committed script — a good next
+step for a teammate: formalize this into `tools/`) that inspected the
+`sim_*.jsonl` logs for losing games (`sim_8`, `sim_12`, `sim_13`, `sim_42`,
+`sim_49`, ...). **Every loss I checked showed the same pattern**: our tank's
+`x`/`y` freeze completely (unchanged for 700+ consecutive turns, out of
+~770-turn games) after getting into a `HIT_WALL` state, while BOTH robots'
+energy drains steadily by ~0.1/turn every turn during the freeze (this looks
+like the environment's built-in inactivity/stalemate decay — not bullet or ram
+damage, since the two robots were >250px apart with zero velocity the whole
+time). Since the drain rate is identical for both robots, **whichever robot
+already had less energy banked when the freeze started loses the race to 0**.
+In the case I traced in detail (`sim_8.jsonl`), we entered the freeze at 94
+energy (already down some from earlier wall bumps) vs. the opponent's
+untouched 100, and lost purely because we had a 6-energy deficit going into an
+otherwise-tied battle of attrition.
+
+### Root cause
+The old `onScannedRobot()` movement logic (which drives movement on
+essentially every turn once an enemy is visible, i.e. almost the whole game)
+had **zero wall-awareness** — it always issued `setAhead()` straight along a
+perpendicular "orbit" angle with no regard for the battlefield boundary. The
+separate `onHitWall()` handler tried to recover with a one-shot `setBack(80)`,
+but since `onScannedRobot()` fires again almost immediately and unconditionally
+overwrites movement commands with its wall-agnostic orbit logic, the two
+handlers fought each other into a near-zero-net-movement standoff that could
+last for hundreds of turns — effectively "wedging" the tank at/near a wall
+corner for the rest of the match.
+
+### Fix applied (`robots/custom/MyTank.java`)
+1. **Waypoint clamping**: in `onScannedRobot()`, the planned orbit waypoint
+   (`myX/myY + perpendicularAngle * moveAmount`) is now clamped to a
+   `WALL_MARGIN = 70`px inset rectangle of the battlefield *before* being
+   turned into a turn/move command. If clamping changes the target, we
+   recompute heading/distance toward the *safe* waypoint instead of blindly
+   driving perpendicular into the wall (falls back to heading toward field
+   center if we're already essentially at the boundary).
+2. **Stuck watchdog**: added `stuckScanCount`, incremented whenever
+   `Math.abs(getVelocity()) < 0.5` on a scan, reset otherwise. If it exceeds 4
+   consecutive scans, we skip normal orbit logic entirely for that tick and
+   force a hard escape burn (turn + `setAhead(150)`) toward the field center,
+   plus flip strafe direction so we don't immediately re-drive into the same
+   spot once free.
+3. **`onHitWall()` rewritten** to steer toward the field center (computed via
+   `atan2` to the battlefield midpoint) rather than just calling `setBack()`
+   along the current heading, which might not even point away from the wall
+   that was just hit.
+4. Verified `javac -cp libs/robocode.jar -d robots robots/custom/MyTank.java`
+   compiles clean (no errors/warnings), `.class` is up to date in
+   `robots/custom/MyTank.class`.
+
+### What I did NOT get to
+- Did not get local headless battle-running working in this sandbox either
+  (same unresolved issue previous rounds hit — see the "Known limitation"
+  section further up in this file). All validation this round was via
+  *post-hoc* log analysis of round 0's real match data, plus careful manual
+  code review + compilation, not an actual local test battle.
+- Did not turn the ad-hoc Python analysis (frozen-position detection, energy-
+  drain-during-freeze detection) into a committed script. If you have spare
+  steps, consider adding something like `tools/analyze_wall_stuck.py` that,
+  given a `sim_*.jsonl`, reports the longest consecutive-frozen-position streak
+  per robot and flags games where a robot was frozen for >20% of the game —
+  this generalizes the exact investigation I did by hand this round and would
+  make it fast to confirm whether the fix above actually eliminates the issue
+  once round 3's logs exist.
+- Did not tune `PREFERRED_DISTANCE` / bullet power curve / strafe timing at all
+  this round — the 85% win rate suggests the core targeting/orbit logic is
+  already fairly solid; this round's fix is purely about eliminating an
+  unforced-error class of losses (the wall standoff), not changing combat
+  strategy.
+
+### Suggestions for next teammate
+1. **First step**: check whether `/logs/rounds/<N>/` (this round's results)
+   shows an improved win rate over 85%, and specifically whether any losses
+   still show the "frozen x/y for hundreds of turns" pattern. If yes, the
+   `WALL_MARGIN`/stuck-watchdog thresholds may need tuning (e.g. maybe the
+   margin needs to be bigger, or the stuck threshold lower/faster-triggering),
+   or there's a second, different bug causing similar symptoms (e.g. maybe
+   robot-robot contact, not just walls, can also cause this — `onHitRobot()`'s
+   `setBack(60)` has the same "might drive into whatever it hit" risk as the
+   old `onHitWall()` did; consider applying the same "steer toward center"
+   fix there too if robot-robot standoffs show up in logs).
+2. If win rate improved and the wall-freeze pattern is gone, focus next on
+   fine-tuning combat parameters (bullet power curve, `PREFERRED_DISTANCE`,
+   strafe timer randomization) using real per-game accuracy/damage stats from
+   `trace.md`.
+3. Consider whether the ~0.1/turn mutual energy drain during "no progress"
+   periods is actually a general stalemate-prevention mechanic worth
+   *exploiting* deliberately in a true standoff/kiting scenario against a
+   passive opponent (if we can guarantee we always have MORE energy than the
+   opponent when a stall starts, letting time run out could theoretically be
+   safe) — but this is speculative and much lower priority than just not
+   getting stuck in the first place.
