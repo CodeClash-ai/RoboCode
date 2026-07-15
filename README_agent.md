@@ -6118,3 +6118,45 @@ orbit ~250px + dodge 0.30. Do NOT switch to head-on off the W-sweep replay (bias
 documented trap). Do NOT push orbit wider without confirming killtick stays flat
 (the wilde slow-kill regression). Always re-check `head -1 /logs/rounds/0/sim_0.jsonl`
 for opponent + INDEX MAPPING first. Keep MyTank class name + Java-8 bytecode.
+
+# Agent Notes (Round 1 / current pass) — opponent = denssle__megaborsten
+
+## STATUS: DOMINANT WIN (250/250, 0 losses, 0 close), 87% share — NO CODE CHANGE
+Opponent CHANGED to denssle__megaborsten. Verified /logs/rounds/0 (INDEX i=0=opus, i=1=megaborsten):
+- results.json: winner=opus-4-8, 40655 vs 5942.
+- results_0.txt: opus_4_8.MyTank 1620 (87%), 10/10 firsts; enemy 237 (13%, all bullet dmg).
+- Full 250-sim sweep: LOSSES=0/250, close(<20E)=0. ourFE mean 95.6, min 38.6.
+  killtick mean 288.8.
+
+## Opponent = VERY FAST near-straight mover with a HEAD-ON gun
+Per-sim analysis (250 games): movefrac 0.949, avgV 7.06 (VERY FAST), avg|dh| 0.028
+(NEAR-STRAIGHT), engages ~275px. Enemy gun offset when firing: median 0.023 rad
+(HEAD-ON gun, aims at our current position — but deals us only ~24 dmg/game).
+
+## Gun aim W=0.0 (full linear lead) CONFIRMED optimal via REAL in-game hit rate
+Real energy-event hit rate (UNBIASED, 150 sims): 52.4% overall. By distance:
+  0-100px 61% (enemy 28.1/1k) | 100-200px 42% (13.4/1k) | 200-300px 62%
+  (8.8/1k, 34541 ticks = MOST time) | 300-400px 40% (4.2/1k) | 400px+ <12%.
+W=0.0 full linear lead is EXACT on the straight sections of this VERY FAST
+near-straight mover -> 52% real hit rate. Matches the proven wins vs the other fast
+near-straight movers (haikuwalls/wallspoethaiku/robrrrat/bt7274). Do NOT switch to
+head-on off any W-sweep replay (documented reactivity-bias trap; W=0.0 wins in REAL
+play). Movement (~250px orbit reaching the 200-300px win zone), dodge (0.30), power
+tiers all data-optimal — we spend most ticks in the 62%-hit / 8.8-enemy-hits zone.
+
+## Decision: NO code change (deliberate)
+git diff on MyTank.java = empty. We score essentially the theoretical max (survival
++ all bonuses; the 13% leak is unavoidable enemy bullet damage during ~289 ticks
+before the kill). Any gun/movement edit only risks regression on a 250/250 sweep we
+win with 38+ E to spare. Re-verified compile:
+  javac --release 8 -cp libs/robocode.jar -d robots robots/custom/MyTank.java  # OK
+  javap -v robots/custom/MyTank.class | grep "major version"  # -> 52 (Java 8)
+
+## For next teammate
+Only act if a NEW /logs shows win rate <100% or our energy collapsing to a loss.
+megaborsten is a VERY FAST near-straight mover -> KEEP W=0.0 full linear lead +
+orbit ~250px + dodge 0.30. If it becomes a HEAVY spinner (avg|dh|>0.06), circular
+(W=0.0 predictor applies); if SLOW/near-stationary, raise W toward 1.0 (but verify
+with REAL in-game hit rate, NOT the biased W-sweep replay). Always re-check
+`head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING first.
+Keep MyTank class name + Java-8 bytecode (only hard requirement).
