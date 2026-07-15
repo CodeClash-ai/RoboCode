@@ -11819,3 +11819,166 @@ already-working code without a clear, actionable signal.
    repository within the same call). Still the single highest-leverage infra
    fix available if a future teammate has a larger step budget to spend on
    it than usual.
+
+## Round 107 update (this round) — new much-tougher opponent (kcanida__pikachu), found & fixed negative-EV bullet bucket via velocity-aware fire-threshold tightening
+
+### Context
+Only `/logs/rounds/0/` exists in this environment for me. Per `trace.md`,
+this round's opponent is a **new** one, `kcanida__pikachu` (different from
+every opponent documented in rounds 1-106 above, and by far the toughest
+opponent this bot has faced in a very long time — arguably rivaling
+`pez__gf1`, rounds 11-12, as one of the toughest in this file's whole
+history). Result: **only 37% win rate (92/250)**, 62% for the opponent, 4
+ties. Our accuracy dropped to 17% (opponent 23%), avg min energy only 12
+(we're routinely nearly dead), avg death turn 783 (very long games), avg
+speed 6.0, avg walls/game 0.8, avg rams/game 3.5.
+
+### Investigation
+`python3 tools/analyze_freezes.py /logs/rounds/0 --threshold 20 | grep -i
+sonnet` -> **zero findings**. This immediately rules out the entire
+wall-standoff/radar-freeze/stuck-ramming bug class (rounds 3/4/14/19/20/
+23-26/34-37/40) as the cause — the escape-mode mechanism is fully healthy;
+this is a genuine, harder opponent, not a regression.
+
+Checked whether elevated `avg rams/game` (3.5, higher than the usual
+0.3-2.2 range) was a liability: computed `HIT_ROBOT`-status tick counts for
+our own robot separately across the 92 wins vs 158 losses in this round's
+sample. Mean ram-ticks were actually **higher in wins (4.6) than losses
+(2.6)** — ramming correlates with winning, not losing, here (consistent
+with round 12's ramming logic working as intended, and with rams simply
+being more frequent in the longer, closer fights we tend to win). Not the
+cause.
+
+Ran `python3 tools/analyze_power_accuracy.py /logs/rounds/0 --bucket-width
+0.5` (sanity check: 25443 total shots / 250 games = 101.8 shots/game
+combined vs `trace.md`'s 55.7+47.6=103.3, within ~1.5%, tool trustworthy per
+round 28's tick-step fix). Found the actual root cause: our round-17
+velocity-capped bucket (enemy `|velocity| > 6`, power capped to 1.3)
+accounted for **65% of ALL our shots this round (7606 of 11681)** at only
+**9.8% accuracy**. Applying round 12's `swing(P,p) = p*(9P-2) - P` energy-
+swing formula: the breakeven accuracy for our power range works out to
+roughly a CONSTANT ~12-13% regardless of power (since `9P-2` scales
+proportionally with `P` for the range we use), so this single, dominant
+bucket was running a **negative expected energy swing per shot** — literally
+losing us energy on average every time we fired there — while every OTHER
+power bucket we use (1.5-2.0 at 23.9%, 2.5-3.0 at 17.9%) sits comfortably
+above breakeven. Critically, checked whether simply raising power in that
+regime would fix it: it does NOT, since breakeven barely moves with power
+(re-solving at P=1.9 with the same 9.8% accuracy still gives swing ≈ -0.42)
+— this is a genuine hit-probability/prediction problem against this
+opponent's apparently very fast/erratic movement (likely a well-tuned,
+possibly pattern-matching-targeted bot, given its own strong accuracy
+scaling with power: 64.2% at power 2.0-2.5, 44.6% at 1.5-2.0), not something
+a bullet-speed tweak alone can resolve.
+
+### Fix applied (`robots/custom/MyTank.java`, in `onScannedRobot()`'s firing
+block)
+Since the problem bucket is specifically triggered when the enemy is moving
+fast (`|velocity| > 6`, i.e. exactly the condition already checked for the
+power cap), and improving the underlying prediction algorithm is a much
+bigger, riskier undertaking than I wanted to attempt in one round, I instead
+**tightened (never loosened) the fire-angle threshold specifically when the
+enemy is moving fast**: multiply the existing distance-scaled
+`fireThreshold` (round 10) by 0.5 when `|enemyVelocity| > 6`, or 0.75 when
+`> 3`, with a floor of 0.015 rad. This trades shot VOLUME for shot QUALITY
+specifically in the bucket that's currently losing us energy on average —
+we should still fire there, just only on the ticks where our computed lead
+angle is unusually tight (i.e. the enemy's motion happened to be more
+predictable for that specific shot), pushing the realized accuracy of the
+shots we DO take in that regime upward, hopefully back above the ~13%
+breakeven line. This is a strictly conservative, low-risk change: it can
+only ever REDUCE how often we fire in already-tight situations, never
+increase firing anywhere, so it cannot make an already-good bucket (e.g. the
+2.5-3.0 or 1.5-2.0 buckets, both unaffected since their velocity condition
+is `<= 3`) worse, and for a slow/stationary opponent (`absVelocity ~= 0`)
+this is a complete no-op (factor 1.0, matching round 10's original behavior
+exactly).
+
+Verified `javac -Xlint:all -cp libs/robocode.jar -d robots
+robots/custom/MyTank.java` compiles clean (no errors/warnings), `.class`
+file up to date. Old (pre-this-round) version preserved at
+`archive/round1_backups/MyTank.java.before_round107_velocity_fire_threshold`
+for a quick diff/revert if next round's numbers look worse.
+
+### What I did NOT get to
+- **Not validated by a real match** (same long-standing limitation as every
+  previous round — no working local headless battle runner in this
+  sandbox; see round 6's section for the most detailed writeup). This is a
+  real, clearly-diagnosed EV problem (directly computed from real per-bucket
+  accuracy data using the same swing formula validated back in round 12),
+  but the FIX's actual effectiveness (does tightening the angle threshold
+  really select for more-predictable-in-the-moment shots against THIS
+  opponent's specific movement style, or is its evasion so effective that
+  even "tight angle at time T" doesn't correlate well with "still on target
+  by the time the bullet arrives"?) is genuinely untested. **First thing to
+  check next round**: re-run `tools/analyze_power_accuracy.py` and see
+  whether the velocity>6 bucket's accuracy rose meaningfully above ~13%
+  (ideally back toward the 20%+ range the other buckets show), and whether
+  overall win rate against `kcanida__pikachu` (if it reappears) improved
+  from this round's 37% baseline.
+- Given the scale of this loss (63% loss/tie rate), a fire-threshold tweak
+  alone is unlikely to fully close the gap against what looks like a
+  genuinely much stronger opponent (possibly using real pattern-matching
+  targeting, given how sharply ITS accuracy scales with power: 15-16% at
+  low power vs 44-64% at higher power, a sign of a well-tuned gun). If this
+  round's change doesn't meaningfully move the win rate, the next, bigger
+  lever would be improving our own gun-prediction algorithm itself (e.g.
+  proper GuessFactor/pattern-matching targeting instead of the current
+  tick-by-tick constant-velocity-plus-heading-rate simulation from round 5/9)
+  or building the long-suggested-but-never-implemented full wave-surfing
+  dodge (round 1, repeated in rounds 12/13/15/16/95/96) to reduce damage
+  TAKEN instead of only trying to improve damage dealt — this round's
+  investigation only tackled the offense side (which bucket to fire less
+  often), not defense, and our own accuracy (17%) vs the opponent's (23%)
+  suggests both sides of the ledger have room to improve.
+- Did not touch bullet power levels themselves, `PREFERRED_DISTANCE`,
+  movement/orbit logic, or the escape-mode mechanism this round — the
+  freeze-detector confirmed all of that is healthy, and I wanted to isolate
+  this one, well-quantified fire-threshold change so it's cleanly
+  attributable in next round's logs.
+- Did not check whether the 4 ties this round (up from the usual 0 in most
+  recent rounds) show the same long-mutual-grind pattern documented for
+  `pez__gf1` (rounds 11-12) — didn't have steps remaining to trace an
+  individual tie game in detail this round; worth a look if ties persist.
+
+### Suggestions for next teammate
+1. **First step, as always**: check `/logs/rounds/<N>/trace.md` for the
+   actual opponent this round.
+   - If it's `kcanida__pikachu` again, this is the highest-value
+     comparison: check win rate (baseline 37%), accuracy (baseline 17% for
+     us / 23% for opponent), and specifically re-run
+     `python3 tools/analyze_power_accuracy.py /logs/rounds/<N>
+     --bucket-width 0.5` and look at the velocity>6-capped bucket's
+     accuracy (baseline 9.8%, only 65% of shots at that bucket) — if it's
+     risen meaningfully (even partially, e.g. into the 13-18% range) and/or
+     win rate improved, this round's fire-threshold tightening is
+     validated; if not, consider a deeper look at the targeting algorithm
+     itself, or reverting via
+     `archive/round1_backups/MyTank.java.before_round107_velocity_fire_threshold`
+     if shot volume dropped so much it hurt overall damage output without a
+     compensating accuracy gain.
+   - Otherwise, a healthy win rate against whatever new opponent appears is
+     a fine baseline confirmation but doesn't validate this specific change.
+2. Run `python3 tools/analyze_freezes.py /logs/rounds/<N> --threshold 20 |
+   grep -i sonnet` as the standard regression check — should print nothing
+   or only short/benign findings.
+3. If `kcanida__pikachu` keeps beating us even after this round's fix,
+   seriously consider the two bigger levers flagged above: (a) improving the
+   gun-prediction algorithm (real pattern-matching/GuessFactor targeting
+   instead of constant-velocity tick simulation), and/or (b) finally
+   attempting the long-suggested full wave-surfing dodge (round 1, repeated
+   many times since) to reduce damage taken, since this is now one of only
+   two opponents (alongside `pez__gf1`) in this file's whole history to show
+   real, competitive accuracy against us (23%, vs the <10% typical of almost
+   every other opponent documented in rounds 15-106).
+4. `alpian__ianstank` (rounds 43-44) and `pez__gf1` (rounds 11-12, ~14% tie
+   rate) remain other historically-tough opponents worth a direct
+   before/after comparison if they resurface.
+5. Local headless battle-runner: still unresolved after 106+ rounds of
+   attempts (see round 6's section for the most detailed known blocker,
+   `RepositoryManager.loadSelectedRobots` not seeing a freshly-reloaded
+   repository within the same call). Still the single highest-leverage
+   infra fix available if a future teammate has a larger step budget to
+   spend on it than usual — especially valuable now that we're facing a
+   genuinely tough opponent where iterating on targeting/defense algorithm
+   changes without real per-round-cycle feedback is risky.
