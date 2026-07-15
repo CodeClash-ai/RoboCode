@@ -211,6 +211,12 @@ public class MyTank extends AdvancedRobot {
         double preferredDistance;
         if (crazyEnemyScans > 4) {
             preferredDistance = 305.0;
+        } else if (activeStopGoShooter()) {
+            // RegullarMonk-style bots stop/reverse constantly but fire repeated
+            // weak bullets.  They are easiest to hit with fast head-on shots;
+            // keep a wider orbit than the harmless stop/go farming mode so the
+            // power-1 gun has longer flight time and fewer point-blank hits.
+            preferredDistance = 455.0;
         } else if (dangerousWallEnemy()) {
             preferredDistance = 335.0;
         } else if (straightEnemyScans > 16 && harmlessLowFireEnemy() && wallEnemyScans <= 4) {
@@ -235,7 +241,8 @@ public class MyTank extends AdvancedRobot {
         // to long bullet flight, while its own gun almost never connects.  Once
         // virtual guns report a hard-to-hit mover, tighten the orbit a bit to
         // shorten flight time and improve hit/kill speed without going to ram range.
-        if (!dangerousWallEnemy() && virtualSamples > 28 && bestGunError() > 72.0 && stationaryScans <= 5 && slowEnemyScans <= 12) {
+        if (!dangerousWallEnemy() && !activeStopGoShooter()
+                && virtualSamples > 28 && bestGunError() > 72.0 && stationaryScans <= 5 && slowEnemyScans <= 12) {
             preferredDistance = 355.0;
         }
         double distanceOffset = limit(-0.62, (e.getDistance() - preferredDistance) / 430.0, 0.55);
@@ -330,7 +337,19 @@ public class MyTank extends AdvancedRobot {
                 power = Math.min(power, 1.25);
             }
         }
-        if (dangerousWallEnemy() && crazyEnemyScans <= 4) {
+        if (activeStopGoShooter()) {
+            // RegullarMonk-like active stop/go shooters made us lose games by
+            // self-depleting with repeated power-3 misses.  Head-on replay is
+            // best and lower-power bullets are both faster and much safer.
+            if (getEnergy() > 42) {
+                power = Math.min(power, distance < 260 ? 1.85 : 1.45);
+            } else if (getEnergy() > 18) {
+                power = Math.min(power, 1.15);
+            } else {
+                power = Math.min(power, 0.55);
+            }
+        }
+        if (dangerousWallEnemy() && crazyEnemyScans <= 4 && !activeStopGoShooter()) {
             // DroidPoet-style active wall runners are dangerous, but round-1
             // logs showed the previous wide/low-power survival tune gave away
             // too much bullet damage and even lost a couple of 10-round sets.
@@ -375,6 +394,12 @@ public class MyTank extends AdvancedRobot {
             gun = GUN_HEAD_ON;
         } else if (crazyEnemyScans > 4) {
             gun = GUN_CIRCULAR;
+        } else if (activeStopGoShooter()) {
+            // Current RegullarMonk traces: very frequent stops/reverses and
+            // power-1 firing.  Offline shot replay favored head-on over linear,
+            // circular, or averaged prediction; lower-power bullets handle the
+            // target's small dodges without over-leading.
+            gun = GUN_HEAD_ON;
         } else if (dangerousWallEnemy()) {
             // Against the active wall runner in the current logs, trace replay
             // favors the normal averaged stop/reversal predictor over head-on,
@@ -461,6 +486,18 @@ public class MyTank extends AdvancedRobot {
         // active until repeated firing proves otherwise; dangerousWallEnemy()
         // takes over after several shots for DroidPoet-like perimeter gunners.
         return enemyFireCount <= 2;
+    }
+
+    private boolean activeStopGoShooter() {
+        // RegullarMonk-style movement in the latest logs: half the time stopped,
+        // small low-turn bursts, and many weak shots.  Treat it separately from
+        // harmless stop/go bots and fast dangerous wall runners: conserve energy,
+        // aim head-on, and stay wider.
+        return stopGoEnemyScans > 8
+                && enemyFireCount > 3
+                && crazyEnemyScans <= 4
+                && Math.abs(enemyVelocityAvg) < 3.8
+                && Math.abs(enemyTurnRateAvg) < 0.035;
     }
 
     private boolean activeStopGoEnemy() {
