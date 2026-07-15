@@ -36,6 +36,7 @@ public class MyTank extends AdvancedRobot {
     private int straightEnemyScans = 0;
     private int crazyEnemyScans = 0;
     private int stopGoEnemyScans = 0;
+    private int closeRammerScans = 0;
     private double enemyVelocityAvg = 0.0;
     private double enemyTurnRateAvg = 0.0;
     private boolean haveEnemyAxis = false;
@@ -165,6 +166,18 @@ public class MyTank extends AdvancedRobot {
         } else {
             crazyEnemyScans = Math.max(0, crazyEnemyScans - 1);
         }
+        // sample.RamFire-style bots repeatedly drive straight into close range
+        // and only score through rare point-blank shots/collisions.  Their future
+        // position is better described by the current straight-line velocity than
+        // by the generic damped harmless-runner gun, so track a narrow rammer
+        // signature for an early linear override.
+        if (e.getDistance() < 285.0 && Math.abs(e.getVelocity()) > 2.0
+                && Math.abs(scanTurnRate) < 0.035 && enemyFireCount <= 3
+                && wallEnemyScans <= 8 && crazyEnemyScans <= 4) {
+            closeRammerScans = Math.min(40, closeRammerScans + 2);
+        } else {
+            closeRammerScans = Math.max(0, closeRammerScans - 1);
+        }
 
         updateVirtualGuns(enemyX, enemyY);
 
@@ -266,6 +279,10 @@ public class MyTank extends AdvancedRobot {
             preferredDistance = 305.0;
         } else if (fastWallCruiser()) {
             preferredDistance = 305.0;
+        } else if (lowFireRammer()) {
+            // RamFire-like opponents try to close directly.  Keep a short bullet
+            // flight but maintain just enough spacing to avoid long pin loops.
+            preferredDistance = 260.0;
         } else if (easyHeadOnStopGoEnemy()) {
             // Cliffbot2-style stop/go movers are weak and the virtual guns show
             // near-head-on beating the damped averaged gun.  Keep a very close
@@ -601,6 +618,12 @@ public class MyTank extends AdvancedRobot {
             // favors the normal averaged stop/reversal predictor over head-on,
             // linear, circular, or the old wall-damped special case.
             gun = GUN_AVERAGED;
+        } else if (lowFireRammer()) {
+            // RamFire-style direct chargers have very low turn rate and usually
+            // continue their current line during bullet flight; offline replay of
+            // the current traces put linear/circular well ahead of the damped
+            // averaged harmless-runner gun.
+            gun = GUN_LINEAR;
         } else if (wallEnemyScans > 4 && straightEnemyScans > 12
                 && enemyFireCount <= 8
                 && Math.abs(e.getVelocity()) > 4.5 && Math.abs(enemyVelocityAvg) > 3.6
@@ -699,6 +722,17 @@ public class MyTank extends AdvancedRobot {
             }
         }
         return best;
+    }
+
+    private boolean lowFireRammer() {
+        return closeRammerScans > 4
+                && harmlessLowFireEnemy()
+                && straightEnemyScans > 4
+                && wallEnemyScans <= 8
+                && crazyEnemyScans <= 4
+                && !fixedHeadingStopGoEnemy()
+                && !fixedHeadingLineEnemy()
+                && !fastWallCruiser();
     }
 
     private boolean harmlessLowFireEnemy() {

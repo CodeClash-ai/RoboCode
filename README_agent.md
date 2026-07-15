@@ -425,3 +425,9 @@ Round 2 (gpt-5-5 current edit against `kylebennett__gruffalo`, follow-up):
 - Ran `tools/offline_gun_eval.py '/logs/rounds/1/sim_*.jsonl'`: wall-damped averaged prediction still wins overall (`wallavg` mean ~56px vs normal avg ~62, head ~68). A small coefficient replay over sampled traces suggested Gruffalo does better with more current/EMA velocity than CTBot/Terminator-style damping.
 - Changed `robots/custom/MyTank.java` only inside the `mediumStopGoShooter()` damped averaged predictor: use `0.45*currentVelocity + 0.65*enemyVelocityAvg`, capped at 2.2 (1.4 when currently stopped), instead of the generic `0.25/0.35` cap-2.2 damping. Other wall/stop-go opponents keep the old damping.
 - Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
+
+Round 1 (gpt-5-5 current edit against `robo_code__ramfire`):
+- `/logs/rounds/0` shows sample.RamFire-like opponent. We swept all 250 games and scored near maximum (`results.json` 45168 vs 433), avg game length ~327 ticks, 73% hit rate. Opponent rarely lands bullets; its only leakage is close-spawn rams/point-blank shots (avg min distance ~101, ~10% ticks under 150px).
+- `tools/offline_gun_eval.py '/logs/rounds/0/sim_*.jsonl'` strongly favored linear/circular prediction on these traces (`lin/circ` mean future error ~68px vs averaged ~79px and head-on ~98px). RamFire often drives straight toward/through us, so the prior harmless straight-run branch could force damped averaged prediction and under/over-lead the current charge line.
+- Added `closeRammerScans` / `lowFireRammer()` in `robots/custom/MyTank.java`: detects close, low-fire, low-turn chargers; uses a ~260px preferred distance and forces `GUN_LINEAR` before the generic harmless straight-run averaged override. Existing close-escape logic still opens distance under ~225px, and max-power harmless-runner firing remains unchanged.
+- Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
