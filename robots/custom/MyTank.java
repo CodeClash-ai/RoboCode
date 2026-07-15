@@ -548,10 +548,20 @@ public class MyTank extends AdvancedRobot {
         // hit rate is 38% at 100-200px vs only 25% at 200-300px, while enemy hit
         // density is similar (8.8 vs 7.8/1k). So orbit ~190px (100-200px zone) for
         // higher accuracy. Enemy gun IS dangerous <100px (13.2/1k) so don't ram in.
-        if (enemyDistance > 420)      rangeBias = -1.2;  // far: strong inward pull to close
-        else if (enemyDistance > 300) rangeBias = -0.9;  // mid-far: firm inward
-        else if (enemyDistance > 210) rangeBias = -0.5;  // approaching target ~190px
-        else if (enemyDistance < 150) rangeBias = 0.5;   // too close (lead-gun kill zone): push out
+        // R2 vs vikdov__dominatorx: MEASURED (round-1 250 sims) the enemy gun aims
+        // HEAD-ON (median offset only 0.018 rad, mean 0.049) -- it fires at our
+        // CURRENT position, NOT a lead. Enemy hit density DROPS with range:
+        // 100-200px 10.5/1k, 200-300px 8.3/1k, 300-400px 6.4/1k. Against a head-on
+        // gun the winning defense is steady TANGENTIAL (perpendicular) motion at
+        // full lateral speed -- the bullet lands where we WERE. Losses had lower
+        // lateral speed (3.81 vs 4.08 in wins). So: orbit slightly WIDER (~215px)
+        // to cut enemy hits ~20% (our head-on hit rate holds well with range), and
+        // keep motion purely tangential (see reduced fire-reversal below -- reversing
+        // is BAD vs a head-on gun, it brings us back toward the incoming bullet).
+        if (enemyDistance > 430)      rangeBias = -1.2;  // far: strong inward pull to close
+        else if (enemyDistance > 320) rangeBias = -0.9;  // mid-far: firm inward
+        else if (enemyDistance > 235) rangeBias = -0.45; // approaching target ~215px
+        else if (enemyDistance < 175) rangeBias = 0.5;   // too close: push out
 
         double desiredDir = absBearing + (Math.PI / 2 + rangeBias) * moveDirection;
 
@@ -591,11 +601,19 @@ public class MyTank extends AdvancedRobot {
         // 0.45 -> 0.70 (still not a strict alternation, so not itself learnable),
         // shorten the rate-limit 6 -> 5 ticks so we can dodge consecutive waves,
         // and keep the rare random reversal to break any residual period.
+        // R2 vs vikdov__dominatorx: enemy gun is HEAD-ON (offset 0.018 rad), NOT a
+        // lead gun. Reversing on enemy fire is COUNTERPRODUCTIVE vs a head-on gun --
+        // it brings us BACK toward where the (already-fired-at-old-position) bullet
+        // is heading, and it kills our lateral velocity (the thing that beats a
+        // head-on gun). So dodge-on-fire is reduced to 0.15 (was 0.45, which was
+        // tuned for the LEAD-gun juggernaut). We still keep rare uncorrelated
+        // reversals + segment breaks so we don't become a fixed pattern for a
+        // possible pattern-matcher, but favor steady full-lateral-speed orbit.
         long now = getTime();
-        if (enemyFired && now - lastReverseTime >= 6 && Math.random() < 0.45) {
+        if (enemyFired && now - lastReverseTime >= 8 && Math.random() < 0.15) {
             moveDirection = -moveDirection;
             lastReverseTime = now;
-        } else if (now - lastReverseTime >= 8 && Math.random() < 0.07) {
+        } else if (now - lastReverseTime >= 12 && Math.random() < 0.06) {
             moveDirection = -moveDirection;
             lastReverseTime = now;
         }

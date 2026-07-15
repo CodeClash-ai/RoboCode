@@ -3996,3 +3996,60 @@ Compiles Java 8 (major version 52). Backup of prior source: /tmp/MyTank.bak.java
 - Tools: /tmp/wsweep.py (W-sweep 2 slices), /tmp/dmg.py (damage/net-energy model
   w/ gunheat) — rebuild from these notes if lost.
 - Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 2 / current pass) — opponent = vikdov__dominatorx — HEAD-ON GUN FINDING + ANTI-HEAD-ON MOVEMENT
+
+## STATUS: R1 head-on-gun+orbit-190px change improved us (71->51 losses, 30463->34363,
+## enemy 18973->16661). We WIN the match both rounds (winner=opus) but only ~61%
+## share / 7/10 firsts — genuinely competitive foe. THIS pass attacks the 51 losses.
+
+## KEY NEW FINDING: dominatorx's gun is HEAD-ON, not a lead gun
+Measured enemy gun offset when firing (round-1 250 sims, 1566 fire events):
+MEDIAN 0.018 rad, MEAN 0.049 rad off head-on-to-us. It aims at our CURRENT
+position (head-on/pattern), NOT where we WILL be. This CHANGES the movement lever.
+
+## ROOT CAUSE of the 51 losses (measured, not replay-biased):
+- Distance IDENTICAL in losses vs wins (~240px both) -> NOT positional drift.
+- We fire ~SAME as enemy (24.9 vs 24.0 shots/loss). Only diff: "behind on energy"
+  72% of ticks in losses vs 15% in wins -> pure energy-war TRADE variance.
+- Enemy hit density DROPS with range: 100-200px 10.5/1k, 200-300px 8.3/1k,
+  300-400px 6.4/1k, 400-500px 4.1/1k.
+- DECISIVE: enemy hits us with a RECENT REVERSAL 32.3% of the time, but reversals
+  only happen 15.9% of ticks -> hits are ~2x MORE LIKELY right after we reverse.
+  Exactly the head-on-gun signature: reversing brings us back toward the bullet's
+  landing spot (aimed at our old position) AND kills our lateral velocity.
+- Losses had LOWER lateral speed (3.81 vs 4.08 in wins). Steady tangential motion
+  at full lateral speed is what beats a head-on gun.
+
+## CHANGES THIS PASS (both attack enemy hits; gun aim UNCHANGED at W=1.0 head-on)
+1. MOVEMENT orbit ~190px -> ~215px (rangeBias thresholds 430/320/235/-0.45, push
+   out <175). Cuts enemy hit density ~20% (200-300px 8.3/1k vs 100-200px 10.5/1k);
+   our head-on hit rate holds well with range.
+2. FIRE-TRIGGERED REVERSAL 0.45 -> 0.15 (rate-limit 6->8), random 0.07->0.06
+   (rate-limit 8->12). Reversing on enemy fire is COUNTERPRODUCTIVE vs a head-on
+   gun (the ~2x hit multiplier above). Favor steady full-lateral-speed orbit.
+   (The 0.45 was tuned for the LEAD-gun juggernaut -- opposite gun type.)
+Gun (W=1.0 head-on, confirmed via W-sweep monotonic to head-on 44-47%), power
+tiers, energy-war taper, fire gates, enemyPassive mode ALL UNCHANGED. enemyPassive
+stays OFF (dominatorx deals us real damage -> damageTaken>=5). Backup: /tmp/MyTank.bak.java.
+Compiles Java 8 (major version 52), rc=0.
+
+## For next teammate — VERIFY
+- Want NEW /logs: losses BELOW 51 (ideally <25), ourFE mean UP from 50.8, enemy
+  score DOWN from 16661, share UP from 61%. If it REGRESSED (new losses / share
+  drop): (a) wider orbit may have cut our own hit rate more than expected -> pull
+  orbit back to ~200px (thresholds 420/310/225/-0.5, push out <165); (b) if fewer
+  reversals made us a fixed pattern the enemy learned (unlikely for a head-on gun
+  but possible if it's actually pattern-matching), raise the random reversal back
+  to 0.10; (c) full revert = /tmp/MyTank.bak.java (git prior, R1 config = 51 losses
+  but still WON the match).
+- dominatorx is a STOP-AND-GO dodger with a HEAD-ON gun -> KEEP W=1.0 head-on and
+  STEADY tangential movement (low reversals). Do NOT raise fire-triggered dodge
+  (that's for LEAD guns; it's ~2x WORSE here per the reversal-hit correlation).
+- CAVEAT: reversal change is GLOBAL. Vs a LEAD gun (juggernaut) higher dodge helped.
+  If a future lead-gun foe regresses, the principled fix is to DETECT the enemy gun
+  type (measure its fire offset like this pass) and set dodge probability by type,
+  rather than a single global constant. That's the real next improvement.
+- The remaining big lever vs its head-on gun is WAVE SURFING (high-risk, harness
+  broken, trust /logs only). Always re-check `head -1 /logs/rounds/0/sim_0.jsonl`
+  for opponent + INDEX MAPPING first. Keep MyTank class name + Java-8 bytecode.
