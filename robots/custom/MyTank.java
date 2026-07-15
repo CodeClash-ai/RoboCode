@@ -33,6 +33,7 @@ public class MyTank extends AdvancedRobot {
     private int wallEnemyScans = 0;
     private int straightEnemyScans = 0;
     private int crazyEnemyScans = 0;
+    private int stopGoEnemyScans = 0;
     private double enemyVelocityAvg = 0.0;
     private double enemyTurnRateAvg = 0.0;
 
@@ -114,6 +115,16 @@ public class MyTank extends AdvancedRobot {
             slowEnemyScans++;
         } else {
             slowEnemyScans = 0;
+        }
+        // Terminator/CTBot-style opponents often alternate between full-speed
+        // bursts and complete stops.  A consecutive slow counter misses these
+        // frequent hard stops, so keep a small leaky score for stop/go motion;
+        // it lets us keep the damped wall predictor instead of over-leading a
+        // freshly stopped target that only looked straight a few ticks earlier.
+        if (Math.abs(e.getVelocity()) < 0.15) {
+            stopGoEnemyScans = Math.min(40, stopGoEnemyScans + 2);
+        } else {
+            stopGoEnemyScans = Math.max(0, stopGoEnemyScans - 1);
         }
         // Several logged opponents (including the current genetic bot) spend
         // long stretches pinned against a wall.  When a target is wall-bound it
@@ -197,7 +208,7 @@ public class MyTank extends AdvancedRobot {
         // Orbit perpendicular, with a distance-control offset.  Far away we cut
         // inward; too close we open out.  wallSmooth then bends the path away
         // from the battlefield edges before we commit to it.
-        double preferredDistance = (crazyEnemyScans > 4 ? 305.0 : (dangerousWallEnemy() ? 335.0 : ((straightEnemyScans > 16 && harmlessLowFireEnemy() && wallEnemyScans <= 4) ? 310.0 : ((straightEnemyScans > 4 && harmlessLowFireEnemy()) ? 275.0 : (wallEnemyScans > 4 ? 315.0 : (headOnGunIsBest() ? 330.0 : (slowEnemyScans > 12 ? 285.0 : PREFERRED_DISTANCE)))))));
+        double preferredDistance = (crazyEnemyScans > 4 ? 305.0 : (dangerousWallEnemy() ? 335.0 : ((straightEnemyScans > 16 && harmlessLowFireEnemy() && wallEnemyScans <= 4) ? 310.0 : ((straightEnemyScans > 4 && harmlessLowFireEnemy()) ? 275.0 : (wallEnemyScans > 4 ? (stopGoEnemyScans > 8 ? 285.0 : 305.0) : (headOnGunIsBest() ? 330.0 : (slowEnemyScans > 12 ? 285.0 : PREFERRED_DISTANCE)))))));
         // Against the current GF-style opponent our gun struggles mostly due
         // to long bullet flight, while its own gun almost never connects.  Once
         // virtual guns report a hard-to-hit mover, tighten the orbit a bit to
@@ -354,10 +365,10 @@ public class MyTank extends AdvancedRobot {
             // damped averaged gun slightly ahead of full linear at our actual
             // shot times, despite long straight runs.
             gun = GUN_AVERAGED;
-        } else if (wallEnemyScans > 4 && straightEnemyScans > 12
+        } else if (wallEnemyScans > 4 && straightEnemyScans > 12 && stopGoEnemyScans <= 8
                 && Math.abs(e.getVelocity()) > 0.55 && Math.abs(turnRate) < 0.025
                 && (Math.abs(enemyVelocityAvg) > 4.2 || Math.abs(e.getVelocity()) > 5.5)
-                && (virtualSamples < 18 || virtualGunError[GUN_LINEAR] <= virtualGunError[GUN_AVERAGED] - 4.0)) {
+                && (virtualSamples < 10 || virtualGunError[GUN_LINEAR] <= virtualGunError[GUN_AVERAGED] - 7.0)) {
             // Antiwalls/Claptrap-style bots can make long, clean, *fast* wall
             // runs where full linear prediction wins.  But the current it_simple
             // traces have many fast wall runs where the normal averaged predictor
@@ -431,7 +442,7 @@ public class MyTank extends AdvancedRobot {
         // Current DroidPoet logs: a high-speed wall/perimeter runner that fires
         // often.  Do not wait for many virtual-wave samples before switching out
         // of the old "harmless wall target" max-power close-orbit mode.
-        return wallEnemyScans > 4 && enemyFireCount > 3;
+        return wallEnemyScans > 4 && enemyFireCount > 3 && stopGoEnemyScans <= 12;
     }
 
     private double bestGunError() {
@@ -518,7 +529,7 @@ public class MyTank extends AdvancedRobot {
             return new double[] {enemyX, enemyY};
         }
         if (wallEnemyScans > 4 && gunType == GUN_AVERAGED && !dangerousWallEnemy()
-                && !(straightEnemyScans > 12 && harmlessLowFireEnemy()
+                && !(stopGoEnemyScans <= 8 && straightEnemyScans > 12 && harmlessLowFireEnemy()
                         && (Math.abs(enemyVelocityAvg) > 3.5 || Math.abs(velocity) > 5.0))) {
             // A harmless wall-bound bot often alternates between max-speed bursts
             // and hard stops/reverses.  Damping avoids over-leading those weak
