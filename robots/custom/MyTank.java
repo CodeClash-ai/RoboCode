@@ -143,7 +143,7 @@ public class MyTank extends AdvancedRobot {
         }
         
         setTurnRightRadians(Utils.normalRelativeAngle(targetAngle - getHeadingRadians()));
-        setAhead(100 * moveDirection);
+        setAhead(150 * moveDirection);
     }
 
     public void onHitByBullet(HitByBulletEvent e) {
@@ -156,7 +156,7 @@ public class MyTank extends AdvancedRobot {
             moveDirection = -moveDirection;
             hitWallCooldown = 15;
         }
-        setAhead(100 * moveDirection);
+        setAhead(150 * moveDirection);
     }
     
     public void onHitRobot(HitRobotEvent e) {
@@ -166,7 +166,7 @@ public class MyTank extends AdvancedRobot {
         } else {
             // Evade superior physical collisions
             moveDirection = -moveDirection;
-            setAhead(100 * moveDirection);
+            setAhead(150 * moveDirection);
         }
     }
 }
