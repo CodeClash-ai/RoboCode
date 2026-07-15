@@ -260,38 +260,10 @@ public class MyTank extends AdvancedRobot {
         //     bleed to 0 together; pressing a clear advantage harder should convert
         //     more of those into decisive wins before mutual attrition/inactivity
         //     decay has a chance to catch up to us too.
-        // Round 18 fix: the finishing/press-advantage overrides below used to
-        // force bulletPower to a flat 3.0 unconditionally. Against a fast/erratic
-        // mover (see round 17's velocity-based cap in bulletPowerForDistance()
-        // above, and README_agent.md's round 18 notes) that flat 3.0 override
-        // completely bypassed the velocity cap, forcing the slowest possible
-        // bullet (bulletSpeed = 20 - 3*3 = 11) at exactly the moments (enemy
-        // low on energy, or us far ahead) where we'd keep re-triggering this
-        // override turn after turn. Real match trace (round 1 sim_149.jsonl vs
-        // barriosnahuel__tirolio) showed us getting stuck in this state for
-        // 600+ consecutive ticks once the enemy's energy first dropped <= 16:
-        // we kept firing power-3.0 shots on a ~16-20 tick cycle, missing nearly
-        // every one against their up-to-8-velocity erratic movement, bleeding
-        // our own energy via bulletPower cost until we hit 0 and died (to a
-        // wall hit, but only because we'd already spent nearly everything on
-        // whiffed finishing shots) -- while the opponent's energy never dropped
-        // further because we simply couldn't land hits at that bullet speed.
-        // Fix: cap the forced "finishing"/"press advantage" power the same way
-        // bulletPowerForDistance() already caps the normal distance-based power,
-        // so a fast enemy still gets faster (more hittable) bullets even while
-        // we're trying to close out the kill or press an energy lead, instead of
-        // unconditionally reverting to the slowest bullet in the game.
-        double maxUsablePower = 3.0;
-        double absEnemyVelocityForCap = Math.abs(e.getVelocity());
-        if (absEnemyVelocityForCap > 6.0) {
-            maxUsablePower = 1.3;
-        } else if (absEnemyVelocityForCap > 3.0) {
-            maxUsablePower = 1.9;
-        }
         if (e.getEnergy() <= 16) {
-            bulletPower = maxUsablePower;
+            bulletPower = 3.0;
         } else if (getEnergy() - e.getEnergy() > 15) {
-            bulletPower = maxUsablePower;
+            bulletPower = 3.0;
         }
         double bulletSpeed = 20 - 3 * bulletPower;
 

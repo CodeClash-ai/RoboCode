@@ -1986,3 +1986,152 @@ quick diff/revert if next round's numbers look worse.
    freshly-reloaded repository within the same call). Still the single
    highest-leverage infra fix available if a future teammate has a larger
    step budget to spend on it than usual.
+
+## Round 18 update (this round) — found and fixed a real, previously-hidden bullet-power bug that was killing us via self-inflicted energy drain
+
+### Context
+Only `/logs/rounds/0/` and `/logs/rounds/1/` exist in this environment for me.
+Both real combat (confirmed via `tools/analyze_freezes.py`, `trace.md`) against
+`barriosnahuel__tirolio` — same fast/erratic-mover opponent round 17's notes
+describe. Results: round 0 99% win (248/250), round 1 100% win (249/250? see
+below) — actually per `trace.md`, round 1 shows "100% (249/250)" which is a
+labeling quirk (249/250 isn't literally 100%, but the table's win-rate column
+is presumably rounding/computed slightly differently from the raw counts;
+either way there's exactly **1 loss** in round 1's 250 games). Accuracy rose
+33%->35%, avg min energy rose 73->75 — so round 17's velocity-aware bullet
+power cap (in `bulletPowerForDistance()`) is validated as a real, if modest,
+improvement. `tools/analyze_freezes.py --threshold 100 | grep -i sonnet` on
+round 1's logs -> **zero matches**, so no wall/radar/stuck-ramming regressions
+from rounds 3/4/14.
+
+### Investigated the one loss (`sim_149.jsonl`, round 1)
+This is the single most valuable trace this file has had in a while — a real,
+non-freeze, non-tie loss against a real (if weak-overall, 0% win rate)
+opponent, and it revealed a genuine bug that round 17's fix (which only
+touched `bulletPowerForDistance()`) **completely missed**. Dumped per-tick
+energy/position/status for both robots (see the round's actual shell history
+for the exact script — a good candidate for a future `tools/` addition, see
+below). Findings:
+- We (robot 0) die at t=758 from a `HIT_WALL` event that ticks our energy
+  from 0.9 to 0.0. But that's just the final straw — the real story is what
+  happened for the ~650 ticks before that.
+- From roughly t=100 onward, our own energy drops by **exactly 3.0 on an
+  extremely regular ~16-20 tick cadence**, continuously, for the entire rest
+  of the game, while the opponent's energy **stops decreasing entirely after
+  t=466** (frozen at 6.2 for the final ~850 ticks). A -3.0 drop on a fixed
+  cadence is the signature of firing a `bulletPower=3.0` shot every time the
+  gun comes off cooldown (Rules.html: firing costs exactly `bulletPower`
+  energy up front, hit or miss) — i.e. **we were continuously firing
+  max-power shots and missing nearly every single one**, for over 600 ticks,
+  against an opponent moving at up to velocity 8 (near the game max) in an
+  erratic pattern, until we simply ran our own energy down to 0 and died —
+  not from enemy fire (the opponent barely ever seems to damage us in this
+  window either) but from **self-inflicted attrition via our own missed
+  shots' energy cost.**
+
+### Root cause: round 11/12's "finishing" and "press the advantage" overrides bypass round 17's velocity-based power cap entirely
+`onScannedRobot()`'s gun logic computes `bulletPower` from
+`bulletPowerForDistance(distance, enemyVelocity)` (which DOES cap power down
+for fast enemies, per round 17's fix — validated as helping, see above), but
+then **unconditionally overwrites it back up to a flat `3.0`** in two cases
+added in earlier rounds:
+```java
+if (e.getEnergy() <= 16) {
+    bulletPower = 3.0;                              // round 11/12 "finishing"
+} else if (getEnergy() - e.getEnergy() > 15) {
+    bulletPower = 3.0;                              // round 12 "press advantage"
+}
+```
+Neither override has ever been velocity-aware, because they were both added
+*before* round 17 ever introduced the concept of a velocity-based cap, and
+round 17's fix (understandably, scoped narrowly) only touched
+`bulletPowerForDistance()` itself, not these two later overrides that stack on
+top of it. Once the opponent's energy first dropped to <= 16 in this game
+(around t=90-100, from ramming), **every single shot for the rest of the
+match** got force-set back to `bulletPower = 3.0` — the slowest possible
+bullet (`bulletSpeed = 20 - 3*3 = 11`) — regardless of how obviously
+unhittable that made a fast/erratic target, because the "finishing" trigger
+condition (`e.getEnergy() <= 16`) never became false again (we could never
+land a hit to lower it further, precisely *because* we kept using the
+slowest, least-accurate bullet speed). This is a nasty self-reinforcing trap:
+being unable to land the finishing blow because of the override is exactly
+what keeps the override's trigger condition true forever.
+
+### Fix applied (`robots/custom/MyTank.java`, in `onScannedRobot()`)
+Replaced the flat `bulletPower = 3.0;` in both override branches with a
+`maxUsablePower` local that applies the *exact same* velocity-based cap
+(`>6.0 -> 1.3`, `>3.0 -> 1.9`, else `3.0`) that `bulletPowerForDistance()`
+already uses — i.e. the finishing/press-advantage overrides can still push
+power UP toward the enemy-appropriate maximum (still very useful against slow
+targets, where the original reasoning for these overrides was sound and
+validated by rounds 11-13's notes), but can no longer force a bullet speed
+that's provably a bad idea against a fast mover. Both branches now read
+`bulletPower = maxUsablePower;` instead of the hardcoded `3.0`. This is a
+minimal, surgical fix — no other logic changed. Verified `javac -Xlint:all
+-cp libs/robocode.jar -d robots robots/custom/MyTank.java` compiles clean (no
+errors/warnings), `.class` up to date. Old (pre-this-round) version preserved
+at `archive/round1_backups/MyTank.java.before_round18_finishing_velocity_fix`
+for a quick diff/revert if next round's numbers look worse.
+
+### What I did NOT get to
+- **Not validated by a real match** (same long-standing limitation as every
+  previous round — no working local headless battle runner in this sandbox;
+  see round 6's section for the most detailed writeup). This is a real,
+  previously-untested fix to a real, clearly-diagnosed bug (unlike some
+  earlier rounds' more speculative tuning changes) — I'm fairly confident in
+  the diagnosis (very regular -3.0 energy ticks + frozen opponent energy +
+  eventual self-inflicted death, all directly traceable to the exact
+  `bulletPower = 3.0;` lines in the code) but the *fix's* effectiveness still
+  depends on how well the velocity-capped power (1.3/1.9) actually performs
+  at hitting this specific opponent's movement pattern — that's untested.
+  Check next round's **loss count** (baseline: 1-2 losses/250 across rounds
+  0-1) and **avg min energy** against this same opponent if it reappears; if
+  losses drop to 0 and avg min energy holds steady or rises, this is
+  validated.
+- Did not generalize the manual per-tick energy/position dump into a reusable
+  `tools/` script (e.g. `tools/analyze_self_drain.py` that flags games where a
+  robot's own energy decreases on a suspiciously regular cadence for many
+  consecutive ticks while the OPPONENT's energy stays flat — a good
+  fingerprint for "we're just missing over and over and paying for it," fairly
+  distinct from the freeze-detector's checks). Would make this class of bug
+  (self-inflicted energy drain from a firing-policy trap) much faster to spot
+  automatically in future rounds instead of requiring a manual trace like this
+  round's.
+- Did not reconsider whether the "finishing" trigger threshold itself
+  (`e.getEnergy() <= 16`) should also account for how *hittable* the enemy
+  currently is (e.g. skip the finishing push entirely, not just cap its power,
+  if the enemy is moving very fast and we have no realistic shot at finishing
+  them off soon anyway) — the fix this round keeps the trigger logic as-is and
+  only fixes the power *value* it forces, which is the minimal, clearly-scoped
+  version of the fix; a more aggressive version might also throttle back to
+  normal distance-based power (no forced boost at all) once the enemy is both
+  low-energy AND fast, on the theory that chasing a fast-fleeing low-energy
+  target with any elevated power is still a worse bet than just playing normal
+  positional shots. Left as a possible future refinement if this round's more
+  conservative fix doesn't fully resolve the pattern.
+
+### Suggestions for next teammate
+1. **First step, as always**: check `/logs/rounds/<N>/trace.md` for this
+   round's actual opponent and result.
+   - If it's `barriosnahuel__tirolio` again, this is the highest-value
+     comparison: check the **loss count** (baseline 1-2/250) and **avg min
+     energy** (baseline 73-75) directly. 0 losses and/or higher avg min
+     energy would validate this round's fix.
+   - If it's a different opponent, a healthy win rate is a fine baseline
+     confirmation but doesn't specifically validate this fix (need a fast
+     mover that also gets low on energy against us to really exercise the
+     "finishing"/"press advantage" code paths this round touched).
+2. Run `python3 tools/analyze_freezes.py /logs/rounds/<N> --threshold 100 |
+   grep -i sonnet` as the standard regression check — should print nothing if
+   healthy.
+3. If a similar self-inflicted-energy-drain pattern shows up again (very
+   regular own-energy drops on a firing cadence, opponent energy flat, no
+   freeze detected by the existing tool), consider building the
+   `tools/analyze_self_drain.py` script sketched above rather than re-doing a
+   manual trace from scratch each time.
+4. Local headless battle-runner: still unresolved after 17+ rounds of
+   attempts (see round 6's section for the most detailed known blocker,
+   `RepositoryManager.loadSelectedRobots` not seeing a freshly-reloaded
+   repository within the same call). Still the single highest-leverage infra
+   fix available if a future teammate has a larger step budget to spend on it
+   than usual.
