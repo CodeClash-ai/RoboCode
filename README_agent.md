@@ -1847,3 +1847,142 @@ Implementation (`robots/custom/MyTank.java`, in `onScannedRobot()`):
    freshly-reloaded repository within the same call). Still the single
    highest-leverage infra fix available if a future teammate has a larger
    step budget to spend on it than usual.
+
+## Round 17 update (this round) — new fast erratic-mover opponent; velocity-aware bullet power
+
+### Context
+Only `/logs/rounds/0/` exists in this environment for me. Per `trace.md` /
+`results.json`, this round's opponent is a **new** one, `barriosnahuel__tirolio`
+(different from every opponent documented in rounds 1-16 above). Result:
+**99% win rate (248/250)**, team score **45192 vs opponent's 565**, but
+**33% accuracy** (down from the 41-80% range seen against previous, mostly
+slow/passive opponents) and **avg min energy 73** (down from 80-96 in recent
+rounds) — this opponent is clearly a step up in difficulty, though we still
+won almost every game. `tools/analyze_freezes.py --threshold 100 | grep -i
+sonnet` -> zero matches, confirming the round-3/4/14 wall/radar/stuck-ramming
+fixes are all still holding, no regressions.
+
+### Investigated the 2 losses (sim_89.jsonl, sim_199.jsonl)
+Both losses show the SAME pattern, and it's genuinely new (not any previously
+documented bug):
+- The opponent (`barriosnahuel__tirolio`) moves **very fast** (velocity up to
+  ~8, the game's max) and covers the WHOLE map erratically (checked x/y over
+  time — it's not orbiting us, it just zips to far corners of the field
+  repeatedly). It also basically **never fires** (its own energy stays
+  perfectly flat except when we hit it).
+- Since it never fires, there's no incoming-damage race — the losses were
+  caused entirely by **us bleeding our own energy to 0 via a long string of
+  missed shots** (each costing `bulletPower` energy up-front regardless of
+  hit/miss, per `Rules.html`), while the opponent's energy stayed high because
+  it wasn't spending anything back. In `sim_89.jsonl`, I dumped every tick
+  where either robot's energy changed >0.5 (see git history / rerun the
+  python one-liner in this section's original chat log if needed as a
+  template) — the dominant pattern is us losing 1.5-3.0 energy roughly every
+  16 ticks (bullet-power costs) with only 3 real landed hits in the whole
+  ~800-turn game before dying at 0 energy vs. the opponent's 58.
+- Also saw 6+ `HIT_WALL` events for us in that one game (a bit above the
+  ~2.8/game series average, but not wildly so — didn't chase this further
+  this round, see "what I did not get to" below).
+
+### Root cause (new insight not previously documented in this file)
+Round 12's energy-swing math (`swing(P,p) = p*(9P-2) - P`) implicitly assumed
+hit probability `p` is **independent of bullet power** — true against a
+slow/near-stationary target (every opponent documented in rounds 1-16 was
+slow-to-moderate speed), but **false** against a genuinely fast/erratic
+mover: `bulletSpeed = 20 - 3*power`, so higher power means a strictly slower
+bullet, which gives a fast-moving target measurably more time-of-flight to
+have moved somewhere else by the time the bullet arrives. Against this
+opponent, using our old high, distance-only bullet power (2.2-3.0 for most of
+the fight) both cost more per shot AND lowered our real hit probability
+compared to using a cheaper, faster bullet — a double penalty that round
+7/8/12's tuning never anticipated because no previous opponent was fast
+enough to expose it.
+
+### Change made this round (`robots/custom/MyTank.java`)
+`bulletPowerForDistance()` now also takes `enemyVelocity` as a parameter (call
+site in `onScannedRobot()` updated to pass `e.getVelocity()`). After computing
+the existing distance-based power band, it's now additionally capped based on
+the enemy's current speed:
+- `abs(enemyVelocity) > 6.0` (near the game's max speed): power capped to 1.3.
+- `abs(enemyVelocity) > 3.0`: power capped to 1.9.
+- Otherwise (slow/stationary, i.e. every previously-documented opponent):
+  **unchanged**, exactly the round 7/8 distance bands as before (3.0/2.9/2.2/1.5).
+
+This is a pure additional cap (`Math.min`), so it can only ever reduce power
+relative to before, and only when the enemy is actually moving fast — it
+should have zero effect against any of the slow opponents seen in rounds
+1-16's history, and only kicks in for exactly the failure mode diagnosed
+above. The existing "finishing" (`e.getEnergy() <= 16`) and "press the
+advantage" (`getEnergy() - e.getEnergy() > 15`) overrides still force max
+power 3.0 regardless, unchanged from round 12 — I judged the extra
+flight-time risk worth it in those specific situations (trying to close out a
+kill, or already comfortably ahead) rather than adding more conditions this
+round; if a future teammate sees finishing shots whiffing a lot against a
+fast mover specifically, that override could also be reconsidered.
+
+Verified `javac -Xlint:all -cp libs/robocode.jar -d robots
+robots/custom/MyTank.java` compiles clean (no errors/warnings), `.class`
+up to date. Old (pre-this-round) version preserved at
+`archive/round1_backups/MyTank.java.before_round17_velocity_power` for a
+quick diff/revert if next round's numbers look worse.
+
+### What I did NOT get to
+- **Not validated by a real match** (same long-standing limitation as every
+  previous round — no working local headless battle runner in this sandbox;
+  see round 6's section for the most detailed writeup of exactly where that
+  effort gets stuck). This is a real, previously-untested behavioral change.
+  Check next round's **accuracy** and **avg min energy** against this same
+  opponent (if it reappears) closely: if accuracy improves and/or avg min
+  energy rises toward the 80-96 range seen against slower opponents, the
+  velocity-based cap is validated. If accuracy or score drops, the caps
+  (1.3 / 1.9, at velocity thresholds 6.0 / 3.0) may need loosening, or this
+  should be reverted via the archive file above.
+- Did not touch movement/orbit logic, `PREFERRED_DISTANCE`, wall-margin, or
+  the stuck-watchdog thresholds this round, even though this game's wall-hit
+  count (6+ in one loss) looked a bit elevated — wanted to isolate the
+  bullet-power change so it's cleanly attributable in next round's logs; if
+  wall hits are still high next round even with accuracy/energy improved,
+  that's a separate, still-open thing to investigate (possibly our orbit
+  logic drags us toward walls when chasing a fast mover that itself runs near
+  the boundary a lot — would need a dedicated look at whether `PREFERRED_
+  DISTANCE`/orbit-angle choice should also depend on enemy velocity, not just
+  bullet power).
+- Did not do a rigorous statistical validation that `p` (hit probability)
+  actually varies with bullet power against this specific opponent (the
+  "double penalty" reasoning above is a first-principles argument from the
+  physics of `bulletSpeed = 20 - 3*power` plus observed erratic fast movement,
+  analogous in spirit to round 12's `Rules.class`-based math correction, but
+  not empirically measured per-power-level from the logs). A future teammate
+  with more steps could try bucketing bullets by power level and checking
+  hit/miss outcomes in `sim_*.jsonl` (bullet events include `p` for power; a
+  full accuracy-by-power breakdown would need to trace each bullet from fire
+  to disappearance — not trivial with the current log format, would be a good
+  `tools/` script to add) to confirm/refute this more rigorously than the
+  manual single-game trace done this round.
+
+### Suggestions for next teammate
+1. **First step, as always**: check `/logs/rounds/<N>/trace.md` for this
+   round's actual opponent and result.
+   - If it's `barriosnahuel__tirolio` again, this is the highest-value
+     comparison: check accuracy (baseline 33%) and avg min energy (baseline
+     73) directly against this round's numbers to see if the velocity-based
+     power cap helped. Also check the loss count (baseline 2/250) — 0 or 1
+     losses would be a clear win for this change.
+   - Otherwise, treat a similar or better win-rate/score as a healthy
+     baseline (no regression) but not a strong validation of this round's
+     specific change against a fast mover, same caveat as many previous
+     rounds' notes when the opponent changes.
+2. Run `python3 tools/analyze_freezes.py /logs/rounds/<N> --threshold 100 |
+   grep -i sonnet` as the standard regression check — should print nothing if
+   healthy.
+3. If wall-hit counts remain elevated against fast-mover opponents
+   specifically, consider making `PREFERRED_DISTANCE` or orbit-angle choice
+   velocity-aware too (e.g. keep more distance / bias movement away from
+   corners more aggressively when the enemy itself is moving at high speed
+   near a boundary), as a follow-up to this round's bullet-power-only fix.
+4. Local headless battle-runner: still unresolved after 16+ rounds of
+   attempts (see round 6's section above for the most detailed known
+   blocker, `RepositoryManager.loadSelectedRobots` not seeing a
+   freshly-reloaded repository within the same call). Still the single
+   highest-leverage infra fix available if a future teammate has a larger
+   step budget to spend on it than usual.

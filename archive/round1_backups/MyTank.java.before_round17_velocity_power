@@ -224,7 +224,7 @@ public class MyTank extends AdvancedRobot {
         setTurnRadarRightRadians(radarTurn * 1.5);
 
         // --- Gun: linear prediction targeting ---
-        double bulletPower = bulletPowerForDistance(e.getDistance(), e.getVelocity());
+        double bulletPower = bulletPowerForDistance(e.getDistance());
         // Round 12 tuning: corrected energy-management math. Round 11's version of
         // this block throttled bullet power down to a cheap 1.0 whenever OUR OWN
         // energy was low, reasoning (incorrectly) that low accuracy (~17% against
@@ -497,7 +497,7 @@ public class MyTank extends AdvancedRobot {
         execute();
     }
 
-    private double bulletPowerForDistance(double distance, double enemyVelocity) {
+    private double bulletPowerForDistance(double distance) {
         // Round 7 tuning pushed power up across all bands and it paid off: round 1's
         // real match (this same opponent, it_economics__ite_bomax, still barely moves
         // at avg speed 0.8 and only 4% accuracy against us) showed accuracy actually
@@ -510,46 +510,14 @@ public class MyTank extends AdvancedRobot {
         // mobile/accurate opponent shows a win-rate or accuracy regression here, revert
         // toward archive/round1_backups/MyTank.java.before_round8_tuning (round 7 values:
         // 2.6/2.0/1.3) or even further back to .before_round7_tuning (original 2.2/1.5/1.0).
-        double power;
         if (distance < 150) {
-            power = 3.0;
+            return 3.0;
         } else if (distance < 350) {
-            power = 2.9;
+            return 2.9;
         } else if (distance < 550) {
-            power = 2.2;
-        } else {
-            power = 1.5;
+            return 2.2;
         }
-
-        // Round 17 addition: the round 7/8 tuning above was validated against
-        // near-stationary/slow opponents (it_economics__ite_bomax, avg speed 0.8;
-        // kinnla__antiwalls, avg speed 1.0) where bullet SPEED barely matters
-        // because the target isn't going anywhere fast regardless of how long our
-        // bullet takes to arrive. This round's opponent (barriosnahuel__tirolio,
-        // see README_agent.md round 17 notes) is a genuinely fast, erratic mover
-        // (observed velocity up to ~8, the game's max) that almost never fires
-        // back itself -- match logs showed us losing 2/250 games purely by
-        // bleeding our OWN energy to 0 via a long string of missed high-power
-        // shots (each costing bulletPower energy up front, hit or miss) while the
-        // enemy's energy stayed flat because it wasn't shooting either. Since
-        // bulletSpeed = 20 - 3*power, HIGHER power means a SLOWER bullet, which
-        // gives a fast/erratic target strictly more time-of-flight to change
-        // direction before the bullet arrives -- i.e. against a fast mover,
-        // higher power doesn't just cost more per shot, it also directly lowers
-        // hit probability (unlike against a slow/stationary target, where p is
-        // roughly power-independent, which is what round 7/8/12's swing(P,p) math
-        // implicitly assumed). Throttle power down when the enemy is moving fast,
-        // trading some damage-per-hit for meaningfully faster bullets (better
-        // real hit chance) and cheaper misses, without touching the bands above
-        // at all for slow/stationary opponents (absVelocity ~= 0 keeps the exact
-        // round 7/8 behavior).
-        double absVelocity = Math.abs(enemyVelocity);
-        if (absVelocity > 6.0) {
-            power = Math.min(power, 1.3);
-        } else if (absVelocity > 3.0) {
-            power = Math.min(power, 1.9);
-        }
-        return power;
+        return 1.5;
     }
 
     public void onHitByBullet(HitByBulletEvent e) {
