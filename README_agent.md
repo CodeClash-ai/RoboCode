@@ -2741,3 +2741,42 @@ Compiles Java 8 (major version 52), rc=0. Backup of prior source: /tmp/MyTank.ba
 - Tool: /tmp/wsweep.py (W-sweep) and /tmp/dmg.py (damage/net-energy). Rebuild from
   this note if lost. Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for the
   current opponent name first. Keep MyTank class name + Java-8 bytecode.
+
+# Agent Notes (Round 2 verification pass) — opponent = avsthiago__sadbot
+
+## STATUS: THE ROUND-1 W=1.0 HEAD-ON CHANGE WORKED — NO CODE CHANGE THIS PASS
+Verified /logs/rounds/{0,1} (opponent avsthiago__sadbot, SLOW lightly-curving
+mover: movefrac 0.36, avgV 1.89, avg|dh| 0.031, engages ~237px, loses energy war):
+- Round 0 (before change, W=0.25 leftover from FAST velocirobot): opus 44617 vs
+  sadbot 4656. 90% share, 10/10 firsts BUT 1 turn-limit timeout (sim_83: we were
+  DOMINATING 104.7E vs 8.4E at 281 turns, round ended before kill).
+- Round 1 (prior teammate switched gun aim to W=1.0 head-on): opus 44592 vs sadbot
+  4368. results_0.txt: opus_4_8.MyTank 1788 (90%), 10/10 firsts. Full 250-sim
+  sweep: LOSSES = 0/250, close(<20E) = 0/250 (the sim_83 timeout is GONE — faster
+  kills). Our final energy min/mean = 35.6/108.9. Mean killtick 193.7 (down from
+  203). Enemy DIES every game.
+
+## Gun aim W=1.0 head-on CONFIRMED optimal (per round-1 W-sweep in prior notes)
+sadbot is a SLOW lightly-curving target -> best hit at current pos; any lead
+overshoots (W-sweep 2 slices monotonic to head-on: W=1.0 ~64% vs W=0.25 ~53%).
+The ~10% score leak is unavoidable enemy survival-bullet damage during the ~194
+ticks before the kill. Raising power to kill faster REGRESSES real games (longer
+cooldown -> longer engagement -> MORE enemy hits, per myfirstkiller/exterminador/
+tracker notes). NOT fixable without wave surfing (high risk, local harness broken).
+
+## Decision: NO code change (deliberate)
+Source IDENTICAL to round-1 winning commit 5f8896c (git diff on MyTank.java =
+empty). W=1.0 head-on (line 283), power tiers 3.0/<300 2.4/<400 1.6/<550 1.0/else,
+orbit ~150px w/ graduated inward pull (-1.1/-0.85/-0.55, push-out <120), energy-war
+taper, low-E clamps. Any edit only risks regression on a 250/250 sweep we win with
+35+ E to spare. Re-verified compile:
+  javac --release 8 -cp libs/robocode.jar -d robots robots/custom/MyTank.java  # OK
+  javap -v robots/custom/MyTank.class | grep "major version"  # -> 52 (Java 8)
+
+## For next teammate
+Only act if a NEW /logs shows win rate <100% or our energy collapsing to a loss
+(enemy final E > 0 while ours = 0). sadbot is SLOW/lightly-curving -> KEEP W=1.0
+head-on. If it becomes a FAST mover (avg|v|>4), lower W toward 0.25; if HEAVILY-
+curving (avg|dh|>0.06), set W=0.0 (circular) + orbit out ~260px. Always re-check
+`head -1 /logs/rounds/0/sim_0.jsonl` for the current opponent name first.
+Keep MyTank class name + Java-8 bytecode (only hard requirement).
