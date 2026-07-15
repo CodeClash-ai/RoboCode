@@ -5943,3 +5943,55 @@ w/ gunheat + distance-tiered power). Rebuild from these if lost.
   head-on-gun wins. Test carefully -- movement changes are high-risk.
 - Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING.
 - Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 2 / current pass) — opponent = pez__haikupoet — REVERTED R1 HEAD-ON GUN REGRESSION (it LOST the match)
+
+## CRITICAL: R1's W=0.0 -> W=1.0 head-on change LOST the match — reverted to W=0.0
+Opponent = pez__haikupoet (MODERATE near-straight mover, movefrac 0.69, avgV 3.88,
+avg|dh| 0.028, mild lead gun offset ~0.214, engages ~190px). INDEX both rounds
+i=0=haikupoet, i=1=opus. Cross-round MATCH results (results.json winner = DECISIVE):
+- R0 (W=0.0 full linear lead): WON — opus 39044 vs haikupoet 14634 (78% share).
+- R1 (prior teammate switched gun aim W=0.0 -> W=1.0 head-on, trusting a BIASED
+  W-sweep/damage replay): LOST — opus 23359 vs haikupoet 25398. winner=pez__haikupoet!
+
+## THE DECISIVE UNBIASED SIGNAL: real in-game hit rate (energy-events, /tmp/realhr.py)
+Measured OUR real hit rate from actual energy-change events across all 250 sims each round
+(fire = our energy drop 0.09..3.05; hit = enemy energy drop >3.5):
+  R0 (W=0.0 full lead):  24 losses, realHR 35.2%, ourFE mean 53.2  -> WON match
+  R1 (W=1.0 head-on):   136 losses, realHR 21.5%, ourFE mean 20.7  -> LOST match
+W=0.0 full lead is GENUINELY better in-game (higher real hit, 5.7x fewer losses,
+2.5x higher final energy). The R1 W-sweep/damage model was BIASED — the R0 enemy
+path was reactive to our ACTUAL W=0.0 shots, so a replay artificially FAVORS a
+DIFFERENT aim (W=1.0). This is the EXACT trap the README warns about repeatedly
+(crazy flat-power, velocirobot, dominatorx, smallpoet R1->R2, pez__poet). The REAL
+cross-round win/loss + realHR is decisive.
+
+## THIS PASS: reverted W to 0.0 (functionally identical to R0 winning config aec6ad7)
+Verified `diff` vs aec6ad7:MyTank.java = only the W-line COMMENT differs (W value
+identical at 0.0). All movement/power/dodge unchanged (close orbit ~120-190px,
+power tiers 3.0/<160 2.6/<250 2.2/<380 1.5/<500 1.0/<600 0.5, dodge-on-fire 0.30
+anti-lead-gun). Backup of R1 (bad, W=1.0) source: /tmp/MyTank_r1_bad.java.
+Compiles Java 8 (major version 52), rc=0.
+
+## LESSON (reinforces the whole README): NEVER switch gun aim off the biased replay
+The W-sweep replay uses the enemy's RECORDED path which was REACTIVE to our ACTUAL
+shots -> it cannot fairly compare a DIFFERENT aim, and systematically overstates
+whatever aim differs from what we fired. The prior teammate's note claimed
+"anti-bias: fired W=0.0 yet head-on wins -> trustworthy" — this reasoning is WRONG:
+the bias direction is NOT simply "favors the fired aim"; a reactive-dodge enemy's
+path makes head-on look artificially good because the recorded positions cluster
+where it ACTUALLY was (which our old shots pushed it away from predictably). Only
+the REAL cross-round win rate + energy-event hit rate is trustworthy. haikupoet is
+a moderate near-straight mover but with enough velocity/drift that FULL LINEAR LEAD
+(W=0.0) beats head-on in REAL play. KEEP W=0.0.
+
+## For next teammate
+Only act if a NEW /logs shows the MATCH lost (winner=pez__haikupoet) or win rate
+collapsing. KEEP W=0.0 full linear lead + close orbit + dodge 0.30. Do NOT switch
+to head-on off any W-sweep/damage replay (it LOST the match). The remaining lever
+for the 24 variance losses is WAVE SURFING (high-risk, harness broken). Tool:
+/tmp/realhr.py (real in-game hit rate + losses per round — the UNBIASED decider;
+rebuild: for each sim, per-file header maps idx->name enemy=non-'opus'; count our
+energy drops 0.09..3.05 = fires, enemy drops >3.5 = our hits; loss = ourFE<=0 and
+enemyFE>0). Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for opponent +
+INDEX MAPPING first. Keep MyTank class name + Java-8 bytecode (only hard requirement).
