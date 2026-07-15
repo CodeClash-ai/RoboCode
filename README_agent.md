@@ -4567,3 +4567,44 @@ energy / lower power (we win bullet dmg; conserving LOST vs wallspoet). The only
 robust further lever is WAVE SURFING (high-risk, local harness broken -> trust
 /logs only). Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for opponent +
 INDEX MAPPING first (R0/R1: i=0=opus, i=1=pikachu). Keep MyTank + Java-8 bytecode.
+
+# Agent Notes (Round 1 / current pass) — opponent = mgalushka__maximbot
+
+## STATUS: PERFECT WIN (250/250, 0 losses) — TUNED GUN W 0.5 -> 1.0 (head-on)
+Opponent CHANGED to mgalushka__maximbot. Verified /logs/rounds/0:
+- results.json: opus-4-8 42853 vs mgalushka__maximbot 7838 (winner=opus).
+- results_0.txt: opus_4_8.MyTank 1722 (84%), 10/10 firsts; enemy 329 (16%).
+- Full 250-sim sweep: LOSSES = 0/250, close(<20E) = 0/250. ourFE min/mean =
+  40.6/101.3. Mean killtick 177 (FAST kills), turns mean 329. Enemy DIES every game.
+
+## Opponent = MODERATE near-straight mover (index i=1; read header per file)
+Per-sim analysis (250 games, header maps idx->name, enemy=non-'opus'):
+- movefrac 0.68, avgV 4.51 (moderate), avg|dh| 0.022 (NEAR-STRAIGHT, minimal turn),
+  engages ~240px. Fires back enough to leak ~16% share. Loses the energy war
+  decisively (we kill it by tick 177 with 40+ E to spare).
+
+## CHANGE THIS PASS: gun aim W 0.5 -> 1.0 (HEAD-ON)
+The gun was left at W=0.5 (blend, tuned for kcanida__pikachu, a FAST HEAVY spinner
+avg|dh| 0.149 — WRONG profile for this near-straight mover). W-sweep replay
+(/tmp/wsweep.py, per-tick interception over recorded paths, TWO independent 80-game
+slices), robustly bimodal with HEAD-ON clearly best:
+  slice A: W0.0 0.397 | W0.25 0.342 | W0.5 0.353 | W0.75 0.400 | W0.9 0.523 | W1.0 0.550
+  slice B: W0.0 0.393 | W0.25 0.327 | W0.5 0.342 | W0.75 0.387 | W0.9 0.512 | W1.0 0.542
+The current W=0.5 sat in the TROUGH (~0.35); head-on wins by ~20 points. Damage
+model (/tmp/dmg.py, 120 games, distance-tiered power): W=0.5 dmg 12138 net +449 ->
+W=1.0 dmg 17886 (+47%) net +3821. BOTH damage AND net energy up -> no downside.
+Near-straight moderate mover -> head-on optimal (matches florian2/gruffalo/ultron/
+hugbot documented above). Movement (wide orbit ~530px from pikachu/gntest), power
+tiers, dodge, enemyPassive mode ALL UNCHANGED (we already win 250/250 -> only touch
+the mis-set gun aim). enemyPassive stays OFF (maximbot deals real damage).
+Only ONE functional line changed (verified via git diff). Compiles Java 8 (major
+version 52). Backup of prior source: /tmp/MyTank.bak.java.
+
+## For next teammate — VERIFY
+- Want NEW /logs: win rate 100% held, killtick DOWN from 177, score share UP from
+  84%, enemy score DOWN from 7838. If it REGRESSED (unlikely — sweep clean + matches
+  documented near-straight-mover pattern), revert W to 0.5 (/tmp/MyTank.bak.java or
+  git prior). maximbot is a MODERATE near-straight mover -> KEEP W=1.0 head-on.
+  If it becomes a HEAVY spinner (avg|dh|>0.06), set W=0.0 (circular) or W=0.5.
+- Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for opponent name + INDEX
+  MAPPING first. Keep MyTank class name + Java-8 bytecode (only hard requirement).
