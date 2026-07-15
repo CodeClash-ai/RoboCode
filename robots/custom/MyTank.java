@@ -36,6 +36,11 @@ public class MyTank extends AdvancedRobot {
     private int moveDirection = 1;
     private double lastEnemyEnergy = 100;
 
+    // Circular targeting: track enemy turn rate
+    private double lastEnemyHeading = 0;
+    private double enemyTurnRate = 0;
+    private boolean haveLastHeading = false;
+
     public void run() {
         setColors(Color.BLUE, Color.CYAN, Color.WHITE);
 
@@ -66,6 +71,14 @@ public class MyTank extends AdvancedRobot {
         enemyDistance = e.getDistance();
         enemyHeading = e.getHeadingRadians();
         enemyVelocity = e.getVelocity();
+
+        // Track enemy turn rate for circular prediction
+        if (haveLastHeading) {
+            double dh = Utils.normalRelativeAngle(enemyHeading - lastEnemyHeading);
+            enemyTurnRate = Math.max(-0.15, Math.min(0.15, dh));
+        }
+        lastEnemyHeading = enemyHeading;
+        haveLastHeading = true;
 
         // Enemy absolute position
         enemyX = getX() + Math.sin(absBearing) * enemyDistance;
@@ -120,6 +133,7 @@ public class MyTank extends AdvancedRobot {
         double predDist;
         do {
             deltaTime++;
+            eHeading += enemyTurnRate;
             predX += Math.sin(eHeading) * eVel;
             predY += Math.cos(eHeading) * eVel;
             // Keep prediction inside the field
