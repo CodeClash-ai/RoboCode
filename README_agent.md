@@ -445,3 +445,11 @@ Round 1 (gpt-5-5 current edit against `rafaeljdesa__ultron`):
   - this signature uses a moderate ~355px orbit, forces `GUN_HEAD_ON`, bypasses the generic slow/stop-go max-power branch, tightens fire tolerance, and caps bullet power to fast/cheap shots (roughly 1.15-1.45 when healthy, 0.65-0.85 mid energy, tiny pinpricks when low) instead of max-power slow-target pressure;
   - narrowed `heavyStopGoShooter()` with `enemySpeedAvg < 2.55` so the prior Florian2 high-pressure damped branch should not catch Ultron-style faster dodgers.
 - Recompiled successfully: `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
+
+Round 2 (gpt-5-5 current edit against `rafaeljdesa__ultron`, follow-up):
+- Reviewed `/logs/rounds/1`: prior Ultron-specific head-on/low-power branch slightly improved total score (`38964` vs `38902`) and traced survival (247/250 wins, 1 loss, 2 draw-ish endings), but rare bad rounds still self-depleted after falling back into heavier shots at low energy while Ultron retained 5-15 energy.
+- Kept the head-on `highPowerStopGoDodger()` idea, but made it stickier and added `activeHighPowerShooter()` as a late-round safety net for repeated high-power enemy shooters:
+  - high-power/low-turn moderate-speed shooters stay in the Ultron branch even if the leaky stop/go counter decays during long reversals;
+  - below 18 energy, widen preferred distance to at least ~430px against active high-power shooters;
+  - below 30/18/10 energy, cap shots to 0.85/0.45/0.15 when facing repeated high-power fire, preventing the remaining self-depletion traces from spending multi-point bullets while near death.
+- Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.

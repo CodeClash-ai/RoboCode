@@ -353,6 +353,13 @@ public class MyTank extends AdvancedRobot {
                 && virtualSamples > 28 && bestGunError() > 72.0 && stationaryScans <= 5 && slowEnemyScans <= 12) {
             preferredDistance = 355.0;
         }
+        if (activeHighPowerShooter() && getEnergy() < 18.0) {
+            // When low on energy against Ultron-style power-3 shooters, avoid the
+            // close 150-220px scrambles seen in the remaining loss/draw traces.  A
+            // wider orbit gives our cheap bullets time to be energy-positive while
+            // reducing the chance of one more enemy power-3 hit ending the round.
+            preferredDistance = Math.max(preferredDistance, 430.0);
+        }
         double distanceOffset = limit(-0.62, (e.getDistance() - preferredDistance) / 430.0, 0.55);
         double desired = absBearing + moveDirection * (Math.PI / 2.0 - distanceOffset);
         if (e.getDistance() < 118
@@ -580,11 +587,27 @@ public class MyTank extends AdvancedRobot {
                 power = Math.min(power, 0.75);
             }
         }
+        if (activeHighPowerShooter()) {
+            // A few Ultron losses/draws still came from falling out of the narrow
+            // highPowerStopGoDodger() signature late in a round, then spending 2+
+            // energy slow-target shots while already below ~12 energy.  Any opponent
+            // with repeated high/medium-high energy-drop shots is dangerous enough
+            // that low-energy survival and faster pinprick bullets are worth more than
+            // another heavy miss.  Keep this as a late safety net so harmless weak
+            // stop/go farmers and stationary targets retain their high-power modes.
+            if (getEnergy() < 10) {
+                power = Math.min(power, 0.15);
+            } else if (getEnergy() < 18) {
+                power = Math.min(power, 0.45);
+            } else if (getEnergy() < 30 && bestGunError() > 58.0) {
+                power = Math.min(power, 0.85);
+            }
+        }
         if (getEnergy() < 22 && distance > 260 && stationaryScans <= 5 && slowEnemyScans <= 12) {
             power = Math.min(power, 1.25);
         }
         if (getEnergy() < 9) {
-            power = Math.min(power, hardToHitMover ? 0.15 : 0.55);
+            power = Math.min(power, hardToHitMover || activeHighPowerShooter() ? 0.15 : 0.55);
         }
         power = Math.min(power, Math.max(0.1, getEnergy() - 0.15));
 
@@ -854,18 +877,31 @@ public class MyTank extends AdvancedRobot {
         // repeatedly stops/reverses, but has a much higher average speed than the
         // slow Florian2/Gruffalo stop-go farmers.  Offline replay over this round
         // puts head-on well ahead of all lead guns; conserve energy with fast, cheap
-        // bullets instead of the older max-power slow-target pressure.
-        return stopGoEnemyScans > 6
-                && enemyFireCount > 1
-                && enemyFirePowerSamples > 0
-                && enemyFirePowerAvg > 2.35
-                && enemySpeedAvg > 2.35
+        // bullets instead of the older max-power slow-target pressure.  The stop/go
+        // score can temporarily decay during long max-speed reversals, so also allow
+        // repeated high-power fire plus low-turn moderate-speed motion to keep this
+        // branch active before the generic slow-target max-power ladder takes over.
+        return activeHighPowerShooter()
+                && (stopGoEnemyScans > 4 || enemyFireCount > 3)
+                && enemySpeedAvg > 2.65
                 && enemySpeedAvg < 5.8
                 && crazyEnemyScans <= 4
                 && Math.abs(enemyTurnRateAvg) < 0.075
                 && !fixedHeadingStopGoEnemy()
                 && !fixedHeadingLineEnemy()
                 && !fastWallCruiser();
+    }
+
+    private boolean activeHighPowerShooter() {
+        return enemyFireCount > 1
+                && enemyFirePowerSamples > 0
+                && enemyFirePowerAvg > 2.18
+                && stationaryScans <= 5
+                && !weakFixedAxisOscillator()
+                && !fixedHeadingStopGoEnemy()
+                && !fixedHeadingLineEnemy()
+                && !fastWallCruiser()
+                && crazyEnemyScans <= 4;
     }
 
     private boolean heavyStopGoShooter() {
