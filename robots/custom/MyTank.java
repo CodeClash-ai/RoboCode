@@ -33,6 +33,26 @@ public class MyTank extends AdvancedRobot {
     private double enemyVelocityAvg = 0.0;
     private double enemyTurnRateAvg = 0.0;
 
+    // Lightweight virtual guns.  The latest opponent dodges enough that pure
+    // circular prediction over-leads badly; keep rolling errors for several
+    // aim styles and let the bot pick the one matching the current enemy.
+    private static final int GUN_HEAD_ON = 0;
+    private static final int GUN_LINEAR = 1;
+    private static final int GUN_CIRCULAR = 2;
+    private static final int GUN_AVERAGED = 3;
+    private static final int GUN_COUNT = 4;
+    private static final int VIRTUAL_WAVES = 96;
+    private final double[] virtualGunError = {55.0, 60.0, 60.0, 58.0};
+    private final boolean[] virtualActive = new boolean[VIRTUAL_WAVES];
+    private final long[] virtualTime = new long[VIRTUAL_WAVES];
+    private final double[] virtualSourceX = new double[VIRTUAL_WAVES];
+    private final double[] virtualSourceY = new double[VIRTUAL_WAVES];
+    private final double[] virtualSpeed = new double[VIRTUAL_WAVES];
+    private final double[][] virtualX = new double[GUN_COUNT][VIRTUAL_WAVES];
+    private final double[][] virtualY = new double[GUN_COUNT][VIRTUAL_WAVES];
+    private int virtualIndex = 0;
+    private int virtualSamples = 0;
+
     public void run() {
         setBodyColor(new Color(18, 24, 34));
         setGunColor(new Color(240, 190, 45));
@@ -85,6 +105,8 @@ public class MyTank extends AdvancedRobot {
         } else {
             slowEnemyScans = 0;
         }
+
+        updateVirtualGuns(enemyX, enemyY);
 
         doMovement(e, absBearing);
         doGun(e, absBearing, enemyX, enemyY);
@@ -188,24 +210,101 @@ public class MyTank extends AdvancedRobot {
         power = Math.min(power, Math.max(0.1, getEnergy() - 0.15));
 
         double bulletSpeed = 20.0 - 3.0 * power;
-        double predictedX = enemyX;
-        double predictedY = enemyY;
-        double predictedHeading = e.getHeadingRadians();
-        double velocity = e.getVelocity();
         double turnRate = haveEnemyHeading ? Utils.normalRelativeAngle(e.getHeadingRadians() - lastEnemyHeading) : 0.0;
-        if (slowEnemyScans > 12 && stationaryScans <= 5) {
-            // Stop-and-go bots alternate between zero and low velocity.  A small
-            // exponential average is a better future estimate than assuming the
-            // current tick's full stop or short burst continues for the whole
-            // bullet flight.  Clamp to keep this conservative for generic slow
-            // opponents.
-            velocity = limit(-3.0, 0.45 * velocity + 0.55 * enemyVelocityAvg, 3.0);
+
+        double[][] candidates = new double[GUN_COUNT][2];
+        candidates[GUN_HEAD_ON] = predictEnemy(enemyX, enemyY, e.getHeadingRadians(), e.getVelocity(), 0.0, bulletSpeed, GUN_HEAD_ON);
+        candidates[GUN_LINEAR] = predictEnemy(enemyX, enemyY, e.getHeadingRadians(), e.getVelocity(), 0.0, bulletSpeed, GUN_LINEAR);
+        candidates[GUN_CIRCULAR] = predictEnemy(enemyX, enemyY, e.getHeadingRadians(), e.getVelocity(), turnRate, bulletSpeed, GUN_CIRCULAR);
+        candidates[GUN_AVERAGED] = predictEnemy(enemyX, enemyY, e.getHeadingRadians(), e.getVelocity(), turnRate, bulletSpeed, GUN_AVERAGED);
+        addVirtualWave(candidates, bulletSpeed);
+
+        int gun = chooseGun();
+        if (stationaryScans > 5) {
+            gun = GUN_HEAD_ON;
+        } else if (virtualSamples < 14 && slowEnemyScans > 12) {
+            gun = GUN_AVERAGED;
+        }
+        double predictedX = candidates[gun][0];
+        double predictedY = candidates[gun][1];
+
+        double aim = Math.atan2(predictedX - getX(), predictedY - getY());
+        setTurnGunRightRadians(Utils.normalRelativeAngle(aim - getGunHeadingRadians()));
+
+        // Fire when the gun is essentially on target.  The tolerance scales with
+        // target width, so we still shoot promptly at close range.
+        double tolerance = Math.atan2(28.0, distance);
+        if (getGunHeat() == 0 && Math.abs(getGunTurnRemainingRadians()) < tolerance && getEnergy() > 0.25) {
+            setFire(power);
+        }
+    }
+
+    private int chooseGun() {
+        int best = GUN_CIRCULAR;
+        if (slowEnemyScans > 12) {
+            best = GUN_AVERAGED;
+        }
+        if (virtualSamples < 14) {
+            return best;
+        }
+        for (int i = 0; i < GUN_COUNT; i++) {
+            if (virtualGunError[i] < virtualGunError[best]) {
+                best = i;
+            }
+        }
+        return best;
+    }
+
+    private void addVirtualWave(double[][] candidates, double bulletSpeed) {
+        int slot = virtualIndex++ % VIRTUAL_WAVES;
+        virtualActive[slot] = true;
+        virtualTime[slot] = getTime();
+        virtualSourceX[slot] = getX();
+        virtualSourceY[slot] = getY();
+        virtualSpeed[slot] = bulletSpeed;
+        for (int i = 0; i < GUN_COUNT; i++) {
+            virtualX[i][slot] = candidates[i][0];
+            virtualY[i][slot] = candidates[i][1];
+        }
+    }
+
+    private void updateVirtualGuns(double enemyX, double enemyY) {
+        for (int slot = 0; slot < VIRTUAL_WAVES; slot++) {
+            if (!virtualActive[slot]) {
+                continue;
+            }
+            long age = getTime() - virtualTime[slot];
+            if (age <= 0) {
+                continue;
+            }
+            if (age * virtualSpeed[slot] >= distance(virtualSourceX[slot], virtualSourceY[slot], enemyX, enemyY) - 18.0 || age > 90) {
+                for (int gun = 0; gun < GUN_COUNT; gun++) {
+                    double error = distance(virtualX[gun][slot], virtualY[gun][slot], enemyX, enemyY);
+                    virtualGunError[gun] = 0.88 * virtualGunError[gun] + 0.12 * error;
+                }
+                virtualActive[slot] = false;
+                virtualSamples++;
+            }
+        }
+    }
+
+    private double[] predictEnemy(double enemyX, double enemyY, double heading, double velocity,
+            double turnRate, double bulletSpeed, int gunType) {
+        if (gunType == GUN_HEAD_ON) {
+            return new double[] {enemyX, enemyY};
+        }
+        if (gunType == GUN_AVERAGED) {
+            // Good against stop-and-go and random-reversal bots: do not trust a
+            // single-tick burst or stop to continue for the whole bullet flight.
+            velocity = limit(-3.5, 0.45 * velocity + 0.55 * enemyVelocityAvg, 3.5);
             turnRate = limit(-0.09, 0.35 * turnRate + 0.65 * enemyTurnRateAvg, 0.09);
+        } else if (gunType == GUN_LINEAR) {
+            turnRate = 0.0;
         }
 
-        // Circular prediction when the enemy is consistently turning, linear
-        // prediction otherwise.  Clamp at the wall, because many bots turn or
-        // stop there and unclamped prediction tends to shoot outside the field.
+        double predictedX = enemyX;
+        double predictedY = enemyY;
+        double predictedHeading = heading;
         double time = 0.0;
         while ((++time) * bulletSpeed < distance(getX(), getY(), predictedX, predictedY) && time < 85) {
             if (Math.abs(turnRate) > 0.0005) {
@@ -219,16 +318,7 @@ public class MyTank extends AdvancedRobot {
                 break;
             }
         }
-
-        double aim = Math.atan2(predictedX - getX(), predictedY - getY());
-        setTurnGunRightRadians(Utils.normalRelativeAngle(aim - getGunHeadingRadians()));
-
-        // Fire when the gun is essentially on target.  The tolerance scales with
-        // target width, so we still shoot promptly at close range.
-        double tolerance = Math.atan2(28.0, distance);
-        if (getGunHeat() == 0 && Math.abs(getGunTurnRemainingRadians()) < tolerance && getEnergy() > 0.25) {
-            setFire(power);
-        }
+        return new double[] {predictedX, predictedY};
     }
 
     public void onHitByBullet(HitByBulletEvent e) {

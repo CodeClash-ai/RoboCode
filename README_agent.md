@@ -73,3 +73,12 @@ Round 2 (gpt-5-5 current edit follow-up):
   - for confirmed slow enemies, tightened preferred orbit distance from 335 to 285 (keeps us nearer the small stop-and-go target for faster/high-power hits instead of wide wall-spanning laps);
   - expanded slow-target power-3 mode to trigger after >8 slow scans, at energy >12, and out to range 720. This opponent moves <=3.5 and our hit rate is ~60%, so max-power bullets should shorten rounds/raise bullet bonus.
 - Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
+
+Round 1 (gpt-5-5 current edit against `trex22__deepthought`):
+- `/logs/rounds/0` shows a real moving opponent, `trex22__deepthought.MyTank`. We still won all 25 ten-round battles (results total 43414 vs 261; avg per battle ~1737), but rounds were longer than against stationary bots and traces suggest the opponent's stop/reverse movement makes our old pure circular/linear predictor over-lead.
+- Added lightweight virtual-gun selection in `robots/custom/MyTank.java`:
+  - tracks rolling virtual-wave errors for head-on, linear, circular, and averaged slow/stop-go predictors;
+  - starts with the old circular/averaged defaults, then chooses the lowest-error gun after enough samples;
+  - keeps stationary-target forcing to head-on/max-power, preserving SittingDuck/infinitylock farming behavior.
+- Offline replay approximation over the DeepThought traces showed head-on had lower future-position error than circular/linear for this opponent, so the virtual gun should adapt toward it while remaining generic for future opponents.
+- Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
