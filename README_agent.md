@@ -5753,3 +5753,53 @@ if SLOW/stationary, raise W toward 1.0. The remaining lever for the 15 variance
 losses is WAVE SURFING (high-risk, harness broken). Always re-check
 `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING first.
 Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 2 verification pass, THIS pass) — opponent = pez__wallspoethaiku
+
+## STATUS: WINNING both rounds (62% share) — NO CODE CHANGE (deliberate)
+Opponent = pez__wallspoethaiku (FAST NEAR-STRAIGHT LEAD-gun mover, avgV ~6.2,
+avg|dh| ~0.017, engages ~257px, gun offset ~0.35 rad = LEAD gun). INDEX both
+rounds i=0=enemy, i=1=opus. Cross-round MATCH results (results.json winner=opus):
+- Round 0: opus 38352 vs wallspoethaiku 14885.
+- Round 1: opus 38503 vs wallspoethaiku 14317. Full 250-sim sweep: 13 LOSSES,
+  28 close(<20E), ourFE mean 62.8, min 0.0.
+
+## The 13 losses = energy-war VARIANCE at farther distance (NOT a fixable bug)
+Losses avg dist 346px, behind-on-energy 66% of ticks; WINS avg dist 251px,
+behind 10%. The FAST mover escapes to 300-450px in losing grinds and out-trades
+us there. NOT positional-config: we WIN the hit exchange at EVERY distance
+(R1 150-sim unbiased hit density by dist, our/enemy hits per 1k, ratio):
+  0-100px 20.6/8.8 (2.33) | 100-200 16.2/8.9 (1.82) | 200-300 16.4/9.1 (1.80) |
+  300-400 15.3/7.5 (2.04) | 400-500 7.1/1.5 (4.88 but our hits COLLAPSE) |
+  500-600 4.8/1.0 | 600-700 1.2/0.0.
+Enemy density flat ~8-9/1k at 100-400px, drops sharply >400px. Our hits collapse
+>400px (can't hit the fast mover at range). Checked: only 3.0% of our fires in
+loss games are the far(>400px)-while-behind case, and the energy-war taper
+(power<=0.8 when behind & dist>300, line 301) already covers it -> tightening the
+fire gate would NOT convert the losses. They're hit-rate variance in long grinds.
+
+## Gun aim W=0.0 CONFIRMED (do NOT switch to head-on off the biased replay)
+Fresh W-sweep on R1 logs (2 slices): W=0.0 0.31/0.31 ~= W=1.0 0.32/0.31 (middle W
+worse). This replay is BIASED toward W=0.0 (R1 enemy path reactive to our actual
+W=0.0 shots), so head-on's razor-thin edge is noise and real head-on advantage is
+nonexistent. README round-0 slices showed W=0.0 winning clearly (0.44 vs 0.34).
+KEEP W=0.0 full linear lead (data-optimal for a fast near-straight mover; matches
+proven wins vs haikuwalls/robrrrat/pez__poet). Switching gun aim off a biased
+replay REGRESSED us repeatedly (crazy/velocirobot/dominatorx/smallpoet/pez__poet).
+
+## Decision: NO code change (deliberate)
+git diff on MyTank.java = empty. We WIN the match 62% share / 8-10 firsts both
+rounds. The 13 losses are unfixable variance without WAVE SURFING (high-risk,
+harness broken). Any gun/movement edit only risks regression on a match we win.
+Re-verified compile:
+  javac --release 8 -cp libs/robocode.jar -d robots robots/custom/MyTank.java  # OK
+  javap -v robots/custom/MyTank.class | grep "major version"  # -> 52 (Java 8)
+
+## For next teammate
+Only act if a NEW /logs shows the MATCH lost (winner=pez__wallspoethaiku) or win
+rate collapsing. KEEP W=0.0 full linear lead + dodge 0.30 (anti-LEAD-gun). Do NOT
+switch to head-on (biased replay trap). Do NOT conserve energy/lower power
+(documented loss vs wallspoet). The only robust lever for the variance losses is
+WAVE SURFING (high-risk, harness broken). Always re-check
+`head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING first.
+Keep MyTank class name + Java-8 bytecode (only hard requirement).
