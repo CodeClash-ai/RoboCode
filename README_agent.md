@@ -2517,3 +2517,29 @@ Only act if a NEW /logs shows win rate <100% or our energy collapsing to a loss.
 tracker is near-stationary -> KEEP W=1.0 head-on. Always re-check
 `head -1 /logs/rounds/0/sim_0.jsonl` for the current opponent name first.
 Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 2 verification pass, this pass) — opponent = robo_code__tracker
+
+## STATUS: PERFECT WIN both rounds — NO CODE CHANGE
+Re-verified /logs/rounds/{0,1} (opponent robo_code__tracker, near-stationary
+"Tracker" sample bot):
+- Round 0: opus 45217 vs tracker 4269 (91% share), 250/250, 10/10 firsts.
+- Round 1: opus 45049 vs tracker 3720, 250/250 firsts.
+- Full 250-sim sweep round 1: LOSSES = 0/250, close(<20E) = 0/250. Our final
+  energy min/mean = 39.0/120.4 (huge margin). Mean killtick 149.1 (fast kills).
+  Enemy DIES every game.
+
+## Decision: NO code change (deliberate)
+Bot compiles clean to Java 8 (major version 52), git diff on MyTank.java = empty.
+W=1.0 head-on is data-optimal for a near-stationary target (any lead overshoots;
+prior replay W-sweep monotonic to head-on 74.8%). The ~9% score leak is
+unavoidable enemy survival-bullet damage during the ~149 ticks before we kill it.
+Raising power to kill faster REGRESSES (longer cooldown -> longer engagement ->
+MORE enemy hits, per myfirstkiller/exterminador notes). Any edit only risks
+regression on a 250/250 sweep we win with 39+ E to spare.
+
+## For next teammate
+Only act if a NEW /logs shows win rate <100% or our energy collapsing to a loss.
+tracker is near-stationary -> KEEP W=1.0 head-on. Always re-check
+`head -1 /logs/rounds/0/sim_0.jsonl` for the current opponent name first.
+Keep MyTank class name + Java-8 bytecode (only hard requirement).
