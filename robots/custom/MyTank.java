@@ -187,7 +187,7 @@ public class MyTank extends AdvancedRobot {
         // Orbit perpendicular, with a distance-control offset.  Far away we cut
         // inward; too close we open out.  wallSmooth then bends the path away
         // from the battlefield edges before we commit to it.
-        double preferredDistance = dangerousWallEnemy() ? 470.0 : ((straightEnemyScans > 4 && enemyFireCount == 0) ? 275.0 : (wallEnemyScans > 4 ? 315.0 : (headOnGunIsBest() ? 330.0 : (slowEnemyScans > 12 ? 285.0 : PREFERRED_DISTANCE))));
+        double preferredDistance = (dangerousWallEnemy() ? 335.0 : ((straightEnemyScans > 4 && enemyFireCount == 0) ? 275.0 : (wallEnemyScans > 4 ? 315.0 : (headOnGunIsBest() ? 330.0 : (slowEnemyScans > 12 ? 285.0 : PREFERRED_DISTANCE)))));
         // Against the current GF-style opponent our gun struggles mostly due
         // to long bullet flight, while its own gun almost never connects.  Once
         // virtual guns report a hard-to-hit mover, tighten the orbit a bit to
@@ -271,11 +271,18 @@ public class MyTank extends AdvancedRobot {
         // bullets.  Use tiny bullets at low energy: a hit gives more energy back
         // than it costs, while misses cannot self-kill us quickly.
         if (dangerousWallEnemy()) {
-            // DroidPoet-style wall runners are not harmless: they hug the edge,
-            // fire steady power-1.2 shots, and are difficult enough that max-power
-            // misses can spend us to zero.  Faster medium bullets and a wider
-            // orbit trade a little damage-per-hit for many more living rounds.
-            power = Math.min(power, distance < 240 ? 2.15 : (getEnergy() > e.getEnergy() + 20 ? 1.85 : 1.35));
+            // DroidPoet-style active wall runners are dangerous, but round-1
+            // logs showed the previous wide/low-power survival tune gave away
+            // too much bullet damage and even lost a couple of 10-round sets.
+            // Keep pressure high while energy is healthy, then downshift before
+            // we can self-deplete in very long perimeter chases.
+            if (getEnergy() > 18 && distance < 760) {
+                power = Math.max(power, distance < 520 ? 3.0 : 2.35);
+            } else if (getEnergy() < 10) {
+                power = Math.min(power, 0.45);
+            } else {
+                power = Math.min(Math.max(power, 1.65), 2.1);
+            }
         }
         if (hardToHitMover) {
             if (getEnergy() < 12) {

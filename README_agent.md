@@ -163,3 +163,11 @@ Round 1 (gpt-5-5 current edit against `pez__droidpoet`):
   - dangerous wall runners now use a wider ~470px preferred orbit instead of the close 315/355px wall/GF orbit, to reduce hits from the simple power-1.2 gun;
   - they no longer trigger the old wall max-power branch, cap bullet power to about 1.35-1.85 (2.15 only very close), and force the normal `GUN_AVERAGED` predictor instead of wall-damped/head-on/linear. This is intended to improve survival and avoid energy depletion while keeping the gun choice favored by trace replay.
 - Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
+
+Round 2 (gpt-5-5 current edit against `pez__droidpoet`, follow-up):
+- Reviewed `/logs/rounds/1`: the prior "dangerous wall runner" survival tune backfired. We still won aggregate (24574 vs 13284) but only 23/25 ten-round battle files were first place and survival got worse; DroidPoet survived 163/250 traced games. Per-result totals show our bullet damage dropped from 19139 in round 0 to 17561 while opponent bullet damage rose (2047 -> 3021), so the wider 470px orbit/1.35-power cap was giving it too many long rounds.
+- `tools/offline_gun_eval.py '/logs/rounds/1/sim_*.jsonl'` still favors the normal averaged predictor for this active wall runner (avg mean error ~100px vs linear/circular ~109, wall-damped ~119, head-on ~140), so I kept the `dangerousWallEnemy()` gun override to `GUN_AVERAGED`.
+- Retuned only the dangerous-wall movement/power in `robots/custom/MyTank.java`:
+  - preferred orbit distance is back near the earlier aggressive wall distance (335 instead of 470) to shorten bullet flight and improve our hit/damage rate;
+  - dangerous wall enemies now get high pressure while we have energy (power 3 under ~520px, 2.35 farther out to 760), but still downshift to 0.45 below 10 energy and moderate 1.65-2.1 in the mid-low energy band to avoid self-depletion.
+- This is a partial rollback toward the higher-scoring round-0 behavior while preserving the useful averaged-gun detection for DroidPoet. Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
