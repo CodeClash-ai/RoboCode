@@ -7573,3 +7573,121 @@ signal.
    repository within the same call). Still the single highest-leverage infra
    fix available if a future teammate has a larger step budget to spend on it
    than usual.
+
+## Round 63 update (this round) — new opponent (rafaeljdesa__ultron), 1 loss traced to normal variance, no changes
+
+### Context
+Only `/logs/rounds/0/` exists in this environment for me. Per `trace.md` /
+`results.json`, this round's opponent is a **new** one, `rafaeljdesa__ultron`
+(different from every opponent documented in rounds 1-62 above). Result:
+**99.6% win rate (249/250)**, team score **42580 vs opponent's 6467**, 49%
+accuracy, avg speed 6.1, avg walls/game 0.4, avg rams/game 1.8, avg min
+energy 75. **1 loss** (`sim_127.jsonl`), 0 ties/draws. The opponent
+(`rafaeljdesa__ultron`) moves fast/erratically (velocity swings between -8
+and +8 constantly, per direct trace) and, notably, **fires almost
+exclusively at max power 3.0** (1618 of 1654 total shots per
+`analyze_power_accuracy.py`) with 20% accuracy — i.e. unlike most recent
+weak opponents (which spray low-power shots), this one commits to full-power
+(16-damage) hits whenever it does land one.
+
+### Validation performed
+1. `python3 tools/analyze_freezes.py /logs/rounds/0 --threshold 20 | grep -i
+   sonnet` -> **zero findings**. Confirms the escape-mode mechanism (rounds
+   20/23/25/34-37/40) and round 47/48's radial-blend movement fix are both
+   still fully healthy — now 16 consecutive rounds of clean validation
+   across 10+ different opponents with no catastrophic/game-costing freeze.
+2. `python3 tools/analyze_power_accuracy.py /logs/rounds/0 --bucket-width
+   0.5` -> sanity check: 24.5 shots/game combined vs `trace.md`'s
+   17.9+7.6=25.5 (within ~4%, tool still trustworthy per round 28's
+   tick-step fix). `sonnet_5`'s buckets: 1.0-1.5 (round 17's velocity cap for
+   this fast enemy) 44.5%, 1.5-2.0 41.9%, merged 2.5-3.0 (round 30's 2.9-cap
+   change) 37.6% — all healthy. Using round 12's `swing(P,p)=p*(9P-2)-P`
+   formula: our own average swing per shot across buckets is comfortably
+   positive (~3.0-6.2), while the opponent's own swing at their observed
+   P=3.0/p=0.20 is only ~+2.0 — i.e. we should (and, per the 249/250 result,
+   do) win the energy race on average; the opponent's own strategy (always
+   max power) is a viable-but-worse choice than a more measured approach,
+   consistent with round 12's original math.
+3. `javac -Xlint:all -cp libs/robocode.jar -d robots
+   robots/custom/MyTank.java` compiles clean (exit 0, no errors/warnings).
+   `.class` up to date.
+4. `diff archive/round1_backups/MyTank.java.before_round47_radial_fix
+   robots/custom/MyTank.java` — confirmed round 47's radial-blend fix (and
+   nothing else since) is exactly what's currently live; `MyTank.java` is
+   1232 lines, unchanged from rounds 47-62.
+
+### Investigated the one loss (`sim_127.jsonl`)
+Dumped every tick where either robot's energy changed by >0.5. Found: this
+specific game was simply **unlucky**, not evidence of a systemic bug. The
+opponent landed several early/mid-game full-power-3 hits in a short span
+(three separate -16.0 hits at t=108/130/460, plus a -15.4 and an -18.4,
+likely a bullet+something-else combo at one tick) while we mostly landed our
+own velocity-capped 1.3-1.9-power shots (worth only ~4-9 damage each) against
+this fast-moving target — a real, but not overwhelming, per-hit damage
+disadvantage (~16 vs ~6) that this one game's specific sequence of landed
+hits happened to compound unfavorably. We were still fighting back (several
++3.9/+8.7/+9.0 energy gains from our own landed hits' `bulletHitBonus`
+refunds throughout), but the accumulated deficit from the opponent's several
+full-power connects was too large to recover from before our own energy
+reached exactly 0.0 at t=489 (a routine firing-cost tick, not a bullet
+impact) — the same general "self-inflicted/attrition-adjacent, but ultimately
+just an unlucky roll of the dice against a real, if imperfect, opponent"
+shape as several single-loss investigations in this file's history (e.g.
+rounds 18/25/31/33/38 against different opponents), not a new bug pattern.
+1/250 (99.6%) is consistent with ordinary variance, especially against an
+opponent that (unlike most recent rungs) commits to full, hard-hitting power
+on every shot rather than spraying weak ones — no corrective action taken
+based on one sample.
+
+### What I did this round (or rather, chose NOT to do)
+Given (a) an excellent overall result (99.6% win rate, huge score margin,
+healthy accuracy/energy/freeze numbers), (b) a full trace of the single loss
+showing normal variance (a real but not overwhelming per-hit-damage
+disadvantage against a fast, always-max-power opponent, compounded by an
+unlucky sequence of landed hits in one specific game) rather than a
+recurring or newly-discovered bug class, (c) zero freeze-detector findings,
+and (d) no local battle-testing available to validate any change before a
+full future round's real match anyway, I made **no changes to
+`MyTank.java`** this round — consistent with this file's very long-
+established pattern (rounds 6, 13, 15, 21, 22, 26, 27, 28, 29, 32, 33, 38,
+39, 41, 42, 48-62) of not touching already-working code without a clear,
+actionable signal of underperformance. I specifically considered (and
+rejected) trying to tighten the velocity-based bullet-power caps (round 17)
+further given this opponent's fast movement, but the swing-math above shows
+our current per-bucket accuracy/power combination is already comfortably
+net-positive against this exact opponent type — no evidence a change would
+help, and round 11's history is a cautionary tale about "fixing" something
+based on plausible-sounding reasoning without a real underperformance
+signal.
+
+### Suggestions for next teammate
+1. **First step, as always**: check `/logs/rounds/<N>/trace.md` for the
+   actual opponent this round, and run
+   `python3 tools/analyze_freezes.py /logs/rounds/<N> --threshold 20 | grep -i
+   sonnet` as the standard regression check (should print nothing or only
+   short/benign findings, per rounds 48-63's clean baseline).
+2. If `rafaeljdesa__ultron` reappears and losses become MORE frequent (not
+   just 1/250), that would upgrade this round's "probably just variance"
+   read to "maybe a real pattern worth digging into further" — in that case,
+   re-run `tools/analyze_power_accuracy.py` and check whether the opponent's
+   own always-max-power strategy is landing more often than the 20% seen
+   this round (their per-shot damage of 16 means even a modest accuracy
+   uptick could shift the energy race), and consider whether the velocity-
+   based bullet-power caps (round 17, currently 1.3/1.9 for fast enemies)
+   need retuning specifically against this fast-mover archetype.
+3. `alpian__ianstank` (rounds 43-44's original corner-camping opponent, which
+   never got a clean before/after re-test with the round-47 radial-blend fix
+   specifically applied against IT) remains the one still-outstanding direct
+   comparison for that particular fix, though several other corner-camper-
+   archetype opponents (`robo_code__corners` rounds 53-54, `alpian__tarektank`
+   round 48) already provide good circumstantial evidence it generalizes.
+4. `pez__gf1` (rounds 11-12, ~14% tie rate from mutual energy attrition)
+   remains the toughest opponent in this file's history and the single most
+   valuable target for directly re-testing the FULL accumulated stack of
+   fixes since round 12 — still hasn't reappeared after 50+ rounds.
+5. Local headless battle-runner: still unresolved after 62+ rounds of
+   attempts (see round 6's section for the most detailed known blocker,
+   `RepositoryManager.loadSelectedRobots` not seeing a freshly-reloaded
+   repository within the same call). Still the single highest-leverage infra
+   fix available if a future teammate has a larger step budget to spend on it
+   than usual.
