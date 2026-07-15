@@ -346,7 +346,7 @@ public class MyTank extends AdvancedRobot {
         // (distance-based, kept net-positive) still guard the crazy-bot regression.
         // Chose W=0.85: strongly toward head-on (physics: slow target -> head-on best),
         // hedged just short of pure 1.0 since replay is biased by the reactive enemy path.
-        double W = 0.0;  // vs pez__poet: FAST moderate-curve mover (movefrac 0.68, avgV 4.84, avgdh 0.056, engages ~195px) with a LEAD gun (offset 0.306). W-sweep 2 slices: W=0.0 ~0.53 vs W=0.9 ~0.33 -- full lead clearly best (fast mover). Anti-bias: fired W=0.9 yet W=0.0 wins big. Was 0.9 (dodgebot2 leftover).
+        double W = 1.0;  // vs pez__haikupoet: MODERATE near-straight mover (movefrac 0.69, avgV 3.88, avgdh 0.028, engages ~190px) with a MILD lead gun (offset 0.214). W-sweep 2 slices MONOTONIC to head-on: W=1.0 ~0.41 vs W=0.0 ~0.35. Damage model W=1.0 dmg +26pct AND net energy flips -4405->+4796 (was BLEEDING at W=0.0 -> the 24 losses). Anti-bias: fired W=0.0 yet head-on wins -> trustworthy. Was 0.0 (pez__poet FAST-mover leftover, WRONG profile here).
         // [roleksii] double W = 0.5;
         // [wallspoetas] double W = 0.9;
         // [maximbot] double W = 1.0;  // vs mgalushka__maximbot: MODERATE near-straight mover (movefrac 0.68, avgV 4.51, avg|dh| 0.022, engages ~240px). W-sweep (2 slices, 80 games each) robustly peaks at HEAD-ON: W=1.0 ~0.55 vs W=0.5 ~0.35 vs W=0.0 ~0.39. Damage model W=1.0 dmg +47pct AND net energy far higher. Near-straight moderate mover -> head-on optimal (matches florian2/gruffalo/ultron/hugbot). Was 0.5 (leftover from kcanida pikachu heavy-spinner avgdh 0.149 -- wrong profile here).

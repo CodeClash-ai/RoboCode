@@ -5889,3 +5889,57 @@ help IF kill speed is preserved (keep power 3.0 at 200-300px) — but validate t
 killtick does NOT rise (that's what killed R1). Always re-check
 `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING first.
 Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 1 / current pass) — opponent = pez__haikupoet (COMPETITIVE, 24 losses -> head-on gun fix)
+
+## KEY FINDING: gun aim was WRONG (W=0.0 full lead, leftover from pez__poet FAST mover) for this MODERATE NEAR-STRAIGHT mover -> net-energy-NEGATIVE (bleeding)
+Opponent CHANGED to pez__haikupoet. Round 0 result (BEFORE my change):
+opus-4-8 39044 vs pez__haikupoet 14634 (winner=opus, 78% share). results_0.txt:
+opus 1639 (78%), 10/10 firsts; enemy 465 (22%, all bullet dmg). Full 250-sim
+sweep: 24 LOSSES, 18 close(<20E), ourFE mean 53.2 (min 0.0). Competitive slugfest.
+
+## Opponent profile (250 sims; header i=0=haikupoet, i=1=opus; read header per file)
+- movefrac 0.69, avgV 3.88 (MODERATE), avg|dh| 0.0277 (NEAR-STRAIGHT), engages ~190px.
+- Gun = MILD LEAD: median offset 0.214 rad, mean 0.174 (between head-on 0.14 and
+  full lead 0.5). NOTE: pez__haikupoet is a DIFFERENT bot from pez__poet (FAST
+  moderate-curve, avgV 4.84, avgdh 0.056) / pez__haikuwalls (FAST near-straight,
+  avgV 5.14) / pez__wallspoethaiku (VERY FAST, avgV 6.24). haikupoet is SLOWER.
+
+## CHANGE THIS PASS: gun aim W 0.0 (full lead) -> 1.0 (HEAD-ON). ONE line (349).
+W-sweep replay (per-tick interception, 2 independent 80-game slices), MONOTONIC to head-on:
+  slice A: W0.0 0.371 | W0.5 0.355 | W0.75 0.394 | W0.9 0.412 | W1.0 0.413
+  slice B: W0.0 0.337 | W0.5 0.331 | W0.75 0.372 | W0.9 0.407 | W1.0 0.409
+Damage/net-energy model (120 games, distance-tiered power + gunheat) DECISIVE:
+  W0.0 (current): dmg 61746, net -4405 (BLEEDING -> the 24 losses), hit 29.1%
+  W1.0 (head-on): dmg 77631 (+26pct), net +4796 (energy-POSITIVE), hit 37.6%
+  W0.9: dmg 77363 net +4581 | W0.5: dmg 63244 net -3511.
+W=1.0 head-on wins big on BOTH hit rate AND net energy (flips bleed -> gain).
+ANTI-BIAS: we FIRED W=0.0 in R0, so the replay reactivity bias FAVORS W=0.0 -- yet
+head-on wins clearly -> very trustworthy (matches maximbot/florian2/gruffalo/mb2
+near-straight-mover precedent). The W=0.0 was leftover from the FAST pez__poet;
+wrong profile here (SLOWER near-straight mover -> full lead overshoots -> bled).
+
+## Movement/dodge UNCHANGED (deliberate)
+Enemy gun is MILD lead (offset 0.214, borderline). Dodge-on-fire is 0.30 (LEAD-gun
+value). Considered lowering it (mild lead leans head-on) but README documents
+movement/dodge changes REPEATEDLY backfiring. The gun is the clear decisive lever
+(net energy flip); left movement alone. Close orbit (~120-190px target) already
+matches the ~190px engagement. Backup: /tmp/MyTank.bak.java (= R0 W=0.0 config).
+Compiles Java 8 (major version 52). Only ONE functional line changed (verified diff).
+
+## Tools: /tmp/wsweep.py (W-sweep 2 slices), /tmp/dmg.py (damage/net-energy model
+w/ gunheat + distance-tiered power). Rebuild from these if lost.
+
+## For next teammate — VERIFY
+- Want NEW /logs: the 24 losses REDUCED (ideally <10), ourFE mean UP from 53.2,
+  enemy score DOWN from 14634, share UP from 78pct, killtick DOWN. If it REGRESSED
+  (unlikely -- W-sweep + damage model both peak at head-on + anti-bias + near-straight
+  precedent), revert W to 0.0 (/tmp/MyTank.bak.java or git prior). haikupoet is a
+  MODERATE near-straight MILD-lead-gun mover -> KEEP W=1.0 head-on. If it becomes a
+  FAST mover (avgV>5) or HEAVY curver (avgdh>0.06), set W=0.0 (full lead/circular);
+  re-run /tmp/wsweep.py + /tmp/dmg.py on >=2 slices first.
+- SECONDARY lever if losses persist: dodge. Enemy gun is MILD lead (0.214); if it's
+  effectively head-on, LOWER dodge-on-fire (0.30 -> 0.12-0.15) per pikachu/dominatorx
+  head-on-gun wins. Test carefully -- movement changes are high-risk.
+- Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING.
+- Keep MyTank class name + Java-8 bytecode (only hard requirement).
