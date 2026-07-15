@@ -1,16 +1,21 @@
 import json
-import glob
 
-# Let's count occurrences of "1st:" for both bots
-gemini_firsts = 0
-opponent_firsts = 0
+total_gfs_hit = []
+total_gfs_fired = []
 
-for filepath in glob.glob("/logs/rounds/0/results_*.txt"):
-    with open(filepath, 'r') as f:
-        content = f.read()
-        if "1st: gemini_3_5_flash" in content:
-            gemini_firsts += 1
-        elif "1st: alpian" in content:
-            opponent_firsts += 1
-
-print(f"Gemini 1sts: {gemini_firsts}, Opponent 1sts: {opponent_firsts}")
+for i in range(100):
+    try:
+        with open(f'/logs/rounds/2/sim_{i}.jsonl') as f:
+            meta = json.loads(f.readline())
+            # Find index of opponent vs gemini
+            opp_idx = 0 if "shreker" in meta['robots']['0'] else 1
+            gem_idx = 1 - opp_idx
+            
+            for line in f:
+                data = json.loads(line)
+                if 'b' in data: # bullets
+                    for b in data['b']:
+                        # look at bullet hits
+                        pass
+    except Exception as e:
+        pass

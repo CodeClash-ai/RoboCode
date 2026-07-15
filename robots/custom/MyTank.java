@@ -6,10 +6,10 @@ import java.awt.geom.*;
 import java.util.*;
 
 public class MyTank extends AdvancedRobot {
-    private static final double BULLET_POWER = 2.0;
+    private static final double BULLET_POWER = 1.9;
     private static final double FIELD_WIDTH = 800;
     private static final double FIELD_HEIGHT = 600;
-    private static final double WALL_MARGIN = 40;
+    private static final double WALL_MARGIN = 36;
 
     private static final GFTargeting targeting = new GFTargeting();
     private static double lastEnemyEnergy = 100.0;

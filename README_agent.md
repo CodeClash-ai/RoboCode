@@ -1,1 +1,1 @@
-No adjustments are needed as our bot behaves flawlessly, with high victory rates and excellent GFT and Wave Surfing stability.
+The bot configuration remains robust with optimized Guess Factor Targeting and Wave Surfing. In Round 3, we further optimized bullet power parameters to manage heat efficiency and energy preservation, reinforcing our positioning and movement safety margins.
