@@ -207,10 +207,21 @@ public class MyTank extends AdvancedRobot {
         // 97->94). Higher power = longer gun cooldown (1+p/5) -> fewer shots, longer
         // engagement -> enemy lands more. REVERTED to the conservative R0 tiers
         // (killtick 275, enemy 56, 97% share). Faster kills + less exposure win here.
-        if (dist < 300)       power = 3.0;
-        else if (dist < 400)  power = 2.4;
-        else if (dist < 550)  power = 1.6;
-        else                  power = 1.0;   // long range -> smallest drain if a miss
+        // ROUND-2 vs iagomonteiro13579__npcsniper (stop-and-go dodger, bimodal
+        // velocity v=0 or v=8, engages ~279px, CONSERVES energy, fires ~half as
+        // often as us). MEASURED hit rate + net firing energy by distance (round-1
+        // 250 sims): 100-200px hr 49% NET +13/1k (WIN zone); 200-300px hr 26% NET
+        // -77/1k (we spend the MOST ticks here = 55k, bleeding); 300-400px hr 17%
+        // NET -131/1k (catastrophic). Old flat power 3.0/<300 fired power-3 at 26%
+        // hit -> lost the energy war -> 15/250 grind losses (we fire 40-66 shots to
+        // enemy's 16-43, both conserving, but our per-miss drain kills us first).
+        // TAPER hard beyond 200px so each far miss costs far less. Net-firing-energy
+        // model over 250 recorded games (MEASURED hit rates): OLD -1773 -> NEW +398.
+        // Keep full power 3.0 only in the <200px net-positive zone (49% hit).
+        if (dist < 200)       power = 3.0;
+        else if (dist < 300)  power = 1.6;
+        else if (dist < 400)  power = 1.0;
+        else                  power = 0.6;   // long range -> smallest drain if a miss
 
         // Energy safety clamps so a bad streak can't self-destruct us.
         if (getEnergy() < 30) power = Math.min(power, 2.0);
@@ -377,11 +388,18 @@ public class MyTank extends AdvancedRobot {
         // DANGEROUS up close (6.3/1k at 100-200, 17.5/1k at 0-100). So orbiting
         // WIDER to ~250px is strictly better here: same/better hit rate AND far
         // fewer enemy hits. (Prior ~150px orbit was for weak-gun slow movers.)
-        double rangeBias = 0.0;  // vs npcsniper: net-energy by dist shows 100-200px is the ONLY net-positive zone (66% hit, +270) vs 200-300px catastrophic (26% hit, -6254). Orbit CLOSER (~170px). Was ~250px for spinbot.
-        if (enemyDistance > 400)      rangeBias = -0.9;  // far: steer strongly inward to close
-        else if (enemyDistance > 290) rangeBias = -0.6;  // mid: firm inward pull
-        else if (enemyDistance > 210) rangeBias = -0.3;  // near target ~190px: gentle inward
-        else if (enemyDistance < 160) rangeBias = 0.45;  // too close (enemy gun deadly <150px): push out
+        // ROUND-2 vs npcsniper: MEASURED net-energy by distance (round-1 250 sims):
+        // 100-200px NET +13/1k (ONLY net-positive zone, 49% hit); 200-300px NET
+        // -77/1k (we spent 55k ticks here bleeding); 300-400px NET -131/1k. We
+        // engaged ~279px (mid of the losing zone) because the enemy keeps distance
+        // open and the prior -0.9 max inward pull wasn't enough to close. Steer
+        // MUCH harder inward when far so we actually reach the <200px win zone;
+        // only push out below ~130px. Target orbit ~160px (100-200px net-positive).
+        double rangeBias = 0.0;
+        if (enemyDistance > 350)      rangeBias = -1.2;  // far: nearly head-on toward enemy to close fast
+        else if (enemyDistance > 250) rangeBias = -0.9;  // mid: strong inward pull
+        else if (enemyDistance > 180) rangeBias = -0.5;  // approaching target ~160px
+        else if (enemyDistance < 130) rangeBias = 0.5;   // too close: push out
 
         double desiredDir = absBearing + (Math.PI / 2 + rangeBias) * moveDirection;
 

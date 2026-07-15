@@ -3000,3 +3000,65 @@ Compiles Java 8 (major version 52), rc=0. Backup of prior source: /tmp/MyTank.ba
   changes. If it becomes a HEAVY spinner (avg|dh|>0.06), set W=0.0 (circular).
 - Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for the opponent name first.
 - Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 2 / current pass) — opponent = iagomonteiro13579__npcsniper (COMPETITIVE, 15 losses)
+
+## STATUS: Round 1's head-on+closer-orbit change did NOT fix the 15 losses.
+Verified /logs/rounds/{0,1} (INDEX MAPPING THIS ROUND: i=0=opus, i=1=npcsniper —
+opposite of round-1 notes; always read the header). Round 0: opus 39031 vs 7379.
+Round 1: opus 39792 vs 7653. Enemy still ~16% share. Full 250-sim sweep round 1:
+LOSSES=15/250, close(<20E)=26, our final E mean 63.6 (min 0.0), killtick 393,
+turns mean 562 (max 1228). Same as round 0 — the R1 W=1.0/orbit-185 change was neutral.
+
+## OPPONENT PROFILE: STOP-AND-GO DODGER (bimodal velocity) that CONSERVES energy
+movefrac 0.75, avgV 4.39, avg|dh| 0.031 (MILD curve), engages ~279px. Velocity
+is BIMODAL: v=0 ~24% of ticks, v=8 ~32% (stops then sprints). Fires ~half as
+often as us (16-43 vs our 40-66 shots/game). Its gun is decent.
+
+## ROOT CAUSE of the 15 losses: ENERGY-WAR BLEED at 200-400px
+MEASURED hit rate + net firing energy by distance (round-1 250 sims, DECISIVE):
+  0-100px:   hr 75%, enemyhit 15.6/1k, NET +16/1k  (deadly enemy gun — avoid)
+  100-200px: hr 49%, enemyhit  6.0/1k, NET +13/1k  (ONLY sustainable WIN zone)
+  200-300px: hr 26%, enemyhit  5.3/1k, NET -77/1k  (we spent 55k ticks HERE bleeding!)
+  300-400px: hr 17%, enemyhit  8.1/1k, NET -131/1k (catastrophic)
+  400-600px: hr 16-19%, NET -30..-56/1k
+We engaged ~279px (mid of the losing zone) firing FLAT power 3.0/<300 at 26% hit
+-> lost the energy war -> in losses we fired 40-66 shots (5-13 hits) to enemy's
+16-43 and BLED to 0 while enemy kept 2-61 E. Pure grind-loss (both conserve, our
+per-miss drain kills us first).
+
+## CHANGES THIS PASS (BOTH attack the energy-war bleed; gun aim UNCHANGED)
+Gun aim W=1.0 head-on CONFIRMED correct via fresh W-sweep 2 slices (monotonic to
+head-on ~40% vs circular ~25%) — NOT the problem. The problem is power + distance.
+1. POWER TIERS: was flat 3.0/<300, 2.4/<400, 1.6/<550, 1.0/else. NOW 3.0/<200,
+   1.6/<300, 1.0/<400, 0.6/else. Keeps full power ONLY in the <200px net-positive
+   zone; tapers HARD beyond so each far miss barely costs energy. Net-firing-energy
+   model over 250 recorded games (MEASURED hit rates): OLD -1773 -> NEW +398.
+2. MOVEMENT rangeBias: strengthened inward pull to actually reach <200px (was
+   maxing at -0.9 but enemy kept distance open -> we stayed at 279px). NOW
+   >350->-1.2 (nearly head-on toward enemy to close), >250->-0.9, >180->-0.5,
+   <130->+0.5 (push out of the 0-100px deadly zone). Target orbit ~160px.
+Net/tick model: 100-200px +0.013 vs 200-300px -0.061 -> shifting inward flips us
+from bleeding to gaining. Both changes compile Java 8 (major version 52).
+Backup of prior source: /tmp/MyTank.bak.java.
+
+## Tool: /tmp/wsweep.py (W-sweep) rebuild from this. The DECISIVE tool this round
+was the net-firing-energy-by-distance model (MEASURED per-bucket hit rates), not
+the biased replay hit-rate sim. One-liner: bucket by dist at prev tick; our energy
+drops in (-3.1,-0.05)=fire, gains>0.1=hit, drops<-3.5=enemy hit us; NET/tick =
+fire_rate*(hr*3*power-power) - enemyhit_rate*8.
+
+## For next teammate — VERIFY
+- Want NEW /logs win rate ABOVE the current ~94% (ideally 100%), the 15 losses
+  GONE, our final E mean UP from 63.6, enemy share DOWN from 16%, engagement dist
+  DOWN from 279 toward ~180px.
+- IF IT REGRESSED (new losses / share drop): (a) the closer orbit may have exposed
+  us to the enemy's close gun (0-100px is deadly 15.6/1k) -> if we overshoot below
+  130px too often, raise the push-out threshold (<160->+0.5) or soften the far pull
+  to -1.0; (b) if the power taper made kills too slow (enemy survives to turn limit
+  with high E), raise the 200-300px tier back toward 2.0. Full revert =
+  /tmp/MyTank.bak.java (git prior, the R1 config = 94%/15 losses).
+- npcsniper is a stop-and-go MILD-curve mover -> KEEP W=1.0 head-on. If it becomes
+  a HEAVY spinner (avg|dh|>0.06), set W=0.0 (circular). Always re-check
+  `head -1 /logs/rounds/0/sim_0.jsonl` for the opponent name + INDEX MAPPING first.
+- Keep MyTank class name + Java-8 bytecode (only hard requirement).
