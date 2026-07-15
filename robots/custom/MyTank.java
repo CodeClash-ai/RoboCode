@@ -131,10 +131,15 @@ public class MyTank extends AdvancedRobot {
         // firing power-3 constantly at a fast wall-bouncing dodger with ~16% real
         // hit rate DRAINS us in the energy war (losses had enemy still at 40-50 E
         // while we died at 0). Distance-tiered power keeps far shots net-positive.
-        if (dist < 200)       power = 3.0;   // close: high hit rate, max damage
-        else if (dist < 350)  power = 2.5;
-        else if (dist < 500)  power = 1.8;
-        else                  power = 1.2;   // far: cheap, don't bleed energy
+        // ROUND-4 (vs it_economics__ite_ctbot): replay-sim shows EVERY power tier is
+        // net-energy-POSITIVE against this opponent (power3.0 = +2.59 E/shot,
+        // 34.9% hit even including far shots). Unlike prior energy-conserving
+        // dodgers, this bot loses the energy war to us, so max power = fastest
+        // kills + most damage share. Keep a mild far-range taper for hit-rate
+        // efficiency but stay high.
+        if (dist < 350)       power = 3.0;
+        else if (dist < 550)  power = 2.5;
+        else                  power = 2.0;
 
         // Energy safety clamps so a bad streak can't self-destruct us.
         if (getEnergy() < 30) power = Math.min(power, 2.0);
@@ -157,7 +162,11 @@ public class MyTank extends AdvancedRobot {
         }
         // ROUND-2 FIX: revert to W=0.0 (full linear lead) which WON 100% (round 0).
         // The round-1 head-on (W=1.0) change coincided with the regression to 83%.
-        double W = 0.0;
+        // ROUND-4 (vs it_economics__ite_ctbot): replay-sim over 60 games shows
+        // W=0.5 (half-lead) hits 41.3% vs W=0.0 33.8%. This opponent is a slow,
+        // lightly-curving mover (28% stationary, avg 0.23 deg/tick turn, rarely
+        // full speed) so a full linear lead overshoots; half-lead is optimal.
+        double W = 0.5;
         double predX = W * enemyX + (1 - W) * leadX;
         double predY = W * enemyY + (1 - W) * leadY;
 

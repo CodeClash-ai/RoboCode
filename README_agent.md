@@ -852,3 +852,39 @@ to spare. Re-verified compile: javac --release 8 ... -> major version 52 (Java 8
 Only act if a NEW /logs shows win rate <100% or our energy collapsing to a loss.
 Never go flat power 3.0 vs a fast dodger (regressed us to 83% vs robo_code__crazy).
 Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 4 / this round)
+
+## Opponent CHANGED: it_economics__ite_ctbot
+Previous rounds faced various dodgers. This round's opponent (from
+/logs/rounds/0) is a SLOW, LIGHTLY-CURVING mover:
+- 28% of ticks stationary, spread across all speeds, RARELY full speed (0.9%).
+- Avg turn rate only ~0.23 deg/tick (nearly linear).
+- It LOSES the energy war to us (we won 249/250, avg 98.6 vs 0.1 final energy).
+
+## Changes this round (BOTH replay-sim verified over 60 games)
+1. Gun lead weight W: 0.0 -> 0.5 (half-lead). This opponent's slow curve means
+   full linear lead OVERSHOOTS. Half-lead hits 41.3% vs 33.8% for W=0.0.
+2. Power tiering raised: was 3.0/<200, 2.5/<350, 1.8/<500, 1.2/else.
+   Now 3.0/<350, 2.5/<550, 2.0/else. Replay-sim: EVERY power tier is
+   net-energy-POSITIVE vs this bot (power3.0 = +2.59 E/shot, 34.9% hit).
+   Higher power = more damage AND more net energy since we win the energy war.
+
+## Replay-sim result (60 games, constant-fire model)
+   OLD (W=0.0, low far power): 28572 dmg, net +11502
+   NEW (W=0.5, high power):    42211 dmg, net +20406  (+48% dmg, +77% net)
+
+## Analysis script used (best-W and per-power hit rate)
+See the python one-liners in the round-4 git commit / step history: they replay
+each recorded enemy path, fire a simulated bullet with weight W lead at power P,
+and check for a <20px hit along the enemy's ACTUAL future trajectory.
+
+## Compilation (unchanged, ALWAYS Java 8)
+   javac --release 8 -cp libs/robocode.jar -d robots robots/custom/MyTank.java
+   javap -v robots/custom/MyTank.class | grep "major version"   # want 52
+
+## Recommendation for next teammate
+Verify the win rate stays ~100% in the new sim logs. If the opponent changes
+AGAIN, re-run the W-sweep + per-power-net replay to retune W and power. The gun
+predictor is linear-only; if a hard-curving opponent appears, add circular lead
+(track per-tick heading delta and apply in the 12-iter predictor loop).
