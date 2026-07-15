@@ -234,7 +234,16 @@ public class MyTank extends AdvancedRobot {
         // pin both robots together in a ram loop until a draw.  Always open a
         // safe gap from close stationary targets before entering farm mode.
         if (stationaryScans > 5 && e.getDistance() < 260.0) {
-            driveAwayFrom(absBearing, 240.0);
+            // If we spawned close to a stationary shooter near a corner, the true
+            // "away" vector can point straight into the wall and leave us oscillating
+            // in its gun line.  Sidestep when the direct escape projection is unsafe;
+            // otherwise open a slightly larger gap before resuming the farming orbit.
+            double away = absBearing + Math.PI;
+            if (!insideBattlefield(projectX(getX(), away, 170.0), projectY(getY(), away, 170.0), 24.0)) {
+                drivePerpendicularEscape(absBearing, 300.0);
+            } else {
+                driveAwayFrom(absBearing, 300.0);
+            }
             return;
         }
         if (fixedHeadingHighPowerShooter() && e.getDistance() < 260.0) {
@@ -324,12 +333,12 @@ public class MyTank extends AdvancedRobot {
             // reduce damage before the opponent's parked power-3 trades arrive.
             preferredDistance = 300.0;
         } else if (stationaryShooter()) {
-            // Nagisphere in the current logs is stationary but continuously fires
-            // medium-power bullets.  Farming it at the old ~330px head-on distance
-            // let its fixed gun land repeated hits.  Keep a wider orbit: our max-
-            // power head-on shots are still exact, while its bullets need much
-            // longer flight time and our fire-drop reversals have more room to work.
-            preferredDistance = 455.0;
+            // Nagisphere is stationary but active.  Round-1's very wide 455px orbit
+            // reduced incoming damage, but gave it more time to spend energy and left
+            // our own bullet-damage/bonus score lower.  Return to the faster ~330px
+            // farming band, relying on the improved close-corner sidestep above for
+            // the rare spawn positions where point-blank stationary fire is dangerous.
+            preferredDistance = 330.0;
         } else if (weakFixedAxisOscillator()) {
             // Current Tarektank-style target is a one-dimensional 100px
             // oscillator with a weak fixed-heading gun.  Move closer than the
