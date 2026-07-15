@@ -232,12 +232,12 @@ public class MyTank extends AdvancedRobot {
             driveAwayFrom(absBearing, 285.0);
             return;
         }
-        if (straightEnemyScans > 8 && harmlessLowFireEnemy() && e.getDistance() < 260.0) {
+        if (straightEnemyScans > 2 && harmlessLowFireEnemy() && e.getDistance() < 310.0) {
             // Hugbot/simple harmless runners can cross our orbit at full speed before
-            // the narrow rammer detector fully confirms.  Open the gap a little early;
-            // these opponents are not shooting, so avoiding collision leakage is worth
-            // a few extra pixels of bullet flight.
-            driveAwayFrom(absBearing, 255.0);
+            // the narrow rammer detector fully confirms.  Open the gap early and keep
+            // opening it longer; these opponents are not shooting, so avoiding point-
+            // blank bullet/ram leakage is worth a few extra pixels of bullet flight.
+            driveAwayFrom(absBearing, 305.0);
             return;
         }
         if (e.getDistance() < 225.0
@@ -336,7 +336,7 @@ public class MyTank extends AdvancedRobot {
         } else if (dangerousWallEnemy()) {
             preferredDistance = 335.0;
         } else if (straightEnemyScans > 16 && harmlessLowFireEnemy() && wallEnemyScans <= 4) {
-            preferredDistance = 310.0;
+            preferredDistance = 335.0;
         } else if (straightEnemyScans > 4 && harmlessLowFireEnemy()) {
             preferredDistance = 275.0;
         } else if (wallEnemyScans > 4) {
@@ -815,12 +815,12 @@ public class MyTank extends AdvancedRobot {
     }
 
     private boolean harmlessLowFireEnemy() {
-        // Claptrap/Tirolio/Antiwalls-style opponents may show one or two
+        // Claptrap/Tirolio/Antiwalls-style opponents may show a few
         // energy drops from stray shots or wall/collision bookkeeping, but are
         // still effectively harmless.  Keep the aggressive straight-run farming
         // active until repeated firing proves otherwise; dangerousWallEnemy()
         // takes over after several shots for DroidPoet-like perimeter gunners.
-        return enemyFireCount <= 2;
+        return enemyFireCount <= 3;
     }
 
     private boolean weakFixedAxisOscillator() {
