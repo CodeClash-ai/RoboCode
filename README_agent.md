@@ -692,3 +692,10 @@ Round 2 (gpt-5-5 current edit against `tannerrogalsky__tannerbot1`, follow-up):
   - for `GUN_LINEAR` on confirmed Tanner, stopped ticks now carry a tiny EMA velocity drift instead of pure zero-velocity head-on;
   - `onHitByBullet` for Tanner now uses a larger perpendicular escape rather than the generic 170px reversal.
 - Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
+
+Round 1 (gpt-5-5 current edit against `vikdov__dominatorx`):
+- `/logs/rounds/0` is a winning but lossy matchup: aggregate `33583` vs `11283`, but traces show only about 218/250 clean wins, ~31 losses and one mutual-zero ending. DominatorX is an active medium-power shooter (detected drops avg ~1.9, ~25/game) with medium/fast movement, many low-turn straight legs, wall/corner bounces/stops, and occasional turns. Losses are mostly long self-depletion duels where our previous wall-cruiser/NPC/Tanner branches over-led or conserved too late while it survived with 10-40 energy.
+- `tools/offline_gun_eval.py '/logs/rounds/0/sim_*.jsonl'` says head-on is best overall for these traces (`head` mean ~75px, `wallavg` ~81, averaged ~95, full linear/circular >120). A quick category replay also favored head-on/wall-damped over full lead even on straight-looking segments, because the bot often stops/reverses/wall-bounces during bullet flight.
+- Added a sticky `dominatorEnemy()` signature in `robots/custom/MyTank.java`: repeated p~2 fire, speed avg ~3-6.4, some straight motion, nontrivial but not crazy turn rate. It is checked before NPCSniper/Tanner/wave-surfer-style branches.
+- For DominatorX the bot now forces `GUN_HEAD_ON`, uses a moderate/widening orbit (~365 healthy, 440/500 when energy drops), sidesteps on detected fire, tightens gun tolerance, and caps bullet power to faster medium shots while healthy (~1.6-2.05) with cheap/tiny low-energy tiers plus small lethal finishers. Also excluded DominatorX from the dangerous-wall max-power safety net.
+- Recompiled successfully: `javac -cp libs/robocode.jar robots/custom/MyTank.java`.

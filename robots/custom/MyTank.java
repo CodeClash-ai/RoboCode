@@ -42,6 +42,7 @@ public class MyTank extends AdvancedRobot {
     private int closeRammerScans = 0;
     private int trackerApproachScans = 0;
     private int npcSniperScans = 0;
+    private int dominatorScans = 0;
     private int tannerWallScans = 0;
     private int waveSurfScans = 0;
     private int juggernautScans = 0;
@@ -217,6 +218,16 @@ public class MyTank extends AdvancedRobot {
         } else {
             trackerApproachScans = Math.max(0, trackerApproachScans - 1);
         }
+        if (dominatorSignatureRaw()) {
+            // vikdov__dominatorx mixes long straight runs, wall/corner stops, and
+            // medium-power fire with occasional turns.  Keep the confirmation sticky;
+            // otherwise late stops look like generic wall/slow targets and re-enable
+            // over-leading/max-power branches.
+            dominatorScans = Math.min(90, dominatorScans + 5);
+        } else {
+            dominatorScans = Math.max(0, dominatorScans - 1);
+        }
+
         // NPCSniper can briefly leave the wall/straight signature late in long
         // rounds, exactly when we most need its low-energy conservation caps.
         // Keep a sticky confirmation counter once the medium-fire fast/straight
@@ -320,6 +331,12 @@ public class MyTank extends AdvancedRobot {
                 drivePerpendicularEscape(absBearing, getEnergy() < 38.0 ? 285.0 : 245.0);
                 return;
             }
+            if (dominatorEnemy()) {
+                // DominatorX fires medium bullets often; when reserve is no longer huge,
+                // cross the shot line instead of only reversing along the same orbit.
+                drivePerpendicularEscape(absBearing, getEnergy() < 42.0 ? 310.0 : 250.0);
+                return;
+            }
             if (mediumPowerWallCruiser()) {
                 // TannerBot's medium wall shots are simple but frequent; a pure orbit
                 // reversal can leave us parallel to the wall and on the same line.  Step
@@ -411,6 +428,10 @@ public class MyTank extends AdvancedRobot {
             driveAwayFrom(absBearing, 335.0);
             return;
         }
+        if (dominatorEnemy() && getEnergy() < 34.0 && e.getDistance() < 330.0) {
+            drivePerpendicularEscape(absBearing, 390.0);
+            return;
+        }
         if (mediumPowerWallCruiser() && getEnergy() < 28.0 && e.getDistance() < 340.0) {
             driveAwayFrom(absBearing, 380.0);
             return;
@@ -496,6 +517,11 @@ public class MyTank extends AdvancedRobot {
             // before its random spinning gun can leak stray hits.  Keep the wider
             // cold-start range for awkward spawn/wall approaches.
             preferredDistance = (virtualSamples > 10 && virtualGunError[GUN_CIRCULAR] < 55.0) ? 305.0 : 340.0;
+        } else if (dominatorEnemy()) {
+            // DominatorX is an active medium-power mixed straight/turn mover.  Replay of
+            // round-0 traces favored head-on/wall-damped over full lead; stay moderately
+            // wide and conserve in long games instead of Tanner/NPC linear/averaged chases.
+            preferredDistance = getEnergy() < 22.0 ? 500.0 : (getEnergy() < 42.0 ? 440.0 : 365.0);
         } else if (npcSniperEnemy()) {
             // iagomonteiro13579__npcsniper: medium-fast straight/wall bursts with
             // lots of medium shots.  It is harder to hit than the simple wall
@@ -828,6 +854,22 @@ public class MyTank extends AdvancedRobot {
             // the round and reduce the time available for close-range Tracker fire.
             power = Math.max(power, distance < 640 ? 3.0 : 2.55);
         }
+        if (dominatorEnemy()) {
+            // DominatorX losses are self-depletion medium-power duels.  Head-on is the
+            // best replay gun, and faster medium bullets improve geometry; use decisive
+            // pressure while healthy, then cheap/tiny shots before our energy can hit zero.
+            if (e.getEnergy() < 9.0 && getEnergy() > 5.5) {
+                power = Math.min(Math.max(power, lethalPower(e.getEnergy())), 1.55);
+            } else if (getEnergy() > 58.0) {
+                power = Math.min(Math.max(power, distance < 380 ? 1.95 : 1.60), 2.05);
+            } else if (getEnergy() > 34.0) {
+                power = Math.min(Math.max(power, distance < 360 ? 1.25 : 0.95), 1.35);
+            } else if (getEnergy() > 16.0) {
+                power = Math.min(power, distance < 325 ? 0.50 : 0.30);
+            } else {
+                power = Math.min(power, getEnergy() < 8.0 ? 0.15 : 0.22);
+            }
+        }
         if (npcSniperEnemy()) {
             // NPCSniper lands enough medium bullets that long max-power miss streaks
             // are the only real losing mode.  Use faster medium/cheap bullets with a
@@ -1089,7 +1131,7 @@ public class MyTank extends AdvancedRobot {
                 power = Math.min(power, getEnergy() < 9 ? 0.15 : 0.45);
             }
         }
-        if (dangerousWallEnemy() && crazyEnemyScans <= 4 && !activeStopGoShooter()) {
+        if (dangerousWallEnemy() && crazyEnemyScans <= 4 && !activeStopGoShooter() && !dominatorEnemy()) {
             // DroidPoet-style active wall runners are dangerous, but round-1
             // logs showed the previous wide/low-power survival tune gave away
             // too much bullet damage and even lost a couple of 10-round sets.
@@ -1212,6 +1254,10 @@ public class MyTank extends AdvancedRobot {
             // advantage from round 1 remains intact.
             gun = (virtualSamples > 20 && virtualGunError[GUN_AVERAGED] + 6.0 < virtualGunError[GUN_CIRCULAR])
                     ? GUN_AVERAGED : GUN_CIRCULAR;
+        } else if (dominatorEnemy()) {
+            // Round-0 DominatorX replay ranks head-on best; full linear/circular over-lead
+            // its stop/reverse/wall bounces, and averaged still carries too much drift.
+            gun = GUN_HEAD_ON;
         } else if (npcSniperEnemy()) {
             // Replay for NPCSniper favors a wall/stop damped velocity predictor over
             // full linear/circular lead or pure head-on.  Keep it forced so the generic
@@ -1403,6 +1449,9 @@ public class MyTank extends AdvancedRobot {
         if (waveSurfingEnemy()) {
             tolerance = Math.min(tolerance, Math.atan2(13.0, distance));
         }
+        if (dominatorEnemy()) {
+            tolerance = Math.min(tolerance, Math.atan2(15.0, distance));
+        }
         if (npcSniperEnemy()) {
             tolerance = Math.min(tolerance, Math.atan2(15.0, distance));
         }
@@ -1487,6 +1536,7 @@ public class MyTank extends AdvancedRobot {
         return virtualSamples > 10
                 && bestGunError() > 78.0
                 && enemyFireCount <= 16
+                && (enemyFirePowerSamples == 0 || enemyFirePowerAvg <= 1.25)
                 && enemySpeedAvg > 3.2
                 && enemySpeedAvg < 6.2
                 && enemyAbsTurnRateAvg > 0.035
@@ -1502,6 +1552,32 @@ public class MyTank extends AdvancedRobot {
 
     private boolean crazyEnemyScansActive() {
         return crazyEnemyScans > 3;
+    }
+
+    private boolean dominatorEnemy() {
+        return dominatorScans > 0 || dominatorSignatureRaw();
+    }
+
+    private boolean dominatorSignatureRaw() {
+        // vikdov__dominatorx: active p~2 shooter with medium/fast straight legs,
+        // wall/corner stops, and enough turning/reversing that head-on beats full lead.
+        // Keep this ahead of NPCSniper/Tanner wall-cruiser signatures, which would force
+        // averaged/linear guns and produced many self-depletion losses in round 0.
+        return enemyFireCount > 3
+                && enemyFirePowerSamples > 2
+                && enemyFirePowerAvg > 1.45
+                && enemyFirePowerAvg <= 2.65
+                && enemySpeedAvg > 3.0
+                && enemySpeedAvg < 6.4
+                && straightEnemyScans > 3
+                && enemyAbsTurnRateAvg > 0.018
+                && enemyAbsTurnRateAvg < 0.100
+                && stationaryScans <= 5
+                && !spinBotEnemy()
+                && !crazyEnemyScansActive()
+                && !fixedHeadingStopGoEnemy()
+                && !fixedHeadingLineEnemy()
+                && !fixedHeadingMediumShooter();
     }
 
     private boolean npcSniperEnemy() {
@@ -1696,6 +1772,7 @@ public class MyTank extends AdvancedRobot {
                 && !stationaryShooter()
                 && !m9WallStopGoEnemy()
                 && !quadWallEnemy()
+                && !dominatorEnemy()
                 && !lowFireTracker()
                 && !lowFireRammer();
     }
@@ -1715,6 +1792,7 @@ public class MyTank extends AdvancedRobot {
                 && !stationaryShooter()
                 && !m9WallStopGoEnemy()
                 && !quadWallEnemy()
+                && !dominatorEnemy()
                 && !lowFireTracker()
                 && !lowFireRammer();
     }
