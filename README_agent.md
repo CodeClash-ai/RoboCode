@@ -2780,3 +2780,43 @@ head-on. If it becomes a FAST mover (avg|v|>4), lower W toward 0.25; if HEAVILY-
 curving (avg|dh|>0.06), set W=0.0 (circular) + orbit out ~260px. Always re-check
 `head -1 /logs/rounds/0/sim_0.jsonl` for the current opponent name first.
 Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 1 / current pass) — opponent = looklazy__chilibot
+
+## STATUS: 249/250 win, 94% share — NO CODE CHANGE (data-optimal)
+Opponent CHANGED to looklazy__chilibot. Verified /logs/rounds/0:
+- results.json: opus-4-8 44194 vs looklazy__chilibot 3645 (94%/6%).
+- results_0.txt: opus_4_8.MyTank 1756 (94%), 10/10 firsts; enemy 109 (6%).
+
+## Opponent = SLOW near-STRAIGHT-LINE mover
+Per-sim analysis (250 games, header maps idx->name, enemy=non-'opus'):
+- movefrac 0.315, avg |v| 1.46 (SLOW), avg |dh| 0.0 (NEVER turns body — pure
+  straight-line back/forth with pauses), engages ~232px.
+- Full 250-sim sweep: 249 wins, 1 non-win = TURN-LIMIT TIMEOUT (sim_244, 355
+  turns: we were DOMINATING 91.6E vs enemy 7.7E, round ended before the kill —
+  NOT a real loss). close(<20E) = 0. Our final E min/mean = 41.2/110.6. Mean
+  killtick 205. Enemy DIES (finalE ~0) in every real game.
+
+## Gun aim W=1.0 head-on CONFIRMED data-optimal (fresh replay W-sweep, 80 games)
+Per-tick interception over recorded paths, power 3.0, MONOTONIC toward head-on:
+  W=0.0 59.2% | W=0.25 60.8% | W=0.5 63.0% | W=0.75 67.2% | W=1.0 72.1%.
+A slow near-straight-line target that pauses ~68% of ticks is best hit at current
+pos; any lead overshoots. KEEP W=1.0.
+
+## Decision: NO code change (deliberate)
+Source is IDENTICAL to prior winning config (git diff on MyTank.java = empty).
+W=1.0 head-on (line 283), power tiers 3.0/<300 2.4/<400 1.6/<550 1.0/else, orbit
+~150px w/ graduated inward pull, energy-war taper, low-E clamps. The ~6% score
+leak is unavoidable enemy survival-bullet damage during the ~205 ticks before the
+kill. Raising power to kill faster REGRESSES real games (longer cooldown -> longer
+engagement -> MORE enemy hits — documented vs myfirstkiller/exterminador/tracker).
+Any edit only risks regression on a 249/250 sweep we win with 41+ E to spare.
+Re-verified compile: javac --release 8 ... -> major version 52 (Java 8). rc=0.
+
+## For next teammate
+Only act if a NEW /logs shows win rate dropping or our energy collapsing to a loss
+(enemy final E > 0 while ours = 0). chilibot is SLOW/near-straight -> KEEP W=1.0
+head-on. If it becomes a FAST mover (avg|v|>4), lower W toward 0.25; if HEAVILY-
+curving (avg|dh|>0.06), set W=0.0 (circular) + orbit out ~260px. Always re-check
+`head -1 /logs/rounds/0/sim_0.jsonl` for the current opponent name first.
+Keep MyTank class name + Java-8 bytecode (only hard requirement).
