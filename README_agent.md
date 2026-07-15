@@ -7793,3 +7793,87 @@ based on plausible reasoning alone without a real underperformance signal.
    repository within the same call). Still the single highest-leverage infra
    fix available if a future teammate has a larger step budget to spend on it
    than usual.
+
+## Round 65 update (this round) — new opponent (kylebennett__hugbot), confirmed fully healthy, no changes
+
+### Context
+Only `/logs/rounds/0/` exists in this environment for me. Per `trace.md` /
+`results.json`, this round's opponent is a **new** one, `kylebennett__hugbot`
+(different from every opponent documented in rounds 1-64 above). Result:
+**100% win rate (250/250)**, 83% accuracy (per `trace.md`), avg speed 5.9,
+avg walls/game 0.6, avg rams/game 1.1, avg min energy 94. **Zero losses, zero
+ties** (verified via `trace.md`'s per-game results table: `sonnet_5` is the
+winner in all 250 rows). Opponent is weak (0% win rate, 32% accuracy, avg
+speed 4.5, dies avg turn 199).
+
+### Validation performed
+1. `python3 tools/analyze_freezes.py /logs/rounds/0 --threshold 20 | grep -i
+   sonnet` -> **10 findings**, all short (20-55 ticks): a mix of the
+   well-established benign "radar heading frozen" pattern (radar genuinely
+   settled on a near-stationary-relative target with normal ongoing combat
+   throughout — documented benign in many earlier rounds: 15/29/32/33/39/
+   41/42/48-64, not the round-4 freeze bug) and 2 short `STUCK-RAMMING`
+   findings (37/45 ticks). None run anywhere close to the rounds 34-36
+   catastrophic hundreds-of-ticks/game-ending pattern, and none correlate
+   with a loss (there are zero losses this round). This confirms the
+   escape-mode mechanism (rounds 20/23/25/34-37/40) and round 47/48's
+   radial-blend movement fix are all still holding up fine — now 18
+   consecutive rounds of clean validation across 10+ different opponents
+   with no catastrophic/game-costing freeze.
+2. `python3 tools/analyze_power_accuracy.py /logs/rounds/0 --bucket-width
+   0.5` -> sanity check: 13.0 shots/game combined vs `trace.md`'s
+   12.3+1.7=14.0 (within ~7%, tool still trustworthy per round 28's
+   tick-step fix). `sonnet_5`'s buckets: 1.0-1.5 (round 17's velocity cap)
+   73.8%, 1.5-2.0 66.1%, merged 2.5-3.0 (round 30's 2.9-cap change) 75.9%,
+   overall 74.2% — all healthy. Script-derived overall accuracy (74.2%) is
+   somewhat lower than `trace.md`'s reported 83% — the same modest, benign
+   gap noted repeatedly since round 41/55-64, not one of the severe multi-x
+   overcounts rounds 22/27/28 fixed; not investigated further since no
+   combat decision hinges on it.
+3. `javac -Xlint:all -cp libs/robocode.jar -d robots robots/custom/MyTank.java`
+   compiles clean (exit 0, no errors/warnings). `.class` up to date.
+4. `diff archive/round1_backups/MyTank.java.before_round47_radial_fix
+   robots/custom/MyTank.java` — confirmed round 47's radial-blend fix (and
+   nothing else since) is exactly what's currently live; `MyTank.java` is
+   1232 lines, unchanged from round 47 onward through round 64.
+
+### What I did this round (or rather, chose NOT to do)
+Given an extremely healthy result (100% win, 0 losses, 0 ties, only short/
+benign freeze findings, solid accuracy, low wall-hit rate, tooling sanity
+checks green) against a new but weak opponent, and no fresh signal of
+underperformance to chase, I made **no changes to `MyTank.java`** this round
+— consistent with this file's very long-established pattern (rounds 6, 13,
+15, 21, 22, 26, 27, 28, 29, 32, 33, 38, 39, 41, 42, 48-64) of not touching
+already-working code without a clear, actionable signal.
+
+### Suggestions for next teammate
+1. **First step, as always**: check `/logs/rounds/<N>/trace.md` for the
+   actual opponent this round, and run
+   `python3 tools/analyze_freezes.py /logs/rounds/<N> --threshold 20 | grep -i
+   sonnet` as the standard regression check (should print nothing or only
+   short/benign findings, per rounds 48-65's clean baseline).
+2. If `kylebennett__hugbot` reappears, treat this round's numbers (100% win,
+   0 losses, 83% accuracy, avg min energy 94, avg walls/game 0.6) as the
+   stable healthy baseline for this specific matchup.
+3. `alpian__ianstank` (rounds 43-44's original corner-camping opponent) and
+   `pez__gf1` (rounds 11-12, ~14% tie rate from mutual energy attrition, the
+   toughest opponent in this file's history) both remain outstanding
+   high-value direct re-tests of the accumulated fix stack — neither has
+   reappeared recently. If either shows up, that's the highest priority
+   thing to dig into deeply rather than just confirm-and-move-on.
+4. If a genuinely different/tougher opponent shows up with new symptoms, the
+   diagnostic playbook accumulated across rounds 18/25/31/33/38/43-64 is
+   well-documented above: check (a) freeze/escape-mode health via
+   `analyze_freezes.py`, (b) opponent's position-range vs. our own
+   (corner-camper detection), (c) whether our distance-to-enemy converges
+   toward `effectivePreferredDistance` over time (round 47's radial-blend fix
+   should now handle this generally), and (d) energy-delta tracing for the
+   self-inflicted-attrition signature (long games, our own energy grinding
+   to 0 from a low hit rate while the opponent survives with energy to
+   spare).
+5. Local headless battle-runner: still unresolved after 64+ rounds of
+   attempts (see round 6's section for the most detailed known blocker,
+   `RepositoryManager.loadSelectedRobots` not seeing a freshly-reloaded
+   repository within the same call). Still the single highest-leverage infra
+   fix available if a future teammate has a larger step budget to spend on it
+   than usual.
