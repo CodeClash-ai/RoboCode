@@ -4938,3 +4938,61 @@ Compiles Java 8 (major version 52), rc=0.
   becomes a mover in a new round, re-check `head -1 /logs/rounds/0/sim_0.jsonl` +
   movement profile (a wide orbit vs a MOVING accurate gunner needs retuning).
 - Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 1 / current pass) — opponent = txeverson__crawler (COMPETITIVE, 63 losses -> circular gun fix)
+
+## KEY FINDING: gun aim was WRONG (W=0.9 near-head-on, leftover from wallspoetas near-straight) for this FAST HEAVILY-CURVING mover
+Opponent CHANGED to txeverson__crawler. Round 0 result (BEFORE my change):
+opus-4-8 27021 vs txeverson__crawler 17885 (60% share). results_0.txt: opus 1267
+(67%), 9/10 firsts. trace.md WIN RATE 74% (184/250) -- we LOSE 63 games. Both
+bots ~similar (our acc 23%, enemy 16%, ~33-35 shots each) = a mutual SLUGFEST.
+Our avg min energy only 27 (tight). Genuinely competitive foe.
+
+## Opponent profile (80 sims; header maps idx->name, enemy=non-'opus')
+- movefrac 0.865, avgV 4.27 (FAST, mostly v=5), avg|dh| 0.098 (HEAVILY CURVING --
+  it circles/curves hard), engages ~355px. Gun = HEAD-ON (median offset 0.007 rad,
+  aims at our CURRENT position, NOT a lead gun).
+
+## ROOT CAUSE of the 63 losses: near-head-on gun was NET-ENERGY-NEGATIVE vs the curver
+Under the OLD W=0.9 gun (near head-on) our replay hit rate was only ~18-21% -- a
+heavily-curving mover defeats head-on aim (it's not where we aim by the time the
+bullet arrives). Damage/net-energy model (80 games, distance-tiered power + gunheat):
+  W=0.9 (near head-on): dmg 4909, netE -2878 (BLEEDING -> the 63 losses)
+  W=0.0 (full CIRCULAR): dmg 21835 (4.4x!), netE +7213 (we GAIN energy), hit 0.70
+The circular predictor was ALREADY in the code (leadX/leadY step the enemy forward
+applying enemyTurnRate EMA); the aim was just blended 90% to head-on. Setting W=0.0
+uses the full circular lead.
+
+## Gun aim W=0.9 -> 0.0 (full CIRCULAR lead). THE key fix (ONE line, 349).
+W-sweep replay (per-tick CIRCULAR interception over recorded paths), 2 independent
+80-game slices, robust:
+  slice A [:80]:    CIRC W=0.0 0.751 | W=0.9 0.186 | W=1.0 0.211 | linear W=0.0 0.125
+  slice B [120:200]:CIRC W=0.0 0.757 | W=0.9 0.192 | W=1.0 0.212 | linear W=0.0 0.119
+Circular hits ~75% vs head-on ~21% -- 3.5x. This is the SAME fix that beat spinbot
+(avg|dh| 0.087 -> 100pct win) and team488__meow (0.104 -> 93%->100%). Circular
+hit rate by distance: <400px ~74-88pct, 500px 65pct, 600px 46pct -> current orbit
+~330px is in the high-accuracy zone.
+
+## Movement/power UNCHANGED (deliberate)
+- Enemy gun is HEAD-ON (offset 0.007) -> steady tangential orbit + LOW reversals
+  (dodge-on-fire 0.10, random 0.05) is CORRECT (matches pikachu head-on-gun win).
+  Do NOT raise dodge (reversing kills lateral speed + walks into head-on bullets).
+- Orbit ~330px: enemy hit density drops with range (23/1k @close, 8/1k @300, 5/1k
+  @500) while our circular hit rate holds ~75% out to 400px -> current orbit is a
+  good balance. Power tiers (2.2 at our ~330px zone) are net-strongly-positive at
+  70pct hit -> fast kills, more bullet dmg. Left all unchanged.
+Compiles Java 8 (major version 52). Backup of prior source: /tmp/MyTank.bak.java.
+
+## For next teammate — VERIFY
+- Want NEW /logs: the 63 losses REDUCED (ideally <15), win rate UP from 74%,
+  our accuracy UP from 23% (toward ~70pct replay), enemy score DOWN from 17885,
+  our avg min-E UP from 27, share UP from 60pct. If it REGRESSED (unlikely --
+  W-sweep clean on 2 slices + damage model 4.4x + matches spinbot/meow precedent),
+  revert W to 0.9 (/tmp/MyTank.bak.java or git prior). Do NOT distrust circular
+  here off a biased replay: the anti-bias favors head-on (we FIRED W=0.9) yet
+  circular wins by 3.5x -> decisive.
+- crawler is a FAST HEAVILY-CURVING mover with a HEAD-ON gun -> KEEP W=0.0 circular
+  + steady low-reversal orbit ~330px. If it becomes SLOW/near-straight (avg|dh|
+  drops <0.03), raise W toward 0.9-1.0 (head-on). Re-run /tmp/wsweep.py on >=2 slices.
+- Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING.
+- Keep MyTank class name + Java-8 bytecode (only hard requirement).
