@@ -4763,3 +4763,122 @@ diff/revert if next round's numbers still look bad.
    (4 rounds and counting) is exactly the kind of thing that would have been
    caught and fixed in ONE round instead of four with working local
    battle-testing.
+
+## Round 38 update (this round) — validated round 37's alignment fix with hard numbers: escape-mode saga (rounds 34-37) is FINALLY resolved
+
+### Context
+This environment had 4 log directories: `/logs/rounds/0` (245/250, 98% win —
+matches round 35's own pre-fix baseline exactly: avg speed 6.1, avg min
+energy 75, avg walls/game 4.2), `/logs/rounds/1` (79/250, 32% win — matches
+round 36's description of round 35's catastrophic regression: avg speed 2.2,
+avg min energy 28), `/logs/rounds/2` (86/250, 34% win — matches round 37's
+description of round 36's still-broken dedupe-only fix: avg speed 2.3, avg
+min energy 30), and **`/logs/rounds/3` — NEW data not seen by round 37**:
+**99% win rate (247/250)**, avg speed back to **6.4**, avg min energy back to
+**81**, avg walls/game **2.0** (best value in a long while), score-relevant
+stats all healthy, only **1 loss** (`sim_16.jsonl`) and 0 ties. This is the
+REAL match result of round 37's "stuck-tick counter should only advance once
+the robot is roughly aligned with its escape target heading, not just once
+per elapsed tick" fix (the turn-rate-vs-stuck-threshold mismatch that
+explained why rounds 35's turn-based strategy AND round 36's dedupe-only fix
+had both still produced the same oscillating-heading, frozen-position,
+game-destroying deadlock).
+
+### Validation performed
+1. `python3 tools/analyze_freezes.py /logs/rounds/3 --threshold 20 | grep -i
+   sonnet` -> only **5 findings total**, all `STUCK-RAMMING`, each short
+   (21-33 ticks) — a massive improvement from round 2's 38 findings (several
+   spanning hundreds of ticks, some running to game-end). This is close to
+   the healthy historical baseline this bug class had settled at after round
+   26's validation of the *original* (pre-round-34) no-turn-escape mechanism
+   (rounds 27-33 consistently showed 0-2 short findings per 250 games) —
+   i.e. round 37's fix didn't just stop the catastrophic regression, it
+   brought the wall/ramming-escape mechanism's health back in line with its
+   best-ever historical performance.
+2. Traced the one loss (`sim_16.jsonl`) tick-by-tick (energy deltas for both
+   robots) — this is an ordinary "self-inflicted attrition from a long
+   string of below-average-accuracy shots, eventually outpaced by the
+   opponent's own hit-bonus income" pattern, structurally identical to the
+   normal-variance losses already characterized in rounds 18/25/31/33 (NOT
+   a stuck/freeze pattern — no `HIT_ROBOT`/repeated-position signature in
+   this trace at all, just a very long, close, ordinary fight that happened
+   to go the opponent's way). No new bug found; 1/250 is consistent with
+   ordinary variance, not a systemic issue.
+3. `python3 tools/analyze_power_accuracy.py /logs/rounds/3 --bucket-width
+   0.5` -> sanity check 25.2 shots/game vs `trace.md`'s 17.8+8.4=26.2 (within
+   ~4%, tool still trustworthy per round 28's tick-step fix). The merged
+   2.5-3.0 power bucket (round 30's 2.9-cap change) shows **41.3% accuracy**
+   for `sonnet_5`, clearly the best of any bucket besides a 1-shot outlier —
+   consistent with rounds 28/29's original finding that motivated round 30's
+   change, reinforcing (a 3rd-ish data point now, alongside round 31/32's
+   opponent-dependent counterexample) that this remains at least a
+   reasonable, not-harmful choice.
+4. `javac -Xlint:all -cp libs/robocode.jar -d robots robots/custom/MyTank.java`
+   compiles clean, no errors/warnings. `.class` up to date. **`MyTank.java`
+   is unchanged this round** — see below for why.
+
+### What I did this round (or rather, chose NOT to do)
+Given (a) a clean, unambiguous validation that round 37's fix resolved the
+4-round-long (rounds 34-37) escape-mode regression saga, with real numbers
+returning to (and slightly exceeding, on walls/game) the best historical
+baseline, (b) the one loss tracing to ordinary variance rather than a new
+bug, and (c) no local battle-testing available to validate any further
+change before a full future round's real match anyway, I made **no changes
+to `MyTank.java`** this round — consistent with this file's long-established
+practice (rounds 6, 13, 15, 21, 22, 26, 27, 28, 29, 32, 33) of not touching
+already-working code without a fresh, clear, actionable signal. Given how
+costly the last several rounds' iterative escape-mode changes turned out to
+be to get exactly right (4 rounds, 3 increasingly narrow bugs found only via
+real match data each time), this seemed like exactly the wrong moment to
+introduce a NEW unvalidated change on top of a mechanism that has just barely
+stabilized — better to let this fix "bake" for at least one more round's
+real data before touching that code path again.
+
+### Suggestions for next teammate
+1. **First step, as always**: check `/logs/rounds/<N>/trace.md` for this
+   round's actual opponent/result. If `andrekorol__oppswantmedead` reappears,
+   compare directly against this round's now-fully-healthy baseline (99% win,
+   avg speed 6.4, avg min energy 81, avg walls/game 2.0, 5 short STUCK-RAMMING
+   findings) — should hold steady or improve, NOT regress toward rounds
+   35-36's broken 32-34%-win baselines. If it regresses again despite no
+   code change between rounds, that would be very surprising and worth
+   immediately re-checking whether the round-37 diff is actually still
+   present in the graded `MyTank.java` (run `diff
+   archive/round1_backups/MyTable.java.before_round37_alignment_fix
+   robots/custom/MyTank.java` — NOTE: verify this file's exact name via `ls
+   archive/round1_backups/` since I'm recalling it from the round-37 notes
+   above rather than re-verifying the exact filename this round) and hasn't
+   been accidentally reverted.
+2. Run `python3 tools/analyze_freezes.py /logs/rounds/<N> --threshold 20 |
+   grep -i sonnet` as the standard regression check — should show 0-5 short
+   (well under 50-tick) findings if healthy, per this round's and rounds
+   27-33's established baseline for this bug class.
+3. **General lesson from the whole rounds 34-37 saga, worth remembering for
+   ANY future change to shared multi-handler state** (escape mode or
+   otherwise): a fix that looks individually well-reasoned can still fail in
+   practice due to an adjacent, not-yet-considered interaction (round 34:
+   coordination gap; round 35: wrong strategy choice for a sub-case; round
+   36: found a real bug but only fixed HALF of the actual timing mismatch;
+   round 37: finally fixed the other half by modeling the real physical
+   constraint — max turn rate vs. stuck-detection timing). When in doubt,
+   prefer fixes grounded in a concrete, checkable physical/API fact (like
+   round 37's turn-rate-vs-turn-required calculation, or round 25's
+   `isMyFault()` javadoc citation) over a plausible-sounding heuristic alone,
+   and expect to need at least one real match's data to confirm even a
+   well-reasoned fix in this specific code path, given the track record.
+4. With the escape-mode mechanism finally stable, if there's ever a round
+   with clear headroom (a weak opponent, no fresh regression signal) and a
+   larger step budget, `pez__gf1` (rounds 11-12, ~14% tie rate from mutual
+   energy attrition) remains the toughest opponent in this file's history and
+   the single most valuable target for directly re-testing the FULL
+   accumulated stack of fixes since round 12 (energy-math, ramming,
+   dodge-on-fire, wall-margin, and now the fully-stabilized escape-mode
+   mechanism) — still hasn't reappeared after 26 rounds.
+5. Local headless battle-runner: still unresolved after 37+ rounds of
+   attempts (see round 6's section for the most detailed known blocker,
+   `RepositoryManager.loadSelectedRobots` not seeing a freshly-reloaded
+   repository within the same call). Still the single highest-leverage infra
+   fix available if a future teammate has a larger step budget to spend on it
+   than usual — the rounds 34-37 saga in particular took 4 full rounds (each
+   with only post-hoc log analysis available) to fully resolve what local
+   battle-testing might have caught and fixed in a single sitting.
