@@ -239,6 +239,11 @@ public class MyTank extends AdvancedRobot {
             // body heading while alternating stops/straight bursts and weak shots.
             // It scores very little, so stay closer and shorten head-on flights.
             preferredDistance = 305.0;
+        } else if (fixedHeadingLineEnemy()) {
+            // MyFirstKiller-style bots also hold one body heading, but may travel
+            // over a longer line segment than the tighter fixedHeadingStopGoEnemy()
+            // midpoint detector allows.  Stay in the short-flight exchange band.
+            preferredDistance = 305.0;
         } else if (fastWallCruiser()) {
             preferredDistance = 305.0;
         } else if (activeStopGoShooter()) {
@@ -388,6 +393,20 @@ public class MyTank extends AdvancedRobot {
             } else {
                 power = Math.min(power, 0.15);
             }
+        } else if (fixedHeadingLineEnemy()) {
+            // Current MyFirstKiller traces: body heading never turns, it moves in
+            // a one-dimensional forward/back line, and its power-1 gun is weak.
+            // The old generic activeStopGoShooter cap (1.35-1.65) left us with
+            // lots of spare energy and long rounds.  Use faster-than-max but still
+            // high-damage bullets while healthy, then keep the proven low-energy
+            // conservation behavior for any unexpectedly long game.
+            if (getEnergy() > 48) {
+                power = distance < 180 ? 3.0 : (distance < 360 ? 2.55 : (distance < 560 ? 2.25 : 1.85));
+            } else if (getEnergy() > 20) {
+                power = Math.min(power, distance < 430 ? 1.35 : 1.05);
+            } else {
+                power = Math.min(power, getEnergy() < 9 ? 0.15 : 0.45);
+            }
         } else if (activeStopGoShooter()) {
             // RegullarMonk-like active stop/go shooters made us lose games by
             // self-depleting with repeated power-3 misses.  Head-on replay is
@@ -449,6 +468,10 @@ public class MyTank extends AdvancedRobot {
             // Ian's Tank moves back and forth along one fixed body-heading line.
             // Aim at the learned midpoint of that line segment (via the drift-head
             // virtual gun slot) instead of chasing the current endpoint/jitter.
+            gun = GUN_DRIFT_HEAD_ON;
+        } else if (fixedHeadingLineEnemy()) {
+            // For longer fixed-heading line movers, a very small velocity drift
+            // beats pure head-on in offline replay without over-leading stops.
             gun = GUN_DRIFT_HEAD_ON;
         } else if (activeStopGoShooter()) {
             // Current RegullarMonk traces: very frequent stops/reverses and
@@ -526,10 +549,10 @@ public class MyTank extends AdvancedRobot {
             // spend even the small conservation bullets when the head-on gun is
             // closely aligned.
             tolerance = Math.min(tolerance, Math.atan2(15.0, distance));
-        } else if (fixedHeadingStopGoEnemy()) {
-            // Low-power head-on shots are cheap, but long Ian's Tank losses came
-            // from spraying while not quite aligned.  Tighten aim modestly, without
-            // becoming stricter than the generic hard-to-hit tolerance.
+        } else if (fixedHeadingStopGoEnemy() || fixedHeadingLineEnemy()) {
+            // Low-power/drift shots are cheap, but fixed-heading stop/go targets
+            // are narrow in the direction that matters.  Tighten aim modestly,
+            // without becoming stricter than the generic hard-to-hit tolerance.
             tolerance = Math.min(tolerance, Math.atan2(18.0, distance));
         }
         if (getGunHeat() == 0
@@ -617,6 +640,22 @@ public class MyTank extends AdvancedRobot {
                 && Math.abs(enemyVelocityAvg) < 3.8
                 && Math.abs(enemyTurnRateAvg) < 0.004
                 && (!haveEnemyAxis || enemyAxisSamples < 20 || enemyAxisMax - enemyAxisMin < 210.0);
+    }
+
+    private boolean fixedHeadingLineEnemy() {
+        // MyFirstKiller-style signature in the current logs: identical body
+        // heading for the whole round, repeated stops/straight bursts along one
+        // axis, and a weak/simple firing pattern.  Unlike fixedHeadingStopGoEnemy
+        // it can span more than 210px, so do not force the learned midpoint; use a
+        // tiny drift projection and somewhat heavier bullets instead of the very
+        // conservative activeStopGoShooter mode.
+        return stopGoEnemyScans > 8
+                && enemyFireCount > 1
+                && crazyEnemyScans <= 4
+                && Math.abs(enemyVelocityAvg) < 4.2
+                && Math.abs(enemyTurnRateAvg) < 0.004
+                && enemyAxisSamples > 18
+                && !fastWallCruiser();
     }
 
     private boolean activeStopGoEnemy() {
@@ -729,8 +768,12 @@ public class MyTank extends AdvancedRobot {
             if (fixedHeadingStopGoEnemy() && enemyAxisSamples > 18) {
                 return predictAxisMidpoint(enemyX, enemyY);
             }
-            // Generic fallback: almost-head-on with a tiny velocity drift.
-            double drift = limit(-0.45, 0.05 * velocity, 0.45);
+            // Generic fallback: almost-head-on with a tiny velocity drift.  For
+            // longer fixed-heading line movers, offline replay favored about 10%
+            // of the current forward/back velocity; keep other enemies at the old
+            // 5% drift to avoid over-leading stop/reverse bots.
+            double driftScale = fixedHeadingLineEnemy() ? 0.10 : 0.05;
+            double drift = limit(-0.80, driftScale * velocity, 0.80);
             return projectClamped(enemyX, enemyY, heading, drift, bulletSpeed, 70);
         }
         if (gunType == GUN_AVERAGED && !dangerousWallEnemy()
