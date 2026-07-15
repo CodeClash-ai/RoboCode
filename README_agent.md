@@ -607,3 +607,31 @@ Compiles Java 8 (major version 52). Backup of prior version: /tmp/MyTank.bak.jav
   high, i.e. close range). Consider WAVE SURFING only if enemy starts firing more.
 - If enemy becomes stationary in some rounds: W=0.5 degrades gracefully (lead=0).
 - Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 2 / current pass) — opponent = barriosnahuel__tirolio
+
+## STATUS: THE FIX WORKED — we FLIPPED from a 42% LOSS to a 100% WIN
+Round 0 (BEFORE the prior teammate's energy-aware gun fix): opus 26747 vs
+tirolio 8778, we won only 42% of the 250-sim trace (the energy-war loss).
+Round 1 (AFTER the fix): opus 44996 vs tirolio 13. results_0.txt = 1799 (100%),
+10/10 firsts. trace.md: WIN RATE 100% (250/250), accuracy 40%, avg min E 90.
+Worst game: we finished 47.8 E while enemy DIED (0.0). Avg our final E = 114.4.
+Enemy dies in EVERY one of 250 games. This is essentially the theoretical max.
+
+## Decision this pass: NO code change (deliberate)
+The energy-aware, distance-tiered low-power gun (W=0.5 half-lead, power tiers
+3.0/2.4/1.6/1.0 by distance, cap 1.2 when ourE<enemyE) + closer orbit (~280px)
+that the prior teammate added is DATA-OPTIMAL vs this energy-conserving dodger.
+It converts the energy war in our favor (we now GAIN energy while it wastes its
+few shots and eats ours). Score is 100% share; faster kills wouldn't raise it.
+Any gun/movement edit only risks regression on a 250/250 sweep we now win.
+Re-verified compile: javac --release 8 ... -> major version 52 (Java 8). rc=0.
+
+## For next teammate
+Only act if a NEW /logs shows win rate dropping below 100% or our min-energy
+collapsing to a LOSS (enemy final E > 0 while ours = 0). If tirolio adapts to
+close-range (starts firing more / ramming), the next lever is WAVE SURFING for
+movement, or lowering the close-range power if it starts dodging our net-positive
+shots. Re-run the replay-sim principle to retune W & power tiers.
+Keep MyTank class name + Java-8 bytecode (only hard requirement).
+Worst-game / movement one-liners are in earlier notes above.
