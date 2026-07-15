@@ -1532,3 +1532,43 @@ was reactive to our actual shots).
 - ianstank fires only when we're close/predictable; the real remaining lever is
   MOVEMENT (fewer enemy hits in grinds) — high risk, local harness broken.
 - Keep MyTank class name + Java-8 bytecode (only hard requirement). W=1.0 head-on.
+
+# Agent Notes (Round 1 / current pass) — opponent = andrekorol__myfirstkiller
+
+## STATUS: 100% WIN (250/250), 97% share — RAISED POWER TIERS FOR MORE DAMAGE
+Round 0 result: opus-4-8 44967 vs andrekorol__myfirstkiller 2066. results_0.txt:
+opus_4_8.MyTank 1793 (97%), 10/10 firsts; enemy 56 (3%). ZERO losses, zero close
+games (worst our final E = 41.8 while enemy DIES every game; mean final E 110.6,
+mean kill tick 275). Trace: our win 100%, accuracy 49%, avg speed 5.4.
+
+## Opponent = SLOW STRAIGHT-LINE MOVER (never turns body)
+Per-sim analysis (250 games, header maps idx->name, enemy=non-'opus'):
+- moving 43% of ticks, avg |v| 1.94, avg |dh| = 0.0 (NEVER turns body — pure
+  straight-line back/forth). Fires ~7 shots/game at 31% acc. Slow (avg speed 1.9).
+  Loses the energy war to us decisively.
+
+## Replay-sim (per-tick interception, 100 games, per-file header idx->name)
+- W-sweep (head-on best, MONOTONIC): W=0.0 46.4% -> W=0.5 51.6% -> W=1.0 62.2%.
+  Kept W=1.0 (head-on) — a slow straight-line target that's stationary ~half the
+  time is best hit at current pos; any lead overshoots. Confirmed data-optimal.
+- Head-on hit rate BY DISTANCE @p3.0: 0-100 79%, 100-200 71%, 200-300 65%,
+  300-400 66%, 400-500 48%, 500-600 38%, 600-700 33%. EVERY bucket is net-energy-
+  POSITIVE (hr>1/3). The old power taper (1.6/1.0 at 550px+) was too conservative.
+
+## CHANGE THIS PASS: raised power tiers (validated +9% dmg AND higher net energy)
+Power: OLD 3.0/<300, 2.4/<400, 1.6/<550, 1.0/else -> NEW 3.0/<400, 2.5/<550,
+1.8/<650, 1.2/else. Replay-sim (120 games, distance-tiered): dmg 225742 -> 246123
+(+9%), net energy 62279 -> 65226 (both up -> no energy-war risk). Full power out
+to 400px (all net-positive here). SAFE because target is SLOW (not a fast dodger
+-> no crazy-bot flat-power-3 regression). W=1.0 head-on UNCHANGED. Movement
+UNCHANGED (orbit ~230px, proven at 250/250). Energy-war taper + low-E safety
+clamps UNCHANGED (still guard the rare grind). Backup: /tmp/MyTank.bak.java (git).
+Compiles Java 8 (major version 52). rc=0.
+
+## For next teammate
+Only act if a NEW /logs shows win rate <100% or our min-energy collapsing to a
+LOSS. If myfirstkiller becomes a FAST dodger (avg |v| rises, moving frac up) or
+starts curving (avg |dh|>0), LOWER power back toward the old distance tiers and
+re-check the W-sweep (never flat power 3.0 at long range vs a fast dodger ->
+regressed us to 83% vs robo_code__crazy; THIS opponent is slow/straight so full
+power to 400px is safe and validated). Keep MyTank class name + Java-8 bytecode.

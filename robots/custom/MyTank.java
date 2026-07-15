@@ -196,10 +196,16 @@ public class MyTank extends AdvancedRobot {
         // -111 -> -45; while retaining ~93% of the winning-game bullet damage (22655
         // vs 24233) so score share barely drops. The energy-war cut below does the
         // heavy lifting in the actual grind-loss state.
-        if (dist < 300)       power = 3.0;
-        else if (dist < 400)  power = 2.4;
-        else if (dist < 550)  power = 1.6;
-        else                  power = 1.0;   // long range -> smallest drain if a miss
+        // vs andrekorol__myfirstkiller (slow straight-line mover, avg|v|1.9, never
+        // turns body, avg|dh|0.0): head-on hit rate is HIGH at every distance
+        // (65% at 200-300px, ~48% 400-500, ~38% 500-600 per replay-sim) so all
+        // shots are net-energy-positive. Raised tiers give +9% dmg AND higher net
+        // energy. Safe because target is SLOW (not a fast dodger -> no crazy-bot
+        // flat-power-3 regression risk; the distance taper still guards long range).
+        if (dist < 400)       power = 3.0;
+        else if (dist < 550)  power = 2.5;
+        else if (dist < 650)  power = 1.8;
+        else                  power = 1.2;   // long range -> smallest drain if a miss
 
         // Energy safety clamps so a bad streak can't self-destruct us.
         if (getEnergy() < 30) power = Math.min(power, 2.0);
