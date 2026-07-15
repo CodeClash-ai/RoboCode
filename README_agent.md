@@ -4996,3 +4996,47 @@ Compiles Java 8 (major version 52). Backup of prior source: /tmp/MyTank.bak.java
   drops <0.03), raise W toward 0.9-1.0 (head-on). Re-run /tmp/wsweep.py on >=2 slices.
 - Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING.
 - Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 2 verification pass, THIS pass) — opponent = txeverson__crawler
+
+## STATUS: THE ROUND-1 CIRCULAR-GUN (W=0.0) CHANGE FLIPPED A 63-LOSS SLUGFEST INTO A DOMINANT WIN — NO CODE CHANGE
+Opponent = txeverson__crawler (FAST HEAVILY-CURVING mover, movefrac 0.87, avgV 4.27,
+avg|dh| 0.098, engages ~355px, with a HEAD-ON gun offset ~0.007 rad). INDEX both
+rounds i=0=opus, i=1=crawler. Cross-round MATCH results (results.json winner):
+- Round 0 (OLD W=0.9 near-head-on, leftover from wallspoetas near-straight profile):
+  WON 27021 vs 17885 (60% share) BUT trace win rate 74% — LOST 63 games (mutual
+  slugfest; near-head-on aim missed the heavy curver -> net-energy-negative -> bled).
+- Round 1 (prior teammate switched gun aim W=0.9 -> W=0.0 FULL CIRCULAR LEAD): WON
+  40803 vs 5945 (87% share!). Enemy score dropped 17885 -> 5945 (67% cut). Full
+  250-sim sweep: LOSSES = 0/250 (down from 63!), close(<20E) = 0. ourFE min/mean =
+  55.6/105.3. killtick mean 214.9. We win 10/10 firsts in EVERY 25-battle
+  results_*.txt (~86-90% share each, full survival 500+100). The circular gun
+  (same fix that beat spinbot avg|dh| 0.087 -> 100% and team488__meow 0.104 ->
+  93%->100%) is data-and-real-result-confirmed for this heavy curver.
+
+## Enemy hit density is FLAT across distance (60 R1 sims) — orbit is ALREADY optimal
+  100-200px 38.6/1k | 200-300 32.5 | 300-400 30.0 (most ticks) | 400-500 28.2 |
+  500-600 30.2 | 600-700 29.4/1k. UNLIKE the stationary/head-on gunners (whose
+  density HALVES with range), crawler's gun hits us at ~SAME rate at ALL distances
+  -> orbiting wider gives NO defensive benefit and would only DROP our circular hit
+  rate (README: ~74% <400px -> 46% @600px). We engage ~300-400px = the high-our-hit
+  zone with no defensive penalty. Movement is correctly tuned; do NOT widen orbit.
+
+## Decision this pass: NO code change (deliberate)
+Source is IDENTICAL to the round-1 winning commit 786ddfe (git diff on MyTank.java
+= empty). W=0.0 full circular lead (line 349), orbit ~330px, power tiers, dodge
+(0.10 fire-reversal — correct vs head-on gun), enemyPassive mode OFF (crawler deals
+real damage). Any gun/movement edit only risks regression on a 250/250 sweep we now
+win with 55+ E to spare. Re-verified compile:
+  javac --release 8 -cp libs/robocode.jar -d robots robots/custom/MyTank.java  # OK
+  javap -v robots/custom/MyTank.class | grep "major version"  # -> 52 (Java 8)
+
+## For next teammate
+Only act if a NEW /logs shows the MATCH lost or win rate collapsing. crawler is a
+FAST HEAVILY-CURVING mover with a HEAD-ON gun -> KEEP W=0.0 full circular lead +
+steady low-reversal orbit ~330px. Do NOT widen orbit (enemy density is flat -> no
+benefit, only cuts our hit rate). Do NOT switch to head-on off any biased replay
+(the cross-round REAL result is decisive: W=0.9 lost 63, W=0.0 lost 0). If it
+becomes SLOW/near-straight (avg|dh| <0.03), raise W toward 0.9-1.0 (head-on).
+Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING.
+Keep MyTank class name + Java-8 bytecode (only hard requirement).
