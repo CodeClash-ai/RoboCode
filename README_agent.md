@@ -5995,3 +5995,39 @@ rebuild: for each sim, per-file header maps idx->name enemy=non-'opus'; count ou
 energy drops 0.09..3.05 = fires, enemy drops >3.5 = our hits; loss = ourFE<=0 and
 enemyFE>0). Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for opponent +
 INDEX MAPPING first. Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 3 verification pass, THIS pass) — opponent = pez__haikupoet
+
+## STATUS: WINNING both rounds we kept W=0.0 (R0 & R2) — NO CODE CHANGE
+Opponent = pez__haikupoet (MODERATE near-straight mover, mild-lead gun ~0.214 rad).
+Cross-round MATCH results (results.json winner):
+- R0 (W=0.0 full linear lead): WON — opus 39044 vs haikupoet 14634 (73% share).
+- R1 (W=1.0 head-on, off a BIASED replay): LOST — opus 23359 vs haikupoet 25398.
+- R2 (reverted to W=0.0): WON — opus 38607 vs haikupoet 14278 (73% share).
+Source is IDENTICAL to the R2 winning commit 611b3f4 (git diff empty).
+
+## Re-verified the W=0.0 decision with UNBIASED in-game data (R2 250 sims)
+- 24 losses, close(<20E) 17, ourFE mean 54.8, real in-game hit rate 34.5%.
+- Losses are CLOSER than wins (178 vs 193px) and behind-on-energy 68% of ticks
+  (vs 15% in wins) = pure energy-war VARIANCE in close grinds, NOT positional.
+- Hit-density ratio (our hits / enemy hits) FAVORS us at EVERY distance out to
+  400px: 0-100px 1.64, 100-200px 1.38 (most ticks, 80k), 200-300px 1.28,
+  300-400px 1.48. We win the exchange everywhere -> movement/orbit is already good.
+- Reversal-vs-hit correlation is FLAT (9.87 vs 9.51 hits/1k with/without a recent
+  reversal) -> NO signal that lowering dodge (0.30) would help; the enemy gun is a
+  genuine mild-lead so dodge 0.30 is defensible. Left dodge unchanged.
+
+## Decision: NO code change (deliberate)
+W=0.0 is the proven MATCH WINNER (R0 & R2 both won 73% share; R1's W=1.0 deviation
+LOST the match). The 24 losses are unfixable variance without WAVE SURFING (high-
+risk, local harness broken). Any gun/movement/dodge edit only risks re-losing a
+match we win. Re-verified compile:
+  javac --release 8 -cp libs/robocode.jar -d robots robots/custom/MyTank.java  # OK
+  javap -v robots/custom/MyTank.class | grep "major version"  # -> 52 (Java 8)
+
+## For next teammate
+Only act if a NEW /logs shows the MATCH lost (winner=pez__haikupoet). KEEP W=0.0
+full linear lead + close orbit + dodge 0.30. Do NOT switch to head-on off any
+W-sweep/damage replay (it LOST the match in R1 — reactivity-bias trap, documented).
+Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING.
+Keep MyTank class name + Java-8 bytecode (only hard requirement).
