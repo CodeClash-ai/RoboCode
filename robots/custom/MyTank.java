@@ -119,7 +119,7 @@ public class MyTank extends AdvancedRobot {
         // simple head-on shots beat circular/linear over-leading.  Track this
         // separately from "slow" because the bot can still burst at max speed
         // while sliding along the edge.
-        if (enemyNearWall(enemyX, enemyY, 44.0)) {
+        if (enemyNearWall(enemyX, enemyY, 70.0)) {
             wallEnemyScans++;
         } else {
             wallEnemyScans = Math.max(0, wallEnemyScans - 2);
@@ -176,7 +176,7 @@ public class MyTank extends AdvancedRobot {
         // Orbit perpendicular, with a distance-control offset.  Far away we cut
         // inward; too close we open out.  wallSmooth then bends the path away
         // from the battlefield edges before we commit to it.
-        double preferredDistance = wallEnemyScans > 6 ? 305.0 : (headOnGunIsBest() ? 330.0 : (slowEnemyScans > 12 ? 285.0 : PREFERRED_DISTANCE));
+        double preferredDistance = wallEnemyScans > 4 ? 315.0 : (headOnGunIsBest() ? 330.0 : (slowEnemyScans > 12 ? 285.0 : PREFERRED_DISTANCE));
         // Against the current GF-style opponent our gun struggles mostly due
         // to long bullet flight, while its own gun almost never connects.  Once
         // virtual guns report a hard-to-hit mover, tighten the orbit a bit to
@@ -225,7 +225,7 @@ public class MyTank extends AdvancedRobot {
         // kill reduces exposure.  Moving opponents keep the conservative ladder.
         if (stationaryScans > 5 && getEnergy() > 12) {
             power = 3.0;
-        } else if (wallEnemyScans > 6 && getEnergy() > 16 && distance < 760) {
+        } else if (wallEnemyScans > 4 && getEnergy() > 14 && distance < 820) {
             // Wall-huggers have very limited escape room; use max-power
             // head-on/near-head-on shots to finish them before they can spend
             // energy on stray bullets (which lowers our available bullet score).
@@ -277,7 +277,7 @@ public class MyTank extends AdvancedRobot {
         int gun = chooseGun();
         if (stationaryScans > 5) {
             gun = GUN_HEAD_ON;
-        } else if (wallEnemyScans > 6) {
+        } else if (wallEnemyScans > 4) {
             gun = GUN_AVERAGED;
         } else if (virtualSamples < 14 && slowEnemyScans > 12) {
             gun = GUN_AVERAGED;
@@ -334,7 +334,7 @@ public class MyTank extends AdvancedRobot {
     }
 
     private boolean headOnGunIsBest() {
-        if (stationaryScans > 5 || wallEnemyScans > 6) {
+        if (stationaryScans > 5 || wallEnemyScans > 4) {
             return true;
         }
         if (virtualSamples < 16) {
@@ -408,7 +408,7 @@ public class MyTank extends AdvancedRobot {
         if (gunType == GUN_HEAD_ON) {
             return new double[] {enemyX, enemyY};
         }
-        if (wallEnemyScans > 6 && gunType == GUN_AVERAGED) {
+        if (wallEnemyScans > 4 && gunType == GUN_AVERAGED) {
             // A wall-bound bot often alternates between max-speed bursts and
             // hard stops/reverses.  A damped linear projection was slightly
             // better than pure head-on in trace replay, while still avoiding

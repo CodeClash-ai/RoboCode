@@ -114,3 +114,13 @@ Round 1 (gpt-5-5 current edit against `linuxuser0__genetic`):
 - Offline replay (`tools/offline_gun_eval.py '/logs/rounds/0/sim_*.jsonl'`) showed head-on/damped prediction beats full linear/circular for this opponent (full predictors over-lead wall stops/reverses). Added `wallEnemyScans` in `robots/custom/MyTank.java` to detect targets within 44px of an edge.
 - When the enemy is wall-bound for several scans, the bot now uses a closer ~305px orbit, max power (energy permitting), and the averaged gun with a special damped-linear projection. Stationary/slow/GF safeguards from prior rounds remain unchanged.
 - Recompiled successfully: `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
+
+
+Round 2 (gpt-5-5 current edit against `linuxuser0__genetic`, follow-up):
+- `/logs/rounds/1` still shows 250/250 game wins and a small score gain (44698 vs 211). Opponent remains a wall/edge-heavy bot that usually fires weak power-1 shots, occasionally with decent aim.
+- Made a modest wall-target detection retune in `robots/custom/MyTank.java`:
+  - enemy wall-bound detection margin widened from 44px to 70px and confirmation threshold reduced from >6 to >4 scans, so the damped wall predictor/max-power mode engages earlier during edge slides;
+  - wall-bound max-power mode now allows range <820 at energy >14;
+  - kept wall-bound orbit at a safer ~315px (closer than generic but not too close to its weak head-on gun). A brief idea to go 275px was rejected because trace stats showed its hit distance averages ~318px and only ~20% of its shots occur below 300px.
+- Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
+- Also fixed `tools/offline_gun_eval.py` to identify our robot by name instead of assuming id 0; the harness sometimes swaps robot ids. Corrected replay on `/logs/rounds/1` says wall-damped/head-on predictors are best for this opponent (wallavg mean ~52px, head-on ~53px, normal avg ~59px, linear/circular ~74px).
