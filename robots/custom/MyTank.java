@@ -354,14 +354,14 @@ public class MyTank extends AdvancedRobot {
             // damped averaged gun slightly ahead of full linear at our actual
             // shot times, despite long straight runs.
             gun = GUN_AVERAGED;
-        } else if (wallEnemyScans > 4 && Math.abs(e.getVelocity()) > 0.55 && Math.abs(turnRate) < 0.025
+        } else if (wallEnemyScans > 4 && straightEnemyScans > 12
+                && Math.abs(e.getVelocity()) > 0.55 && Math.abs(turnRate) < 0.025
                 && (virtualSamples < 45 || virtualGunError[GUN_LINEAR] <= virtualGunError[GUN_AVERAGED] + 8.0)) {
-            // Antiwalls/Claptrap-style bots often sit still, then run in a
-            // straight line along an edge.  During those fast wall bursts, full
-            // linear prediction beats the damped/averaged wall-stop gun in the
-            // latest trace replay.  Keep the override through more early waves,
-            // then require the virtual scores to stay roughly competitive so
-            // stop/reverse wall runners can still switch back to averaging.
+            // Antiwalls/Claptrap-style bots can make long, clean wall runs where
+            // full linear prediction wins.  Do not force linear on short wall
+            // snippets, though: the current CTBot traces are wall-heavy but
+            // stop/reverse after brief runs, and the damped wall/averaged guns
+            // beat early linear over-lead there.
             gun = GUN_LINEAR;
         } else if (wallEnemyScans > 4 && virtualSamples < 18) {
             // Cold-start wall-bound targets with the damped wall predictor, but
