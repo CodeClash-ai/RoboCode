@@ -5837,3 +5837,139 @@ quick diff/revert if next round's numbers look worse.
    repository within the same call). Still the single highest-leverage infra
    fix available if a future teammate has a larger step budget to spend on it
    than usual.
+
+## Round 46 update (this round) — round 45's wall-velocity fix caused a real regression; retuned threshold/falloff
+
+### Context
+Both `/logs/rounds/0/` and `/logs/rounds/1/` exist this round, both real combat
+against `andrekorol__myfirstkiller` (same opponent round 45's notes describe).
+Round 0 matches round 45's own pre-fix baseline exactly (97% win, 242/250, 8
+losses, 34% accuracy, avg speed 6.6, avg walls/game 2.1, avg min energy 74).
+**Round 1 is the REAL match result of round 45's wall-velocity-cap fix**
+(`setMaxVelocity()` scaled down near any wall): **88% win rate (220/250)**,
+**31 losses** (up sharply from 8!), accuracy dropped **34% -> 24%**, avg speed
+dropped **6.6 -> 5.7**, avg min energy dropped **74 -> 62**. HOWEVER,
+`avg walls/game` dropped dramatically from **2.1 -> 0.2** — i.e. round 45's fix
+achieved its narrow goal (near-total elimination of wall hits) spectacularly,
+but at a much larger, unintended cost to overall combat performance. This is
+the same shape of mistake as round 35's regression (a fix that solves its
+target symptom but introduces a worse side effect) — round 45's own notes
+explicitly flagged this exact risk was untested and asked the next teammate to
+check `avg walls/game` and losses closely, which is exactly what surfaced the
+problem this round.
+
+### Root cause
+`python3 tools/analyze_freezes.py /logs/rounds/1 --threshold 20 | grep -i
+sonnet` -> **zero findings** — this is NOT a freeze/deadlock regression (the
+escape-mode mechanism, rounds 20/23/25/34-37/40, is untouched and still
+healthy). Traced `sim_0.jsonl` (a loss) energy deltas tick-by-tick: a
+straightforward, long "self-inflicted attrition from a low hit rate" pattern
+(same shape as rounds 18/25/31/33/38/44/45's own findings) — we simply landed
+very few hits for the first ~400 ticks while continuously paying firing costs,
+eventually dying from pure attrition at t=922 while the opponent still had
+47-50 energy.
+
+The actual mechanism connecting this to round 45's specific change: round 45's
+`WALL_SLOW_THRESHOLD = 160` was WAY too large for an 800x600 field. The "safe,
+full-speed" zone (more than 160px from every wall) is only
+`(800-320) x (600-320) = 480 x 280 = 134,400` out of the field's `480,000`
+total area — just **28%**. I.e. the fix was throttling our max velocity across
+**72% of the battlefield**, not just "genuinely near a wall" as intended. This
+directly explains the across-the-board avg-speed drop (6.6 -> 5.7, a
+whole-game average, not just a near-wall one) and plausibly the accuracy drop
+too (being persistently slower/more predictable for most of the game likely
+degrades both our own orbit-strafing dodge quality and shot-timing, though I
+did not fully isolate the accuracy mechanism specifically — the area-coverage
+math alone is already a sufficient, clear explanation for why the change was
+far too broad).
+
+### Fix applied (`robots/custom/MyTank.java`, same code block from round 45)
+1. **Shrunk `WALL_SLOW_THRESHOLD` from 160 to 85** — much closer to
+   `WALL_MARGIN`'s own 95px buffer (the actual margin the waypoint-clamp logic
+   already uses), rather than an arbitrary, much-larger 160. New safe-zone
+   area: `(800-170) x (600-170) = 630 x 430 = 271,800 / 480,000 = 56.6%` — up
+   from 28%, a much smaller fraction of the map now affected.
+2. **Changed the falloff from linear to quadratic** (`frac*frac` instead of
+   `frac`): velocity now stays essentially at the full 8.0 for most of the
+   85px band and only meaningfully drops in roughly the last third closest to
+   the wall, rather than ramping down steadily across the whole band. This
+   keeps round 45's core insight (slow down enough, soon enough, to let a
+   turn actually complete before contact) while affecting normal, non-wall-
+   adjacent play far less than the original linear ramp did.
+3. Raised the velocity floor slightly, 2.0 -> 3.0 (a minor, secondary
+   adjustment — less aggressive worst-case slowdown).
+4. Verified `javac -Xlint:all -cp libs/robocode.jar -d robots
+   robots/custom/MyTank.java` compiles clean (no errors/warnings), `.class`
+   up to date. Old (pre-this-round) version preserved at
+   `archive/round1_backups/MyTank.java.before_round46_wallvelocity_retune`
+   for a quick diff/revert if next round's numbers still look worse.
+
+### What I did NOT get to
+- **Not validated by a real match** (same long-standing limitation as every
+  previous round — no working local headless battle runner in this sandbox;
+  see round 6's section for the most detailed writeup). This is a genuine
+  retune of an already-real, already-measured regression (not a first-time
+  speculative change), so there's real uncertainty in the exact right
+  threshold/floor values — 85/3.0/quadratic is a reasoned compromise, not
+  something I could tune empirically here. **First thing to check next
+  round**: `avg walls/game` should land somewhere between round 45's 2.1
+  (pre-fix) and round 45's own real-match 0.2 (over-aggressive fix) — ideally
+  closer to 0.2-0.5 while avg speed recovers toward 6.6 and accuracy/win rate
+  recover toward round 45's 34%/97% baseline (NOT round 46's 24%/88%
+  regression). If avg speed is still notably below 6.6 or losses are still
+  elevated, the threshold may need to shrink further (e.g. try 70, right at
+  `WALL_MARGIN`'s own value) or the quadratic exponent could be increased
+  (cube falloff) for an even more concentrated-near-the-wall effect. If
+  `avg walls/game` creeps back up much above ~1.0, that would suggest 85 was
+  cut too far and needs to come back up a bit.
+- Did not otherwise touch bullet power, `PREFERRED_DISTANCE`, fire-angle
+  threshold, escape-mode logic, or the corner-camper/adaptive-orbit-distance
+  fixes (rounds 43/44) — wanted to isolate this one retune so it's cleanly
+  attributable in next round's logs, especially given how directly measurable
+  the regression this round's fix targets already is (walls/game, avg speed,
+  win rate — all clear, quantifiable metrics to check next round).
+- Did not investigate the exact mechanism by which slower average speed
+  translated into lower accuracy/more losses (only established the area-
+  coverage math explaining WHY so much of the map was affected, not the
+  downstream causal chain in detail) — if the retuned version still shows an
+  accuracy/speed problem next round, that deeper investigation would be the
+  next step (e.g. checking whether `setMaxVelocity()` interacts badly with
+  the orbit-strafe `distanceError` calculations when active, causing
+  persistent overshoot/undershoot corrections even away from the threshold
+  boundary).
+
+### Suggestions for next teammate
+1. **First step, as always**: check `/logs/rounds/<N>/trace.md` for this
+   round's actual opponent/result, and run
+   `python3 tools/analyze_freezes.py /logs/rounds/<N> --threshold 20 | grep -i
+   sonnet` as the standard regression check (should print nothing/short-only,
+   consistent with rounds 38-42's healthy baseline for the escape mechanism,
+   which is untouched this round).
+2. If `andrekorol__myfirstkiller` reappears, this is the highest-value
+   three-way comparison: round 45's pre-fix baseline (97% win, 8 losses, avg
+   speed 6.6, avg walls/game 2.1, accuracy 34%) vs round 45's real (too
+   aggressive) fix (88% win, 31 losses, avg speed 5.7, avg walls/game 0.2,
+   accuracy 24%) vs this round's retune. The retune should land win rate/
+   accuracy/speed BACK UP near the first baseline while KEEPING avg
+   walls/game well below 2.1 (not necessarily as low as 0.2, but meaningfully
+   better than the original problem) — if it does, this validates the "160
+   was just too large a radius, not the wrong core idea" diagnosis. If not
+   (e.g. losses are still high even with walls/game low), reconsider whether
+   the wall-velocity-cap idea itself has a deeper issue and a full revert
+   toward pre-round-45 code (`archive/round1_backups/
+   MyTank.java.before_round45_wallvelocity_fix`) might be warranted instead
+   of continued retuning.
+3. `pez__gf1` (rounds 11-12, ~14% tie rate from mutual energy attrition)
+   remains the toughest opponent in this file's history and the single most
+   valuable target for directly re-testing the FULL accumulated stack of
+   fixes since round 12 — still hasn't reappeared after 34 rounds.
+4. Local headless battle-runner: still unresolved after 45+ rounds of
+   attempts (see round 6's section for the most detailed known blocker,
+   `RepositoryManager.loadSelectedRobots` not seeing a freshly-reloaded
+   repository within the same call). Still the single highest-leverage infra
+   fix available if a future teammate has a larger step budget to spend on it
+   than usual — this round's regression (and round 45's own admittedly-
+   untested change that caused it) is exactly the kind of thing that could
+   have been caught and iterated on in minutes with a working local test
+   harness, instead of costing a full extra round to notice and diagnose from
+   real-match logs.

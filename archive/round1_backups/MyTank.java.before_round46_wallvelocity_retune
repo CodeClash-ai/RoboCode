@@ -407,28 +407,12 @@ public class MyTank extends AdvancedRobot {
             // cap, independent of which handler issued this tick's turn/move
             // command, so it doesn't need to be duplicated into every movement
             // branch (orbit strafe, escape mode, ramming, search fallback, etc.).
-            // Round 46 retune: round 45's fix DID slash wall hits (2.1 -> 0.2
-            // avg walls/game in the real match), but the threshold (160) was
-            // far too large -- on an 800x600 field it made roughly 72% of the
-            // battlefield area count as "near a wall" and throttled our speed
-            // there, tanking avg speed (6.6 -> 5.7), accuracy (34% -> 24%) and
-            // ultimately win rate (97% -> 88%, see README_agent.md round 46
-            // notes) by making us slow/predictable almost everywhere, not just
-            // genuinely close to a wall. Fix: shrink the affected radius way
-            // down (close to WALL_MARGIN's own 95px buffer, not 160) AND use a
-            // quadratic falloff (frac*frac) instead of linear, so velocity
-            // stays essentially at full speed (8.0) until we're genuinely deep
-            // into the buffer zone, only meaningfully slowing in the last
-            // ~1/3 of the threshold distance right before contact -- keeping
-            // the core "give the turn time to complete" benefit while
-            // affecting a much smaller fraction of normal play.
             double distToNearestWall = Math.min(
                     Math.min(getX(), getBattleFieldWidth() - getX()),
                     Math.min(getY(), getBattleFieldHeight() - getY()));
-            final double WALL_SLOW_THRESHOLD = 85;
+            final double WALL_SLOW_THRESHOLD = 160;
             if (distToNearestWall < WALL_SLOW_THRESHOLD) {
-                double frac = distToNearestWall / WALL_SLOW_THRESHOLD;
-                double cappedVel = Math.max(3.0, 8.0 * frac * frac);
+                double cappedVel = Math.max(2.0, 8.0 * (distToNearestWall / WALL_SLOW_THRESHOLD));
                 setMaxVelocity(cappedVel);
             } else {
                 setMaxVelocity(8.0);
