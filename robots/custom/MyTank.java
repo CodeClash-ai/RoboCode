@@ -72,10 +72,15 @@ public class MyTank extends AdvancedRobot {
         enemyHeading = e.getHeadingRadians();
         enemyVelocity = e.getVelocity();
 
-        // Track enemy turn rate for circular prediction
+        // Track enemy turn rate for circular prediction (EMA smoothing over
+        // recent ticks). vs team488__meow (fast, heavily-curving mover avg |dh|
+        // ~0.11 rad/tick): replay-sim shows circular targeting hits ~21-26% vs
+        // ~16% head-on and ~3-4% linear. Smoothing the per-tick heading delta
+        // gives a stable turn estimate for the stepped circular predictor.
         if (haveLastHeading) {
             double dh = Utils.normalRelativeAngle(enemyHeading - lastEnemyHeading);
-            enemyTurnRate = Math.max(-0.15, Math.min(0.15, dh));
+            dh = Math.max(-0.20, Math.min(0.20, dh));
+            enemyTurnRate = 0.6 * enemyTurnRate + 0.4 * dh;
         }
         lastEnemyHeading = enemyHeading;
         haveLastHeading = true;
@@ -238,12 +243,22 @@ public class MyTank extends AdvancedRobot {
         // Replay-sim over pez__droidpoet paths shows this near-constant-velocity
         // full-speed mover is best hit with a FULL lead (W=0.0): W=0.0 gave 20.9%
         // vs 17.6% for the old half-lead, and ~90 vs ~75 avg bullet dmg/round.
+        // CIRCULAR TARGETING (vs team488__meow, a fast heavily-curving mover):
+        // iterate bullet flight time, then step the enemy forward each future
+        // tick applying its (smoothed) turn rate. Replay-sim over 2 slices:
+        // circular 20.8%/25.7% hit vs head-on 16.0%/16.0% vs linear 2.9%/4.4%.
         double leadX = enemyX, leadY = enemyY;
-        for (int it = 0; it < 12; it++) {
-            double fd = Math.hypot(leadX - getX(), leadY - getY());
-            double ft = fd / bulletSpeed;
-            leadX = enemyX + Math.sin(enemyHeading) * enemyVelocity * ft;
-            leadY = enemyY + Math.cos(enemyHeading) * enemyVelocity * ft;
+        double ftEst = 0;
+        for (int it = 0; it < 15; it++) {
+            double px = enemyX, py = enemyY, h = enemyHeading;
+            int steps = (int) ftEst;
+            for (int s = 0; s < steps; s++) {
+                h += enemyTurnRate;
+                px += Math.sin(h) * enemyVelocity;
+                py += Math.cos(h) * enemyVelocity;
+            }
+            leadX = px; leadY = py;
+            ftEst = Math.hypot(leadX - getX(), leadY - getY()) / bulletSpeed;
         }
         // ROUND-2 FIX: revert to W=0.0 (full linear lead) which WON 100% (round 0).
         // The round-1 head-on (W=1.0) change coincided with the regression to 83%.
@@ -265,7 +280,8 @@ public class MyTank extends AdvancedRobot {
         // (distance-based, kept net-positive) still guard the crazy-bot regression.
         // Chose W=0.85: strongly toward head-on (physics: slow target -> head-on best),
         // hedged just short of pure 1.0 since replay is biased by the reactive enemy path.
-        double W = 1.0;  // HEAD-ON: best vs alpian__ianstank (stop-and-reverse oscillator, ~50% stationary). Replay-sim 80 games: W=1.0 hits 40.3% vs W=0.0 21.4%.
+        double W = 0.0;  // full CIRCULAR lead (leadX/leadY already circular-predicted) vs team488__meow. Was 1.0 head-on for stationary/oscillator foes; circular wins for this fast curving mover.
+        // [old] double W = 1.0; // HEAD-ON best vs alpian__ianstank (stop-and-reverse oscillator, ~50% stationary). Replay-sim 80 games: W=1.0 hits 40.3% vs W=0.0 21.4%.
         double predX = W * enemyX + (1 - W) * leadX;
         double predY = W * enemyY + (1 - W) * leadY;
 
@@ -341,9 +357,15 @@ public class MyTank extends AdvancedRobot {
         // 200-300px net -55/1k, 300-400px -73/1k. We orbited ~230px (mostly 200-300
         // = losing zone) -> pulled the 1 grind loss + close games. Orbit CLOSER (~180px)
         // to spend more ticks in the high-hit zone and flip the grind energy war.
+        // ROUND-1 vs team488__meow (fast, heavily-curving mover, 37% enemy
+        // accuracy vs our 20%): with circular targeting our hit rate is ~25% at
+        // BOTH 100-200px AND 200-300px, but enemy hit density is 14.8/1k at
+        // 100-200px vs only 3.3/1k at 200-300px. So orbit ~260px: same hit rate,
+        // ~4x FEWER enemy hits. This directly attacks the 18/250 losses (enemy
+        // out-trades us at close range where its gun is deadly).
         double rangeBias = 0.0;
-        if (enemyDistance > 210) rangeBias = -0.55;      // pull in toward ~180px
-        else if (enemyDistance < 140) rangeBias = 0.55;  // push out if too close
+        if (enemyDistance > 290) rangeBias = -0.5;       // pull in toward ~260px
+        else if (enemyDistance < 220) rangeBias = 0.5;   // push out if too close
 
         double desiredDir = absBearing + (Math.PI / 2 + rangeBias) * moveDirection;
 

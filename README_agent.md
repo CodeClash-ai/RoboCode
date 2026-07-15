@@ -1777,3 +1777,53 @@ Only act if a NEW /logs shows win rate <100% or our energy collapsing to a loss
 W=1.0 head-on. If it becomes a FAST dodger (avg|v| up, moving frac up), LOWER W
 toward 0.5 and re-run the W-sweep. Never go flat power 3.0 at long range vs a fast
 dodger (regressed to 83% vs robo_code__crazy). Keep MyTank class name + Java-8.
+
+# Agent Notes (Round 1 / current pass) — opponent = team488__meow (STRONG CURVING DODGER)
+
+## KEY FINDING: first genuinely tough foe in a while — FAST, HEAVILY-CURVING mover with a GOOD gun
+Round 0 result (BEFORE my change): opus-4-8 39720 vs team488__meow 4779.
+results_0.txt: opus 1684 (93%), 10/10 firsts BUT trace.md shows WIN RATE 93%
+(232/250) — we LOSE 18 games. Games are LONG (avg 761, max 1729 turns). Our
+accuracy only 20%; ENEMY accuracy 37% (its gun is BETTER than ours). Our avg
+min energy only 42 (tight). Losses are ~500-700 turn games where the enemy
+out-DAMAGES us and finishes with 2-44 energy (not just slow grinds).
+
+## Opponent profile (per-sim, 80 games; header maps idx->name, enemy=non-'opus')
+- moving 91% of ticks, avg |v| 5.4 (fast), avg |dh| 0.115 rad/tick (STRONG curve),
+  engage dist ~284px. A real orbiting/curving dodger, NOT a duck.
+
+## CHANGES THIS PASS (gun rewrite + orbit distance) — both replay-sim validated
+1. GUN: replaced linear predictor with proper CIRCULAR TARGETING (step enemy
+   forward each future tick applying a SMOOTHED turn rate; enemyTurnRate now EMA
+   0.6/0.4). Set W=0.0 so we use the full circular lead. Replay-sim over 2 slices
+   (tools/replay2.py): circular 20.8%/25.7% hit vs head-on 16.0%/16.0% vs
+   linear 2.9%/4.4%. ~50% more hits — directly attacks our 20% accuracy problem.
+2. ORBIT: was ~180px. With circular gun our hit rate is ~25% at BOTH 100-200px
+   AND 200-300px, but ENEMY hit density is 14.8/1k at 100-200px vs only 3.3/1k
+   at 200-300px. So orbit ~260px (rangeBias pull-in >290, push-out <220): SAME
+   hit rate, ~4x FEWER enemy hits. Attacks the 18 losses (enemy out-trades close).
+Power tiers (3.0/<300, 2.4/<400, 1.6/<550, 1.0/else), fire gates, energy-war
+taper, low-E clamps ALL UNCHANGED. Backup: /tmp/MyTank.bak.java (also git).
+Compiles Java 8 (major version 52), rc=0.
+
+## Analysis tools (persisted this pass)
+- tools/replay2.py: circular vs head-on vs linear hit rate + hit-rate-by-distance.
+  Usage: python3 tools/replay2.py 60  (arg = #games). Edit files[120:200] for a
+  2nd slice. bydist() at the bottom prints hit rate per 100px bucket.
+- tools/replay_meow.py: earlier W-sweep + basic circular test.
+- Key one-liner (net our energy & enemy hit density by distance) is in step
+  history: bucket by dist at prev tick; our energy drops (-3.1,-0.05)=fire,
+  gains>0.1=our hit, drops<-3.5=enemy hit us. 200-300px was our worst NET zone
+  under the OLD 180px orbit (-136/1k) — the orbit-out fix targets exactly this.
+
+## For next teammate — VERIFY
+- Want NEW /logs win rate ABOVE 93% (ideally 97%+), our accuracy UP from 20%,
+  our avg min-energy UP from 42, fewer/no losses. If it DROPPED, first suspect
+  the circular gun (if enemy became a stop-and-go/reactive dodger, circular
+  overshoots -> set W back toward 0.5-1.0) OR the wider orbit (if enemy's gun is
+  ALSO good at mid-range, pull orbit back to ~200px: thresholds 230/160). Revert
+  to /tmp/MyTank.bak.java (git prior, 93%) if a clear regression.
+- Circular targeting degrades GRACEFULLY: turn rate ~0 or velocity ~0 -> head-on.
+- The remaining lever if still losing is WAVE SURFING (enemy gun is 37% accurate
+  — dodging its bullets is the biggest untapped win, but high-risk; local harness
+  broken, trust /logs only). Keep MyTank class name + Java-8 bytecode.
