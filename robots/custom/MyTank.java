@@ -180,11 +180,22 @@ public class MyTank extends AdvancedRobot {
             reverseDirection();
         }
 
-        // SittingDuck-style opponents in the current logs never fire.  Once we
-        // are confident a stationary target is harmless, cancel movement so we
-        // do not donate wall/collision damage while the gun farms max-power
-        // hits.  If a stationary locker does fire, enemyFireCount disables this
-        // branch and we keep orbiting/dodging as normal.
+        // SittingDuck-style opponents in many logs never fire.  Once we are
+        // confident a stationary target is harmless, cancel movement so we do
+        // not donate wall damage while the gun farms max-power hits.  One
+        // important exception: if the round spawned us almost touching a
+        // stationary bot (sample.Fire in the current traces), stopping here can
+        // pin both robots together in a ram loop until a draw.  Always open a
+        // safe gap from close stationary targets before entering farm mode.
+        if (stationaryScans > 5 && e.getDistance() < 180.0) {
+            double away = absBearing + Math.PI;
+            if (!insideBattlefield(projectX(getX(), away, 170.0), projectY(getY(), away, 170.0), WALL_MARGIN + 18.0)) {
+                away = Math.atan2(getBattleFieldWidth() / 2.0 - getX(), getBattleFieldHeight() / 2.0 - getY());
+            }
+            setMaxVelocity(8.0);
+            driveAlongAngle(away, 180.0);
+            return;
+        }
         if (stationaryScans > 10 && enemyFireCount == 0) {
             if (!insideBattlefield(getX(), getY(), WALL_MARGIN + 25.0)) {
                 driveToward(getBattleFieldWidth() / 2.0, getBattleFieldHeight() / 2.0, 120.0);
@@ -725,13 +736,19 @@ public class MyTank extends AdvancedRobot {
     public void onHitRobot(HitRobotEvent e) {
         reverseDirection();
         setMaxVelocity(8.0);
-        double gunTurn = Utils.normalRelativeAngle(getHeadingRadians() + e.getBearingRadians() - getGunHeadingRadians());
+        double robotBearing = getHeadingRadians() + e.getBearingRadians();
+        double gunTurn = Utils.normalRelativeAngle(robotBearing - getGunHeadingRadians());
         setTurnGunRightRadians(gunTurn);
-        if (e.isMyFault()) {
-            setBack(90);
-        } else {
-            setAhead(90 * moveDirection);
+        // Turn and drive directly away from the collision instead of just
+        // backing up along our current heading.  The old response could be
+        // overwritten by the stationary-target stop branch and leave us pinned
+        // against close-spawn stationary shooters, causing needless ram loops
+        // and the occasional draw.
+        double escape = robotBearing + Math.PI;
+        if (!insideBattlefield(projectX(getX(), escape, 150.0), projectY(getY(), escape, 150.0), WALL_MARGIN)) {
+            escape = Math.atan2(getBattleFieldWidth() / 2.0 - getX(), getBattleFieldHeight() / 2.0 - getY());
         }
+        driveAlongAngle(escape, 170.0);
         if (getGunHeat() == 0 && getEnergy() > 3) {
             setFire(3.0);
         }
@@ -770,6 +787,18 @@ public class MyTank extends AdvancedRobot {
     private void reverseDirection() {
         moveDirection = -moveDirection;
         lastDirectionChangeTime = getTime();
+    }
+
+
+    private void driveAlongAngle(double angle, double distance) {
+        double turn = Utils.normalRelativeAngle(angle - getHeadingRadians());
+        double ahead = distance;
+        if (Math.cos(turn) < 0) {
+            turn = Utils.normalRelativeAngle(turn + Math.PI);
+            ahead = -distance;
+        }
+        setTurnRightRadians(turn);
+        setAhead(ahead);
     }
 
     private void driveToward(double x, double y, double distance) {

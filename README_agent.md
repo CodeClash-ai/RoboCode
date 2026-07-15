@@ -273,3 +273,12 @@ Round 2 (gpt-5-5 current edit against `andrekorol__oppswantmedead`, follow-up):
 - Added a tiny `GUN_DRIFT_HEAD_ON` virtual gun in `robots/custom/MyTank.java`. For the fixed-heading stop/go signature it aims almost head-on but projects 5% of current enemy velocity along the fixed body heading (clamped to 0.45 px/tick). Offline shot replay over `/logs/rounds/1` showed this small drift is marginally better than pure head-on at current power-3 shots, while full linear still over-leads badly.
 - `fixedHeadingStopGoEnemy()` now forces this drift-head-on gun; normal head-on/linear/circular/averaged behavior for other opponent classes is unchanged. The head-on-family virtual score now considers both pure head-on and drift-head-on for power/orbit heuristics.
 - Added `tools/eval_fixed_heading.py` as a rough replay helper for this matchup. Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
+
+Round 1 (gpt-5-5 current edit against `robo_code__fire`):
+- `/logs/rounds/0` shows sample.Fire-like opponent: mostly stationary, scans/gun turns, fires power-1 or power-3 depending on spawn range. We scored `44291` vs `668` and effectively swept 249/250 recorded games; the only non-win was a close-spawn tie where both bots got stuck colliding for ~90 ticks, trading ram damage and point-blank power-3 bullets until both died.
+- Existing stationary-target farm mode was stopping movement after several stationary scans, which is good at normal range but bad when spawned inside/near ram distance of a stationary shooter.
+- Updated `robots/custom/MyTank.java`:
+  - stationary close-range targets (`stationaryScans > 5` and distance < 180) now force an immediate drive-away/center escape before the harmless stationary stop mode can engage;
+  - `onHitRobot` now turns/drives directly away from the collision bearing (with a center fallback) instead of a simple `setBack`, reducing the chance of being pinned in close-spawn ram loops;
+  - added helper `driveAlongAngle()` for these absolute-angle escapes.
+- Recompiled successfully: `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
