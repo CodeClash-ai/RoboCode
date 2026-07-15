@@ -391,6 +391,13 @@ public class MyTank extends AdvancedRobot {
             // more predictable than sample.Crazy.  Tighten only after virtual waves
             // confirm low circular error, preserving the safer old Crazy spacing.
             preferredDistance = (virtualSamples > 14 && virtualGunError[GUN_CIRCULAR] < 85.0) ? 260.0 : 305.0;
+        } else if (quadWallEnemy()) {
+            // QuadWall-style perimeter stop/go runner: stays on walls, fires many
+            // weak bullets, and virtual/replay evidence favors the normal averaged
+            // predictor over the fast-cruise linear gun.  Keep a moderate range;
+            // widen only through power caps/low-energy safeguards instead of chasing
+            // point-blank along the wall.
+            preferredDistance = getEnergy() < 28.0 ? 430.0 : 325.0;
         } else if (fixedHeadingHighPowerShooter()) {
             // A fixed-heading high-power stop/go shooter is more dangerous than
             // Ian/Tarektank-style weak axis bots.  Keep a short but not point-blank
@@ -620,6 +627,20 @@ public class MyTank extends AdvancedRobot {
         }
         if (fastWallCruiser() && getEnergy() > 14 && distance < 820) {
             power = Math.max(power, distance < 650 ? 3.0 : 2.55);
+        }
+        if (quadWallEnemy()) {
+            // Current QuadWall logs are safe in aggregate but the rare losses are
+            // self-depletion after long wall chases.  Preserve max pressure while
+            // healthy, then downshift earlier than the generic low-energy guard.
+            if (getEnergy() > 42 && distance < 760) {
+                power = Math.max(power, distance < 560 ? 3.0 : 2.45);
+            } else if (getEnergy() > 28) {
+                power = Math.min(Math.max(power, distance < 420 ? 1.85 : 1.45), 2.05);
+            } else if (getEnergy() > 14) {
+                power = Math.min(power, distance < 360 ? 0.85 : 0.55);
+            } else {
+                power = Math.min(power, getEnergy() < 8 ? 0.15 : 0.30);
+            }
         }
         if (lowFireTracker() && getEnergy() > 14 && distance < 760) {
             // The approach is highly predictable; max-power linear shots shorten
@@ -904,6 +925,11 @@ public class MyTank extends AdvancedRobot {
             // Replay for NPCSniper favors a wall/stop damped velocity predictor over
             // full linear/circular lead or pure head-on.  Keep it forced so the generic
             // dangerous-wall branch does not use the less-damped averaged predictor.
+            gun = GUN_AVERAGED;
+        } else if (quadWallEnemy()) {
+            // QuadWall is an active weak-fire wall runner with frequent stops; actual
+            // trace replay favors the normal averaged predictor, not the old full-linear
+            // fast-wall-cruiser gun.
             gun = GUN_AVERAGED;
         } else if (velociRobotEnemy()) {
             // For this medium-speed weak shooter, damped averaged prediction is usually
@@ -1287,6 +1313,30 @@ public class MyTank extends AdvancedRobot {
                 && virtualGunError[GUN_HEAD_ON] + 5.0 < virtualGunError[GUN_DRIFT_HEAD_ON];
     }
 
+    private boolean quadWallEnemy() {
+        // gabriel_lw__quadwall in the current logs is a wall/perimeter runner with
+        // many hard stops and frequent weak shots.  It superficially resembles the
+        // daCruzer/Antiwalls fast wall cruisers, but trace replay shows the normal
+        // averaged gun beats full linear/circular and the old fastWallCruiser branch
+        // can over-spend in very long rounds.  Require virtual evidence that averaged
+        // is not losing to linear so clean edge sliders keep their linear farming.
+        return wallEnemyScans > 8
+                && stopGoEnemyScans > 8
+                && enemyFireCount > 3
+                && enemyFirePowerSamples > 1
+                && enemyFirePowerAvg <= 1.45
+                && enemySpeedAvg > 2.0
+                && enemySpeedAvg < 5.3
+                && enemyAbsTurnRateAvg < 0.085
+                && crazyEnemyScans <= 4
+                && !spinBotEnemy()
+                && !fixedHeadingStopGoEnemy()
+                && !fixedHeadingLineEnemy()
+                && !lowFireTracker()
+                && !lowFireRammer()
+                && (virtualSamples > 18 && virtualGunError[GUN_AVERAGED] <= virtualGunError[GUN_LINEAR] + 4.0);
+    }
+
     private boolean fastWallCruiser() {
         // daCruzer/Antiwalls-style perimeter cruisers: wall-bound, long straight
         // fast runs, and only a modest number of weak shots.  The first daCruzer
@@ -1304,7 +1354,8 @@ public class MyTank extends AdvancedRobot {
                 && straightEnemyScans > 12
                 && Math.abs(enemyVelocityAvg) > 3.6
                 && modestFire
-                && crazyEnemyScans <= 4;
+                && crazyEnemyScans <= 4
+                && !quadWallEnemy();
     }
 
     private boolean easyHeadOnStopGoEnemy() {
@@ -1502,7 +1553,7 @@ public class MyTank extends AdvancedRobot {
         // of the old "harmless wall target" max-power close-orbit mode.
         return wallEnemyScans > 4 && enemyFireCount > 3 && stopGoEnemyScans <= 12
                 && !highPowerStopGoDodger()
-                && !heavyStopGoShooter() && !mediumStopGoShooter() && !fastWallCruiser() && !npcSniperEnemy();
+                && !heavyStopGoShooter() && !mediumStopGoShooter() && !quadWallEnemy() && !fastWallCruiser() && !npcSniperEnemy();
     }
 
     private double bestGunError() {
@@ -1604,7 +1655,7 @@ public class MyTank extends AdvancedRobot {
             double drift = limit(-0.80, driftScale * velocity, 0.80);
             return projectClamped(enemyX, enemyY, heading, drift, bulletSpeed, 70);
         }
-        if (gunType == GUN_AVERAGED && (!dangerousWallEnemy() || npcSniperEnemy())
+        if (gunType == GUN_AVERAGED && !quadWallEnemy() && (!dangerousWallEnemy() || npcSniperEnemy())
                 && (npcSniperEnemy()
                         || velociRobotEnemy()
                         || ((wallEnemyScans > 4 || (stopGoEnemyScans > 8
