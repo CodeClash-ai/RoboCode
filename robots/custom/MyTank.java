@@ -280,7 +280,7 @@ public class MyTank extends AdvancedRobot {
         // (distance-based, kept net-positive) still guard the crazy-bot regression.
         // Chose W=0.85: strongly toward head-on (physics: slow target -> head-on best),
         // hedged just short of pure 1.0 since replay is biased by the reactive enemy path.
-        double W = 1.0;  // HEAD-ON best vs it_economics__ite_florian2 (SLOW near-straight mover, avg speed 1.6, avg turn 0.016). Replay-sim 2 slices monotonic: W=1.0 58-60pct hit vs W=0.0 49-50pct. Was 0.0 (circular) for fast curving team488__meow.
+        double W = 0.25;  // vs robo_code__velocirobot (FAST near-straight mover, avgV 4.35, movefrac 0.94, avgDH 0.02, engages ~194px). Replay W-sweep 2 slices: W=0.25 hits ~47pct vs W=1.0 head-on ~43pct, W=0.0 full-lead ~44pct. Partial lead best for fast straight mover. Was 1.0 (head-on) for slow florian2.
         // [old] double W = 1.0; // HEAD-ON best vs alpian__ianstank (stop-and-reverse oscillator, ~50% stationary). Replay-sim 80 games: W=1.0 hits 40.3% vs W=0.0 21.4%.
         double predX = W * enemyX + (1 - W) * leadX;
         double predY = W * enemyY + (1 - W) * leadY;

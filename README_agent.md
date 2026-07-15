@@ -2598,3 +2598,59 @@ Only act if a NEW /logs shows win rate <100% or our energy collapsing to a loss.
 nagisphere is STATIONARY -> KEEP W=1.0 head-on. Always re-check
 `head -1 /logs/rounds/0/sim_0.jsonl` for the current opponent name first.
 Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 1 / current pass) — opponent = robo_code__velocirobot (TOUGH FOE, 11 losses)
+
+## KEY FINDING: velocirobot is a FAST NEAR-STRAIGHT mover with a GOOD gun — first real fight in a while
+Round 0 result (BEFORE my change): opus-4-8 43310 vs robo_code__velocirobot 7295.
+results_0.txt: opus 1774 (88%), 10/10 firsts BUT trace.md WIN RATE 96% (239/250)
+-- we LOSE 11 games. Enemy accuracy 36% > our 32%. Our avg min energy only 58.
+Games are LONG (avg 520, max 914). This is a genuinely competitive opponent.
+
+## Opponent profile (120 sims; header maps idx->name, enemy=non-'opus')
+- movefrac 0.94 (almost always moving), avg |v| 4.35 (FAST), avg |dh| 0.020
+  (near-STRAIGHT, only lightly curving), engages CLOSE (dist mean 219 / median 194).
+  Fires ~2.5x less than us but its gun is accurate. It out-trades us in close grinds.
+
+## The 7 loss games (round 0): ALL long close-range energy-war GRINDS
+sim_118/144/155/181/185/188/194: 734-836 turns, avg dist 174-221px, behind on
+energy 54-96% of ticks. We bled out first because our hit rate at close range
+wasn't high enough to win the energy war fast enough.
+
+## CHANGE THIS PASS (gun aim): W = 1.0 (head-on) -> 0.25 (partial lead)
+The gun was left at W=1.0 head-on from the SLOW florian2 match. That is WRONG for
+this FAST near-straight mover. Replay W-sweep (per-tick interception over recorded
+paths, 2 independent 80-game slices):
+  slice A: W0.0=43.7% W0.25=47.0% W0.5=39.4% W0.75=39.4% W1.0=42.8%
+  slice B: W0.0=43.5% W0.1=44.6% W0.25=46.6% W0.35=45.2% W0.5=41.4%
+CLEAN peak at W=0.25 (~47%) vs head-on ~43%. A fast, mostly-straight mover needs
+a partial lead (full lead overshoots its mild curves/reversals; head-on trails).
+NOTE: the replay is biased TOWARD head-on (enemy path was reactive to our ACTUAL
+W=1.0 shots), yet W=0.25 STILL wins -> strong signal it's the right aim.
+Damage/net-energy replay (120 games, distance-tiered power): W=1.0 dmg 25778
+net +3399 -> W=0.25 dmg 29161 (+13%) net +5225 (+54%). BOTH damage and net energy
+UP -> no energy-war downside; directly attacks the close-grind losses.
+
+## Movement: LEFT UNCHANGED (deliberate — data says current orbit is right)
+Net-energy-by-distance (measured, 150 games): 0-100px NET -56/1k, 100-200px -79/1k
+(BEST), 200-300px -153/1k, 300-400px -94/1k. Closing to <200px is correct (our
+39% hit rate there beats 17% at 200-300px, and it's the least-negative zone). The
+current orbit (~150-180px w/ graduated inward pull -1.1/-0.85/-0.55, push-out
+<120) already camps the right zone. Note enemy hit density is HIGH up close
+(23.6/1k @ 0-100, 15/1k @ 100-200) so do NOT push closer than ~150px vs this good
+gun. The gun (hit rate) is the lever, not movement.
+
+## Compile: javac --release 8 ... -> major version 52 (Java 8), rc=0.
+## Backup of prior source (W=1.0): /tmp/MyTank.bak.java.
+
+## For next teammate — VERIFY
+- Want NEW /logs win rate ABOVE 96% (ideally 100%), our accuracy UP from 32%,
+  fewer/no long grind losses, our avg min-E UP from 58. If it DROPPED, the W=0.25
+  lead may have hurt (revert to W=1.0 / /tmp/MyTank.bak.java, which won 96%).
+- velocirobot is a FAST near-straight mover -> KEEP W=0.25 (or re-run the W-sweep
+  on >=2 slices if it changes profile). If it becomes a SLOW mover, raise W toward
+  1.0; if a HEAVILY-curving dodger (avg|dh|>0.06), set W=0.0 (circular).
+- The remaining lever if still losing grinds is WAVE SURFING (enemy gun 36%
+  accurate -> dodging its close-range bullets is the biggest untapped win, but
+  high-risk; local harness broken, trust /logs only).
+- Keep MyTank class name + Java-8 bytecode (only hard requirement).
