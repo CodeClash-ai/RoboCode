@@ -763,33 +763,7 @@ public class MyTank extends AdvancedRobot {
         // above, which always takes precedence via the early return) and we're not
         // critically low on energy ourselves (a collision still costs us 0.6, so
         // don't risk it if we're down to fumes).
-        // Round 131 addition: gate opportunistic ramming on the enemy NOT
-        // currently juking hard (small |enemyHeadingRate|). Motivation (see
-        // README_agent.md round 130/131 notes): against `logancsc__dodgebot2`
-        // (an evasive/dodging opponent, per its name and behavior -- the
-        // first opponent in this file's history to hand us an outright
-        // overall match LOSS), a full-sample energy-delta trace of
-        // HIT_ROBOT-status ticks showed we lose roughly 2x as much energy
-        // from robot-robot contact as the opponent does (~-2.5/game for us
-        // vs ~-1.25/game for them, confirmed across two independent
-        // 250-game samples) -- the OPPOSITE of what round 12's ramming math
-        // predicts for whoever initiates contact (initiator should net only
-        // -0.6, victim -1.8, per Rules.ROBOT_HIT_DAMAGE/ROBOT_HIT_BONUS).
-        // The most likely mechanism: by the time our "turn toward + charge"
-        // command actually results in contact several ticks later, a
-        // sharply-juking enemy may have already turned such that WE are no
-        // longer the one "moving toward" it at the actual moment of
-        // collision, flipping which side is "at fault" (and therefore which
-        // side eats the cheap 0.6-only cost vs the expensive 1.8 cost)
-        // against us. Skipping the charge specifically while the enemy is
-        // mid-juke (i.e. enemyHeadingRate, already tracked for gun
-        // prediction, is large) avoids committing to a multi-tick charge
-        // right when it's most likely to go stale/misaligned by the time
-        // contact happens, while leaving ramming fully active against the
-        // straight-moving/typical-weak-opponent case where round 107's
-        // analysis found it correlates with winning, not losing.
-        if (enemyDistance < 60 && getEnergy() > 3 && getTime() > rammingCooldownUntil
-                && Math.abs(enemyHeadingRate) < 0.05) {
+        if (enemyDistance < 60 && getEnergy() > 3 && getTime() > rammingCooldownUntil) {
             double turnToEnemy = robocode.util.Utils.normalRelativeAngle(
                     absBearing - getHeadingRadians());
             setTurnRightRadians(turnToEnemy);

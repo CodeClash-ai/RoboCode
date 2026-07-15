@@ -316,6 +316,41 @@ def analyze(logdir, bucket_width):
         overall_acc = (100.0 * total_hits / total_shots) if total_shots else 0.0
         print(f"{'TOTAL':>14} | {total_shots:>6} | {total_hits:>5} | {overall_acc:>7.1f}%")
         print()
+
+    # --- Round 131 addition: per-robot summed energy-swing(P,p) totals. ---
+    # Motivation (see README_agent.md round 130's notes): individual per-bucket
+    # accuracy numbers don't directly answer "is this matchup's bullet-power
+    # tuning actually net-favorable overall" -- a bucket with low accuracy but
+    # high power/volume can still dominate the total swing, or vice versa.
+    # Round 12/109's swing(P,p) formula (derived from Rules.class's actual
+    # getBulletDamage()/getBulletHitBonus() constants, not guessed) gives the
+    # expected relative energy change per shot at accuracy p and power P:
+    #   P <= 1:  swing = P * (7p - 1)              (flat 1/7 breakeven)
+    #   P >  1:  swing = p * (9P - 2) - P           (breakeven depends on P)
+    # Summing (swing-per-shot * shots) across every bucket gives a single,
+    # directly comparable "total expected energy swing" per robot for the
+    # whole sample -- the clearest available signal for "who's actually ahead
+    # on bullet economics in this matchup", independent of any single
+    # bucket's raw accuracy number.
+    print("=== Per-bucket swing(P,p) totals (round 131) ===")
+    print(f"{'robot':>24} | {'total swing':>12} | {'swing/game':>11}")
+    for robot in sorted(stats.keys()):
+        buckets = stats[robot]
+        total_swing = 0.0
+        for bucket, (shots, hits) in buckets.items():
+            if shots <= 0:
+                continue
+            low = float(bucket.split("-")[0])
+            power = low + bucket_width / 2.0
+            p = hits / shots
+            if power <= 1.0:
+                sw = power * (7.0 * p - 1.0)
+            else:
+                sw = p * (9.0 * power - 2.0) - power
+            total_swing += sw * shots
+        per_game = total_swing / total_games if total_games else 0.0
+        print(f"{robot:>24} | {total_swing:>12.1f} | {per_game:>11.2f}")
+    print()
     return 0
 
 
