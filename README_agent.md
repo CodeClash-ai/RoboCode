@@ -302,3 +302,48 @@ The battle now RUNS 10 rounds locally (java -cp libs/* ... robocode.Robocode
   stopped-aim shots too (fires-then-moves faster than bullet), lower long-range
   power further.
 - Keep MyTank class name + Java-8 bytecode (the only hard requirement).
+
+# Agent Notes (Round 2 / current pass) — opponent = trex22__deepthought
+
+## DATA-DRIVEN GUN REWRITE (replay simulation of enemy trajectory)
+Built a replay simulator over /logs/rounds/1/sim_*.jsonl that fires our gun from
+our recorded position each tick and checks if the bullet intercepts the enemy's
+ACTUAL recorded future path. Findings vs this stop-and-go wall-hugging dodger
+(stopped ~38% of ticks, bursts to v=8 the rest; body rotates to run along walls):
+  - Aim: pure head-on (aim at current pos) = 42.9% hit; pure linear = 31.7%.
+    BEST = blend w=0.9 (90% current + 10% linear lead) = 44.2%. Enemy's bursts
+    are reactive/random so leading OVER-shoots; heavy current-pos weight wins.
+  - Power vs damage/tick (accounts for hit-rate drop + slower cooldown at high
+    power): power 3.0 = 0.394 dmg/tick, power 1.9 = 0.30, power 1.0 = 0.157.
+    HIGHER POWER WINS because dmg/hit (16 @ p3 vs 9.4 @ p1.9) dominates. Full
+    round-sim: p3.0 ~252 potential dmg/round vs p1.7 ~174. Enemy has only 100 E
+    so p3.0 also kills FASTER (more bullet-bonus, less time exposed).
+  - Hit rate by distance: <400px ~49-51%, 400-600px ~36-43%. So orbit CLOSER.
+
+## Changes made this pass
+1. aimAndFire REWRITTEN: power = 3.0 always (energy-scaled down only when low:
+   <20->1.5, <10->0.8, <4->0.3). Aim = blend W=0.90 (current 90% / linear 10%).
+   Removed the previous distance/velocity power tiers (they measured WORSE:
+   round0 killtick 416 -> round1 killtick 460 with the low-power-at-range tiers).
+2. Movement range control tightened to target ~400px (pull in >450, push out
+   <250) to raise hit rate. Was ~500px avg engagement -> lower accuracy zone.
+3. Gun-align fire threshold 0.15 -> 0.12 rad (slightly tighter for accuracy).
+
+## Compile verified
+  javac --release 8 -cp libs/robocode.jar -d robots robots/custom/MyTank.java  # OK
+  javap -v robots/custom/MyTank.class | grep "major version"  # -> 52 (Java 8)
+Backup of prior version: /tmp/MyTank.bak.java (NOT persistent; also in git).
+
+## REPLAY SIMULATOR (reusable analysis tool)
+The per-tick interception replay is the key tool. To re-run for a new opponent,
+load sim_*.jsonl (per-file header maps index->name; enemy = the non-'opus' one),
+then for each tick fire a bullet from our (x,y) along an aim strategy and step it
+forward at speed 20-3*power checking distance<20 to enemy's recorded future pos.
+See the python snippets in this file's git history / the commands used this round.
+
+## For next teammate
+- If opponent unchanged: current config is data-optimal for bullet damage. Only
+  risk is regression; verify new /logs killtick DROPS below ~460 and our-E stays
+  high. If enemy becomes a genuine constant-velocity mover, RAISE the linear
+  weight (lower W toward 0.5-0.6); re-run the replay sim to retune W & power.
+- Keep MyTank class name + Java-8 bytecode (only hard requirement).

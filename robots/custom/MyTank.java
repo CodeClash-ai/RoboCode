@@ -100,80 +100,42 @@ public class MyTank extends AdvancedRobot {
     }
 
     private void aimAndFire(double absBearing) {
-        // Choose bullet power by distance & our energy.
-        // Opponent (trex22__deepthought) is a STOP-AND-GO DODGER: stopped ~54%
-        // of ticks, then makes big evasive bursts (v up to 8) after we fire.
-        double power;
-        boolean stationary = Math.abs(enemyVelocity) < 1.0;
-        if (stationary) {
-            // Can't dodge a bullet already in flight while stopped -> max power,
-            // BUT at long range give it time to move before impact, so use a
-            // slightly lower (faster) bullet far away.
-            power = (enemyDistance < 500) ? 3.0 : 2.4;
-        } else {
-            // Moving dodger: fire FASTER (lower-power) bullets so they arrive
-            // before it can complete an evasive burst. Faster bullets = harder
-            // to dodge and less energy wasted on missed max-power shots.
-            if (enemyDistance < 200) {
-                power = 3.0;
-            } else if (enemyDistance < 450) {
-                power = 2.2;
-            } else {
-                power = 1.7;
-            }
-        }
-        if (getEnergy() < 20) {
-            power = Math.min(power, 1.0);
-        }
-        if (getEnergy() < 8) {
-            power = Math.min(power, 0.5);
-        }
+        // Data-driven vs trex22__deepthought (stop-and-go wall-hugging dodger):
+        // Replaying its recorded trajectory showed that damage-per-tick is
+        // MAXIMIZED by full-power (3.0) bullets even though hit rate is a bit
+        // lower, because damage/hit (16) dominates the slower cooldown & the
+        // small hit-rate loss. Best aim = 90% current position + 10% linear lead
+        // (blend w=0.9), which measured ~44% hit rate vs ~32% for pure linear.
+        double power = 3.0;
+        if (getEnergy() < 20) power = Math.min(power, 1.5);
+        if (getEnergy() < 10) power = Math.min(power, 0.8);
+        if (getEnergy() < 4)  power = Math.min(power, 0.3);
         power = Math.max(0.1, Math.min(power, 3.0));
 
         double bulletSpeed = 20 - 3 * power;
 
-        // Predict enemy future position (iterative circular prediction)
-        double predX = enemyX;
-        double predY = enemyY;
-        double eHeading = enemyHeading;
-        double eVel = enemyVelocity;
+        // Linear lead prediction over bullet flight time.
+        double dist = Point2D.distance(getX(), getY(), enemyX, enemyY);
+        double flight = dist / bulletSpeed;
+        double leadX = enemyX + Math.sin(enemyHeading) * enemyVelocity * flight;
+        double leadY = enemyY + Math.cos(enemyHeading) * enemyVelocity * flight;
 
-        // Estimate turn rate from small movement changes is unreliable;
-        // use straight-line + heading prediction over bullet flight time.
-        double deltaTime = 0;
-        double battleW = getBattleFieldWidth();
-        double battleH = getBattleFieldHeight();
-        double predDist;
-        do {
-            deltaTime++;
-            eHeading += enemyTurnRate;
-            predX += Math.sin(eHeading) * eVel;
-            predY += Math.cos(eHeading) * eVel;
-            // Keep prediction inside the field
-            if (predX < 18) predX = 18;
-            if (predX > battleW - 18) predX = battleW - 18;
-            if (predY < 18) predY = 18;
-            if (predY > battleH - 18) predY = battleH - 18;
-            predDist = Point2D.distance(getX(), getY(), predX, predY);
-        } while ((deltaTime) * bulletSpeed < predDist && deltaTime < 120);
+        // Blend: heavy weight on current pos (enemy stops ~40% of ticks and its
+        // bursts are reactive/unpredictable, so lead over-shoots).
+        double W = 0.90;
+        double predX = W * enemyX + (1 - W) * leadX;
+        double predY = W * enemyY + (1 - W) * leadY;
 
-        // Stop-and-go dodger: when stopped, aim directly at current position
-        // (max accuracy). When it accelerates it ramps to v=8 quickly and holds,
-        // so full constant-velocity prediction is accurate mid-burst. Blend only
-        // in the low-speed accel/decel transition to avoid over-shooting.
-        if (Math.abs(enemyVelocity) < 1.0) {
-            predX = enemyX;
-            predY = enemyY;
-        } else if (Math.abs(enemyVelocity) < 3.0) {
-            predX = 0.55 * enemyX + 0.45 * predX;
-            predY = 0.55 * enemyY + 0.45 * predY;
-        }
+        // Clamp prediction inside the field.
+        double bw = getBattleFieldWidth(), bh = getBattleFieldHeight();
+        predX = Math.max(18, Math.min(bw - 18, predX));
+        predY = Math.max(18, Math.min(bh - 18, predY));
+
         double aimAngle = Math.atan2(predX - getX(), predY - getY());
         double gunTurn = Utils.normalRelativeAngle(aimAngle - getGunHeadingRadians());
         setTurnGunRightRadians(gunTurn);
 
-        // Only fire if gun is roughly aligned and cool
-        if (getGunHeat() == 0 && Math.abs(gunTurn) < 0.15 && getEnergy() > power + 0.2) {
+        if (getGunHeat() == 0 && Math.abs(gunTurn) < 0.12 && getEnergy() > power + 0.2) {
             setFire(power);
         }
     }
@@ -192,9 +154,11 @@ public class MyTank extends AdvancedRobot {
         // Range control: if too far, angle inward to close; if too close, angle
         // outward to open. Keeps us in the sweet spot (~450px) where our gun is
         // accurate but we're hard to ram and enemy bullets take longer to arrive.
+        // Target ~400px: replay analysis shows hit rate rises from ~36% at
+        // 500-600px to ~49% at 300-400px, so orbit a bit closer than before.
         double rangeBias = 0.0;
-        if (enemyDistance > 550) rangeBias = -0.35;      // pull in
-        else if (enemyDistance < 300) rangeBias = 0.45;  // push out
+        if (enemyDistance > 450) rangeBias = -0.35;      // pull in
+        else if (enemyDistance < 250) rangeBias = 0.50;  // push out
         double desiredDir = absBearing + (Math.PI / 2 + rangeBias) * moveDirection;
 
         // Wall smoothing: steer away from walls
