@@ -335,9 +335,15 @@ public class MyTank extends AdvancedRobot {
         // DROPS to 5.4/1k; at 100-200px our hit is 66% with only 4.5/1k enemy.
         // -> Orbit MUCH CLOSER (~230px) to move BOTH our accuracy up and out of
         // the enemy's kill zone. This flips the energy war in our favor.
+        // ROUND-2 vs alpian__tarektank: NET-energy analysis by distance (150 games)
+        // showed 100-200px is the ONLY net-POSITIVE zone (+46/1k ticks): our hit rate
+        // 70% there dominates the slightly higher enemy hit density (11.9 vs 9.6/1k).
+        // 200-300px net -55/1k, 300-400px -73/1k. We orbited ~230px (mostly 200-300
+        // = losing zone) -> pulled the 1 grind loss + close games. Orbit CLOSER (~180px)
+        // to spend more ticks in the high-hit zone and flip the grind energy war.
         double rangeBias = 0.0;
-        if (enemyDistance > 270) rangeBias = -0.55;      // pull in toward ~230px
-        else if (enemyDistance < 180) rangeBias = 0.55;  // push out if too close
+        if (enemyDistance > 210) rangeBias = -0.55;      // pull in toward ~180px
+        else if (enemyDistance < 140) rangeBias = 0.55;  // push out if too close
 
         double desiredDir = absBearing + (Math.PI / 2 + rangeBias) * moveDirection;
 

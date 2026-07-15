@@ -1664,3 +1664,45 @@ Compiles Java 8 (major version 52), rc=0.
   (avg|v| up, moving frac up) or curves (avg|dh|>0), re-run the W-sweep replay.
   Never go flat power 3.0 at long range vs a fast dodger (regressed to 83% vs crazy).
 - Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 2 / current pass) — opponent = alpian__tarektank
+
+## STATUS: round 1 won 249/250 (90% share in results_0). 1 LOSS + several close
+## games are ALL long grinds. THIS pass: orbit CLOSER (~230px -> ~180px).
+
+## Verified /logs/rounds/{0,1}: opus 44954/45355 vs tarektank 3577/3995.
+Round 1 trace: win rate 100% (249/250), the 1 loss = sim_34 (1077-turn grind,
+we behind on energy 97% of ticks, bled to 0 vs enemy 13E). Close wins sim_7/215/
+55 finished with 2-16 E — all long grinds too. Games are LONG (avg 552 turns).
+
+## ROOT-CAUSE ANALYSIS (net energy by distance, 150 games — the decisive signal)
+Measured OUR real hit rate (energy-gain/fire events) AND enemy hit density AND
+computed NET energy/1k ticks per distance bucket:
+  100-200px: our hit 70%, enemy 11.9/1k -> NET +46/1k  (ONLY net-POSITIVE zone!)
+  200-300px: our hit 38%, enemy  9.6/1k -> NET -55/1k
+  300-400px: our hit 21%, enemy  3.5/1k -> NET -73/1k
+  400-500px: our hit 29%, enemy  3.2/1k -> NET -30/1k
+We orbited ~230px -> 55% of ticks in the 200-300 LOSING zone. Even though the
+enemy hits us slightly more often up close (11.9 vs 9.6/1k), our 70% hit rate
+there DOMINATES. Orbiting closer flips the grind energy war in our favor.
+
+## CHANGE THIS PASS (movement only): orbit ~230px -> ~180px
+rangeBias thresholds: pull-in >270->>210, push-out <180-><140. Only functional
+change (verified via diff: 2 lines). Power tiers UNCHANGED (3.0/<300 covers the
+new close zone at full power where hit=70% -> net-positive). W=1.0 head-on
+CONFIRMED optimal via fresh replay-sim W-sweep on round-1 logs (48.7% @ W=1.0 vs
+30% @ W=0.0, monotonic — tarektank is a slow stop-and-reverse straight mover).
+Movement reversals/dodge, fire gates, energy-war taper ALL UNCHANGED.
+Compiles Java 8 (major version 52). Backup of prior source: /tmp/MyTank.bak.java.
+
+## For next teammate — VERIFY
+- Want the sim_34-style grind loss GONE (win rate 100%), close-game final-E UP
+  from 0-16, and share held/raised >=90%. If share DROPPED or NEW losses appear,
+  the closer orbit may have exposed us to more enemy close-range hits -> push
+  orbit back toward ~200px (thresholds 230/160) or revert to /tmp/MyTank.bak.java
+  (git prior, 249/250). If it worked, could try ~160px (thresholds 190/130) since
+  100-200px is +46/1k net.
+- tarektank is SLOW/straight -> KEEP W=1.0 head-on. Keep MyTank + Java-8 bytecode.
+- Net-energy-by-distance one-liner (the decisive tool): bucket by dist at prev
+  tick; count our energy drops in (-3.1,-0.05)=fire, gains>0.1=hit for OUR hit
+  rate; our drops <-3.5=enemy hit for density; NET = fires*hr*3p - fires*p - eh*~8.
