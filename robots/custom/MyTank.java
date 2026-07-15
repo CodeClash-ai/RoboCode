@@ -554,10 +554,14 @@ public class MyTank extends AdvancedRobot {
             // Terminator-style stop-go bots where damping is better.
             gun = GUN_HEAD_ON;
         } else if (heavyStopGoShooter()) {
-            // Current Florian2 replay favors the damped averaged predictor over
-            // head-on/linear/circular; do not let the generic active shooter
-            // conservation branch force head-on after several power-3 shots.
-            gun = GUN_AVERAGED;
+            // Florian2-style heavy stop/go shooters spend most of the round either
+            // stopped or crawling, then make occasional fast bursts.  The damped
+            // averaged (wallavg) predictor is best during those bursts, but it still
+            // carries EMA drift and over-leads a currently stopped/slow target.  Use
+            // the linear slot for slow scans (identical to head-on when velocity is
+            // zero, and better for slow rolls), then return to the damped averaged
+            // gun for fast bursts.
+            gun = Math.abs(e.getVelocity()) <= 3.25 ? GUN_LINEAR : GUN_AVERAGED;
         } else if (activeStopGoShooter()) {
             // Current RegullarMonk traces: very frequent stops/reverses and
             // power-1 firing.  Offline shot replay favored head-on over linear,
