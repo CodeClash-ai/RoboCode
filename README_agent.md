@@ -12988,3 +12988,94 @@ already-working code without a clear, actionable signal of underperformance.
    spend on it than usual — especially valuable for iterating faster on
    tough matchups like `kcanida__pikachu`, where each experiment currently
    costs a full round to validate or refute.
+
+## Round 115 update (this round) — 2nd consecutive round vs pez__wallspoetas, fully healthy, no changes
+
+### Context
+Both `/logs/rounds/0/` and `/logs/rounds/1/` exist this round, both real
+combat against `pez__wallspoetas` — same opponent round 114's notes
+describe (no code change happened between round 114 and this round;
+`kcanida__pikachu`, the very tough opponent from rounds 107-109 whose
+round-109 low-power fast-mover-cap fix STILL awaits a direct before/after
+re-test, did NOT reappear again this round — now 6 consecutive rounds,
+109-114, of it not showing up). Round 0 here matches round 114's own
+baseline almost exactly (98% win, 246/250, 3 losses + 1 tie, 54% accuracy,
+avg speed 6.0, avg walls/game 0.5, avg rams/game 1.6, avg min energy 65,
+score 42660 vs 10124). Round 1 (2nd independent sample): **98% win rate
+(246/250)**, 3 losses (`sim_0`, `sim_103`, `sim_207`) + 1 tie (`sim_236`),
+55% accuracy, avg speed 6.0, avg walls/game 0.5, avg rams/game 1.8, avg min
+energy 67, score 42994 vs 10028 — essentially identical, no regression, no
+drift.
+
+### Validation performed
+1. `python3 tools/analyze_freezes.py /logs/rounds/1 --threshold 20 | grep -i
+   sonnet` -> **5 findings** across 3 games (`sim_121`, `sim_171`, `sim_90`),
+   all short (22-48 ticks): a mix of the well-established benign "radar
+   heading frozen" pattern (documented benign since round 15, most recently
+   rounds 48-114, not the round-4 freeze bug) and 2 short `STUCK-RAMMING`
+   findings (34/48 ticks), all well within the healthy post-round-37/40
+   range. **Cross-checked all 3 flagged games against the winner table —
+   none of them (`sim_121`, `sim_171`, `sim_90`) overlap with any of the 3
+   real losses or the 1 tie (`sim_0`, `sim_103`, `sim_207`, `sim_236`)**.
+   Confirms the escape-mode mechanism (rounds 20/23/25/34-37/40) and round
+   47/48's radial-blend movement fix are both still fully healthy — the
+   ~1.6% loss/tie rate is genuine combat-competitiveness variance (per round
+   114's own per-loss traces), not a freeze/deadlock bug.
+2. `javac -Xlint:all -cp libs/robocode.jar -d /tmp/build robots/custom/MyTank.java`
+   compiles clean (exit 0, no errors/warnings).
+3. `diff archive/round1_backups/MyTank.java.before_round109_lowpower_fastcap
+   robots/custom/MyTank.java` — confirmed round 109's low-power fast-mover
+   cap change (1.3->0.5 for `absVelocity>6`, in both
+   `bulletPowerForDistance()` and the finishing/press-advantage
+   `maxUsablePower` override) is exactly what's currently live in
+   `MyTank.java`; no accidental drift or reversion. `MyTank.java` is 1273
+   lines, unchanged from round 109 onward through round 114.
+
+### What I did this round (or rather, chose NOT to do)
+Given a 2nd consecutive fully healthy result (98% win across both fresh
+samples, only ordinary-variance losses/ties matching round 114's own
+established baseline, freeze findings all short/benign and NOT correlated
+with any loss, stable accuracy/energy numbers, tooling sanity checks green)
+against the same weak-but-not-trivial opponent, and no fresh signal of
+underperformance to chase, I made **no changes to `MyTank.java`** this round
+— consistent with this file's very long-established pattern (rounds 6, 13,
+15, 21, 22, 26, 27, 28, 29, 32, 33, 38, 39, 41, 42, 48-106, 109-114) of not
+touching already-working code without a clear, actionable signal.
+
+### Suggestions for next teammate
+1. **First step, as always**: check `/logs/rounds/<N>/trace.md` (or
+   `results.json` + per-`sim_*.jsonl` `winner` fields if `trace.md` is
+   missing, per round 68's note) for the actual opponent this round, and run
+   `python3 tools/analyze_freezes.py /logs/rounds/<N> --threshold 20 | grep -i
+   sonnet` as the standard regression check.
+2. **If `kcanida__pikachu` finally reappears**, this remains THE single
+   highest-value comparison outstanding across this whole file's recent
+   history — see rounds 107-109's notes for the full history (round 107:
+   37% win baseline; round 107's fire-threshold "fix": 24% win, a
+   regression, reverted in round 108; round 108's revert: back to 37%;
+   round 109: lowered the fast-mover power cap 1.3->0.5, STILL not validated
+   by a real match against this specific opponent after 6 consecutive
+   rounds — 109 through this round — of it not reappearing).
+   `analyze_power_accuracy.py`'s per-bucket numbers can be trusted directly
+   (round 113's ghost-frame-hit-attribution fix is in place and confirmed
+   still working) — no extra caution needed there.
+3. If `pez__wallspoetas` keeps reappearing, treat ~98% win / ~3 losses per
+   250 / 54-55% accuracy / avg min energy 65-67 / avg walls/game 0.5 as the
+   stable healthy baseline for this specific matchup.
+4. `mgalushka__maximbot` (rounds 110-111), `robo_code__walls` (rounds
+   112-113), `alexbay218__shreker` (rounds 101-102), `vikdov__dominatorx`
+   (rounds 99-100), and `admiralrasmussen__wavesurfing` (rounds 95-96,
+   likely a genuine wave-surfer) are the most recent moderately-tougher
+   opponents seen — all confirmed stable across repeat samples without
+   needing a code change. `alpian__ianstank`/`pez__gf1` (rounds 43-44/11-12,
+   the historically toughest opponents in this file alongside
+   `kcanida__pikachu`) remain outstanding high-value direct re-tests of the
+   accumulated fix stack if either resurfaces.
+5. Local headless battle-runner: still unresolved after 114+ rounds of
+   attempts (see round 6's section for the most detailed known blocker,
+   `RepositoryManager.loadSelectedRobots` not seeing a freshly-reloaded
+   repository within the same call). Still the single highest-leverage
+   infra fix available if a future teammate has a larger step budget to
+   spend on it than usual — especially valuable for iterating faster on
+   tough matchups like `kcanida__pikachu`, where each experiment currently
+   costs a full round to validate or refute.
