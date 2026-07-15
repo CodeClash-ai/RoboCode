@@ -1706,3 +1706,44 @@ Compiles Java 8 (major version 52). Backup of prior source: /tmp/MyTank.bak.java
 - Net-energy-by-distance one-liner (the decisive tool): bucket by dist at prev
   tick; count our energy drops in (-3.1,-0.05)=fire, gains>0.1=hit for OUR hit
   rate; our drops <-3.5=enemy hit for density; NET = fires*hr*3p - fires*p - eh*~8.
+
+# Agent Notes (Round 1 / current pass) — opponent = it_economics__ite_cliffbot2
+
+## STATUS: PERFECT WIN (250/250), 96% share — NO CODE CHANGE (data-optimal)
+Verified /logs/rounds/0:
+- results.json: opus-4-8 44717 vs it_economics__ite_cliffbot2 1323.
+- results_0.txt: opus_4_8.MyTank 1819 (96%), 10/10 firsts; enemy 80 (4%).
+- trace.md: our win 100% (250/250), accuracy 73%(!), avg speed 5.4, avg min E 94.
+  Enemy: 0% win, 3.5 shots/game, 22% acc, avg speed 2.4, dies avg turn 176.
+
+## Opponent = SLOW, LIGHTLY-CURVING mover
+Per-sim analysis (60 games, header maps idx->name, enemy=non-'opus'):
+- moving 53.5% of ticks, avg |v| 2.65, avg |dh| 0.029 rad/tick (mild curve).
+  Loses the energy war to us decisively (fires ~3.5 shots/game). Games are SHORT
+  (avg 327 turns) — we kill it fast.
+
+## Verified 0 LOSSES / huge margin
+All 250 sims: losses=0. Worst-game our final E = 97.0; mean 126.0. Enemy DIES
+every game. This is essentially the theoretical maximum score share (the 4% leak
+is unavoidable enemy survival-bullet damage during the ~176 ticks before we kill).
+
+## Gun aim: W=1.0 head-on CONFIRMED data-optimal (replay-sim, 80 games)
+W-sweep (per-tick interception over recorded paths, power 3.0):
+  W=0.0 63.4% | W=0.25 66.6% | W=0.5 69.5% | W=0.75 74.3% | W=1.0 78.2%.
+MONOTONIC toward head-on — a slow, only-lightly-curving target that's stationary
+~half the time is best hit at current pos; any lead overshoots. Matches our real
+73% accuracy. Current power tiers (3.0/<300, 2.4/<400, 1.6/<550, 1.0/else),
+orbit ~180px, energy-war taper, low-E clamps ALL correct for this energy-loser.
+
+## Decision: NO code change (deliberate)
+We score essentially the max. Any gun/movement edit only risks regression on a
+250/250 sweep we win with 97+ E to spare. Re-verified compile:
+  javac --release 8 -cp libs/robocode.jar -d robots robots/custom/MyTank.java  # OK
+  javap -v robots/custom/MyTank.class | grep "major version"  # -> 52 (Java 8)
+
+## For next teammate
+Only act if a NEW /logs shows win rate <100% or our energy collapsing to a loss.
+cliffbot2 is SLOW/lightly-curving -> KEEP W=1.0 head-on. If it becomes a FAST
+dodger (avg|v| up, moving frac up), LOWER W toward 0.5 and re-run the W-sweep.
+Never go flat power 3.0 at long range vs a fast dodger (regressed to 83% vs crazy).
+Keep MyTank class name + Java-8 bytecode (only hard requirement).
