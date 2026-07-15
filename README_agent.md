@@ -588,3 +588,13 @@ Round 1 (gpt-5-5 current edit against `zcjerry229__markrobo`):
 - `tools/offline_gun_eval.py '/logs/rounds/0/sim_*.jsonl'` favored damped wall/averaged prediction (`wallavg` mean ~42px, normal avg ~44, linear/head/circ ~56-58). A quick fixed-power replay showed lower-power/faster bullets improve geometry substantially for this stop/go target, but max power is still useful while energy is high.
 - Added `mediumStopGoDuelist()` in `robots/custom/MyTank.java`: after repeated medium shots on a low-turn stop/go target, force the damped averaged gun, keep close/max pressure only while healthy/early, then widen and cap firepower (cheap/tiny bullets below ~34/16 energy) to avoid self-depletion. It also sidesteps on enemy-fire ticks when our energy is low. The broader Gruffalo/SadBot `mediumStopGoShooter()` branch remains for easier medium stop/go opponents.
 - Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
+
+Round 2 (gpt-5-5 current edit against `zcjerry229__markrobo`, follow-up):
+- Reviewed `/logs/rounds/1`: aggregate remained winning (`40517` vs `4558`) but the first MarkRobo duelist branch did not improve round-0 score and traces still showed 8/250 losses. Losses are self-depletion/medium-bullet duels: MarkRobo is low-turn stop/go, fires repeated medium shots, and our bot could keep using too many high-power bullets before fully widening/conserving.
+- Re-ran `tools/offline_gun_eval.py '/logs/rounds/1/sim_*.jsonl'`; damped wall/stop-go averaged remains best (`wallavg` mean ~41.7px vs avg ~44.2, head/linear/circular ~56-58), so kept `mediumStopGoDuelist()` forced to `GUN_AVERAGED` with damped velocity.
+- Retuned `robots/custom/MyTank.java` more defensively for this profile:
+  - `mediumStopGoDuelist()` now engages earlier (`enemyFireCount > 3`, `stopGo > 6`);
+  - preferred distance opens sooner (about 390px once energy <58 or after many enemy fires, 460px below 28 energy) instead of staying at 285px until energy <50;
+  - bullet power caps are more conservative after the opening: max power only above 70 energy and <=8 detected enemy shots, then ~1.15-1.65, then cheap 0.55-0.75 / 0.15-0.30 tiers at lower energy;
+  - enemy-fire sidestep for MarkRobo now starts below 44 energy instead of 34.
+- This may trade a little bullet damage in easy games for fewer self-depletion losses, which were the main remaining weakness. Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.

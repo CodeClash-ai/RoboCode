@@ -260,7 +260,7 @@ public class MyTank extends AdvancedRobot {
                 drivePerpendicularEscape(absBearing, 230.0);
                 return;
             }
-            if (mediumStopGoDuelist() && getEnergy() < 34.0) {
+            if (mediumStopGoDuelist() && getEnergy() < 44.0) {
                 // MarkRobo-style medium stop/go duelists can win only after long
                 // exchanges.  When our reserve is getting low, sidestep on their
                 // fire tick rather than just reversing in the same orbit.
@@ -479,11 +479,13 @@ public class MyTank extends AdvancedRobot {
             // falling into the old RegullarMonk conservation orbit.
             preferredDistance = 275.0;
         } else if (mediumStopGoDuelist()) {
-            // MarkRobo-style medium-power stop/go duelists are harmless in short
-            // rounds but can steal wins when we keep a close max-power exchange
-            // after our energy falls.  Farm close while healthy, widen before the
-            // late low-energy self-depletion pattern starts.
-            preferredDistance = getEnergy() < 34.0 ? 430.0 : (getEnergy() < 50.0 ? 360.0 : 285.0);
+            // MarkRobo-style medium-power stop/go duelists are the current lossy
+            // profile.  They are easy enough to outscore, but close max-power
+            // exchanges occasionally let their medium gun drain us before our damped
+            // bullets finish the job.  Open the band earlier after repeated fires;
+            // keep a closer range only in the high-energy opening.
+            preferredDistance = getEnergy() < 28.0 ? 460.0
+                    : (getEnergy() < 58.0 || enemyFireCount > 10 ? 390.0 : 320.0);
         } else if (mediumStopGoShooter()) {
             // Gruffalo/SadBot-style opponents: many stops / low-turn bursts and
             // repeated medium-power shots.  SadBot still leaves us with a large
@@ -839,14 +841,14 @@ public class MyTank extends AdvancedRobot {
             // bullets.  Max-power is fine early, but the only losses are long
             // self-depletion duels after 10+ enemy shots.  Downshift before that
             // cliff; faster bullets also reduce wallavg lead error on this target.
-            if (getEnergy() > 58 && enemyFireCount <= 10 && distance < 680) {
+            if (getEnergy() > 70 && enemyFireCount <= 8 && distance < 680) {
                 power = Math.max(power, distance < 520 ? 3.0 : 2.35);
-            } else if (getEnergy() > 34) {
-                power = Math.min(Math.max(power, distance < 430 ? 1.85 : 1.45), 2.05);
-            } else if (getEnergy() > 16) {
-                power = Math.min(power, distance < 360 ? 0.85 : 0.60);
+            } else if (getEnergy() > 44) {
+                power = Math.min(Math.max(power, distance < 430 ? 1.45 : 1.15), 1.65);
+            } else if (getEnergy() > 24) {
+                power = Math.min(power, distance < 360 ? 0.75 : 0.55);
             } else {
-                power = Math.min(power, getEnergy() < 8 ? 0.15 : 0.35);
+                power = Math.min(power, getEnergy() < 10 ? 0.15 : 0.30);
             }
         } else if (mediumStopGoShooter()) {
             // Current SadBot/Gruffalo traces use frequent medium-power fire, but our
@@ -1480,8 +1482,8 @@ public class MyTank extends AdvancedRobot {
         // several long self-depletion losses when we keep firing max-power after
         // many enemy shots.  Use this narrower branch for late-duel conservation
         // and the older, more-damped wallavg predictor.
-        return stopGoEnemyScans > 8
-                && enemyFireCount > 5
+        return stopGoEnemyScans > 6
+                && enemyFireCount > 3
                 && enemyFirePowerSamples > 2
                 && enemyFirePowerAvg > 1.40
                 && enemyFirePowerAvg <= 2.35
