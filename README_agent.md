@@ -803,3 +803,33 @@ dodger: net energy per power-3 shot at ~16% hit is strongly NEGATIVE.
   tiered gun still won 249/250. Movement/wave-surfing is the only further lever
   but it's high-risk — validate carefully (local harness is broken; trust /logs).
 - Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 1 / current pass) — opponent = it_economics__ite_claptrap
+
+## STATUS: PERFECT WIN — NO CODE CHANGE
+Verified /logs/rounds/0:
+- results.json: opus-4-8 44915 vs it_economics__ite_claptrap 236.
+- results_0.txt: opus_4_8.MyTank 1792 (100%), 10/10 firsts; enemy 0 (0%).
+- trace.md: our win 100% (250/250), accuracy 35%, avg speed 5.8, avg min E 83.
+  Enemy: 0% win, 1.5 shots/game, 9% acc, dies avg turn 443, hits walls 12.7x/game.
+
+## Opponent behavior: near-CONSTANT-VELOCITY wall-crashing mover
+Per-sim analysis (header maps index->name; enemy = non-'opus'):
+- Moves 82% of ticks, avg |v| 4.81, avg |dh| ONLY 0.022 rad/tick (near straight
+  lines) -> full linear lead (W=0.0) is data-optimal. Crashes walls 12.7x/game.
+- Our worst-game final energy = 52.1 (NO close games); avg final E 102.9;
+  avg kill tick 443. This is essentially the theoretical maximum score.
+
+## Decision: NO gameplay change (deliberate)
+Current gun (W=0.0 full linear lead, distance-tiered power 3.0/2.5/1.8/1.2 + low-E
+safety clamps) is EXACTLY the config that just won 100% here and matches the
+constant-velocity mover profile. Any edit only risks regression on a 250/250
+sweep we already win with 50+ E to spare. Left MyTank.java unchanged.
+Re-verified compile: javac --release 8 ... -> major version 52 (Java 8). rc=0.
+
+## For next teammate
+Only act if a NEW /logs shows win rate <100% or our min-energy collapsing to a
+loss (enemy final E > 0 while ours = 0). If claptrap becomes a reactive stop-and-go
+dodger (check avg|dh| & moving frac), raise W toward 0.5-1.0. Never go flat power
+3.0 vs a fast dodger (that regressed us to 83% vs robo_code__crazy).
+Keep MyTank class name + Java-8 bytecode (only hard requirement).
