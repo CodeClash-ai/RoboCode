@@ -2,275 +2,267 @@ package custom;
 
 import robocode.*;
 import robocode.util.Utils;
-import java.awt.Color;
 import java.awt.geom.*;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 
 public class MyTank extends AdvancedRobot {
+    private static final double BULLET_POWER = 2.0;
+    private static final double FIELD_WIDTH = 800;
+    private static final double FIELD_HEIGHT = 600;
+    private static final double WALL_MARGIN = 40;
 
-    private double lastEnemyHeading = 0;
-    private double lastEnemyEnergy = 100.0;
-    private int moveDirection = 1;
-    private int hitWallCooldown = 0;
+    private static final GFTargeting targeting = new GFTargeting();
+    private static double lastEnemyEnergy = 100.0;
+    private static final Point2D.Double enemyLocation = new Point2D.Double();
+    private static final Point2D.Double myLocation = new Point2D.Double();
+    private static double enemyAbsoluteBearing = 0;
+    private static double enemyVelocity = 0;
+    private static double enemyHeading = 0;
+    private static int direction = 1;
+    
+    private static final List<EnemyWave> waves = new ArrayList<>();
+    private static final List<MyWave> myWaves = new ArrayList<>();
 
-    // Guess Factor Targeting Statistics
-    // 2 distance segments (0-350, 350+), 31 bins each
-    private static final int DISTANCE_SEGMENTS = 2;
-    private static final int BINS = 31;
-    private static final int MIDDLE_BIN = 15;
-    private static final int[][] stats = new int[DISTANCE_SEGMENTS][BINS];
-
-    // Track active waves
-    private static final List<Wave> waves = new ArrayList<>();
-
-    private static class Wave {
-        double startX, startY;
-        double targetBearing;
-        double bulletSpeed;
-        int direction;
-        double maxEscapeAngle;
-        long fireTime;
-        int distanceSegment;
-
-        public Wave(double startX, double startY, double targetBearing, double bulletSpeed, int direction, double maxEscapeAngle, long fireTime, int distanceSegment) {
-            this.startX = startX;
-            this.startY = startY;
-            this.targetBearing = targetBearing;
-            this.bulletSpeed = bulletSpeed;
-            this.direction = direction;
-            this.maxEscapeAngle = maxEscapeAngle;
-            this.fireTime = fireTime;
-            this.distanceSegment = distanceSegment;
-        }
-    }
-
+    @Override
     public void run() {
-        // Aesthetic setup matching our superior tech
-        setBodyColor(Color.black);
-        setGunColor(Color.darkGray);
-        setRadarColor(Color.red);
-        setBulletColor(Color.orange);
-        setScanColor(Color.red);
-
-        setAdjustRadarForRobotTurn(true);
         setAdjustGunForRobotTurn(true);
         setAdjustRadarForGunTurn(true);
 
-        turnRadarRightRadians(Double.POSITIVE_INFINITY);
+        waves.clear();
+        myWaves.clear();
+
+        while (true) {
+            turnRadarRightRadians(Double.POSITIVE_INFINITY);
+        }
     }
 
+    @Override
     public void onScannedRobot(ScannedRobotEvent e) {
-        // Infinite radar lock with small overshoot to prevent slipping
-        double absoluteBearing = getHeadingRadians() + e.getBearingRadians();
-        double radarTurn = absoluteBearing - getRadarHeadingRadians();
-        setTurnRadarRightRadians(Utils.normalRelativeAngle(radarTurn) * 1.5);
+        myLocation.setLocation(getX(), getY());
+        enemyAbsoluteBearing = getHeadingRadians() + e.getBearingRadians();
+        enemyLocation.setLocation(
+            getX() + e.getDistance() * Math.sin(enemyAbsoluteBearing),
+            getY() + e.getDistance() * Math.cos(enemyAbsoluteBearing)
+        );
+        enemyVelocity = e.getVelocity();
+        enemyHeading = e.getHeadingRadians();
 
-        // Advanced Energy Drop Detection for Evasive Dodging
-        double energyDrop = lastEnemyEnergy - e.getEnergy();
-        if (energyDrop >= 0.1 && energyDrop <= 3.0) {
-            // Unpredictable dodge: change direction or alter pacing when shot at
-            if (Math.random() < 0.6) {
-                moveDirection = -moveDirection;
-            }
+        // 1. WAVE SURFING (Movement)
+        double changeInEnergy = lastEnemyEnergy - e.getEnergy();
+        if (changeInEnergy >= 0.1 && changeInEnergy <= 3.0) {
+            // Enemy fired a bullet! Create wave.
+            EnemyWave wave = new EnemyWave();
+            wave.fireTime = getTime() - 1;
+            wave.bulletSpeed = 20.0 - 3.0 * changeInEnergy;
+            wave.directAngle = enemyAbsoluteBearing + Math.PI; // wave comes from enemy
+            wave.origin = new Point2D.Double(enemyLocation.x, enemyLocation.y);
+            wave.direction = (enemyVelocity * Math.sin(enemyHeading - enemyAbsoluteBearing) >= 0) ? 1 : -1;
+            waves.add(wave);
         }
         lastEnemyEnergy = e.getEnergy();
 
-        // Dynamic bullet power selection to maximize damage and conserve energy
-        double bulletPower = 3.0;
-        if (e.getDistance() > 400) {
-            bulletPower = 1.5;
-        } else if (e.getDistance() > 200) {
-            bulletPower = 2.0;
+        updateWaves();
+        updateMyWaves();
+        doMovement();
+
+        // 2. GUESS FACTOR TARGETING (Gun)
+        double bulletPower = BULLET_POWER;
+        if (e.getEnergy() < 4) {
+            bulletPower = Math.max(0.1, e.getEnergy() / 4.0);
         }
-        // Protect ourselves from self-defeat via over-firing when low on energy
-        bulletPower = Math.min(bulletPower, getEnergy() / 6.0);
-        if (bulletPower < 0.1) bulletPower = 0.1;
+        double bulletSpeed = 20.0 - 3.0 * bulletPower;
+        double maxEscapeAngle = Math.asin(8.0 / bulletSpeed);
         
-        double bulletSpeed = 20 - 3 * bulletPower;
+        double targetGFAngle = targeting.getBestAngle(e.getDistance(), enemyVelocity, maxEscapeAngle);
+        
+        // Find the direction of enemy rotation around us
+        double enemyLateralVelocity = enemyVelocity * Math.sin(enemyHeading - enemyAbsoluteBearing);
+        int enemyDirection = (enemyLateralVelocity >= 0) ? 1 : -1;
+        
+        double fireAngle = enemyAbsoluteBearing + enemyDirection * targetGFAngle;
+        
+        setTurnGunRightRadians(Utils.normalRelativeAngle(fireAngle - getGunHeadingRadians()));
+        
+        if (getGunHeat() == 0 && Math.abs(getGunTurnRemaining()) < 10) {
+            Bullet b = setFireBullet(bulletPower);
+            if (b != null) {
+                MyWave w = new MyWave();
+                w.origin = new Point2D.Double(getX(), getY());
+                w.fireTime = getTime();
+                w.bulletSpeed = bulletSpeed;
+                w.directAngle = enemyAbsoluteBearing;
+                w.maxEscapeAngle = maxEscapeAngle;
+                w.direction = enemyDirection;
+                w.stats = targeting.getStatsSegment(e.getDistance(), enemyVelocity);
+                myWaves.add(w);
+            }
+        }
 
-        // Determine distance segment
-        int distSeg = e.getDistance() < 350 ? 0 : 1;
+        // Radar lock
+        setTurnRadarRightRadians(Utils.normalRelativeAngle(enemyAbsoluteBearing - getRadarHeadingRadians()) * 1.5);
+    }
 
-        // Update waves
-        double enemyX = getX() + e.getDistance() * Math.sin(absoluteBearing);
-        double enemyY = getY() + e.getDistance() * Math.cos(absoluteBearing);
-
+    private void updateWaves() {
+        double time = getTime();
         for (int i = 0; i < waves.size(); i++) {
-            Wave w = waves.get(i);
-            double traveled = (getTime() - w.fireTime) * w.bulletSpeed;
-            double distToWaveSource = Point2D.distance(w.startX, w.startY, enemyX, enemyY);
-            if (traveled >= distToWaveSource) {
-                double currentBearing = Math.atan2(enemyX - w.startX, enemyY - w.startY);
-                double angleDiff = Utils.normalRelativeAngle(currentBearing - w.targetBearing);
-                double guessFactor = angleDiff / w.maxEscapeAngle * w.direction;
-                int bin = (int) Math.round((guessFactor + 1.0) * MIDDLE_BIN);
-                bin = Math.max(0, Math.min(BINS - 1, bin));
-                stats[w.distanceSegment][bin]++;
+            EnemyWave w = waves.get(i);
+            w.distanceTraveled = (time - w.fireTime) * w.bulletSpeed;
+            if (w.distanceTraveled > myLocation.distance(w.origin) + 50) {
                 waves.remove(i);
                 i--;
             }
         }
+    }
 
-        // Select the best guess factor from stats
-        int bestBin = MIDDLE_BIN;
-        int maxHits = -1;
-        for (int b = 0; b < BINS; b++) {
-            if (stats[distSeg][b] > maxHits) {
-                maxHits = stats[distSeg][b];
-                bestBin = b;
-            }
-        }
-
-        double gunTurn;
-        // If we don't have enough statistics yet, fall back to simple circular/linear prediction
-        if (maxHits <= 1) {
-            double enemyHeading = e.getHeadingRadians();
-            double enemyVelocity = e.getVelocity();
-            double headingChange = enemyHeading - lastEnemyHeading;
+    private void updateMyWaves() {
+        double time = getTime();
+        for (int i = 0; i < myWaves.size(); i++) {
+            MyWave w = myWaves.get(i);
+            double distanceTraveled = (time - w.fireTime) * w.bulletSpeed;
             
-            double predictedX = enemyX;
-            double predictedY = enemyY;
-            
-            for (int i = 0; i < 20; i++) {
-                double distance = Point2D.distance(getX(), getY(), predictedX, predictedY);
-                double t = distance / bulletSpeed;
+            if (distanceTraveled >= w.origin.distance(enemyLocation)) {
+                double currentAngle = Utils.normalAbsoluteAngle(Math.atan2(enemyLocation.x - w.origin.x, enemyLocation.y - w.origin.y));
+                double angleDiff = Utils.normalRelativeAngle(currentAngle - w.directAngle);
+                double gf = angleDiff / w.maxEscapeAngle;
                 
-                if (Math.abs(headingChange) > 0.00001) {
-                    predictedX = enemyX + (enemyVelocity / headingChange) * (Math.cos(enemyHeading) - Math.cos(enemyHeading + headingChange * t));
-                    predictedY = enemyY + (enemyVelocity / headingChange) * (Math.sin(enemyHeading + headingChange * t) - Math.sin(enemyHeading));
-                } else {
-                    predictedX = enemyX + enemyVelocity * Math.sin(enemyHeading) * t;
-                    predictedY = enemyY + enemyVelocity * Math.cos(enemyHeading) * t;
+                int bin = (int) Math.round((gf * w.direction + 1.0) * (GFTargeting.BINS / 2));
+                bin = Math.max(0, Math.min(GFTargeting.BINS - 1, bin));
+                
+                for (int b = 0; b < GFTargeting.BINS; b++) {
+                    w.stats[b] += 1.0 / (1.0 + Math.pow(b - bin, 2));
                 }
                 
-                double margin = 18.0;
-                predictedX = Math.max(margin, Math.min(getBattleFieldWidth() - margin, predictedX));
-                predictedY = Math.max(margin, Math.min(getBattleFieldHeight() - margin, predictedY));
+                myWaves.remove(i);
+                i--;
             }
-            gunTurn = Utils.normalRelativeAngle(Math.atan2(predictedX - getX(), predictedY - getY()) - getGunHeadingRadians());
+        }
+    }
+
+    private void doMovement() {
+        if (waves.isEmpty()) {
+            if (Math.random() < 0.05) {
+                direction = -direction;
+            }
+            double targetAngle = enemyAbsoluteBearing + Math.PI / 2 + 0.3 * direction;
+            Point2D.Double targetLoc = predictPosition(targetAngle, 120);
+            goTo(targetLoc);
+            return;
+        }
+
+        EnemyWave surfWave = getClosestWave();
+        if (surfWave == null) return;
+
+        double[] playAngles = { -0.5, -0.25, 0, 0.25, 0.5 };
+        double bestDanger = Double.POSITIVE_INFINITY;
+        Point2D.Double bestLoc = null;
+
+        for (double offset : playAngles) {
+            double angle = enemyAbsoluteBearing + Math.PI / 2 + offset * direction;
+            Point2D.Double testLoc = predictPosition(angle, 100);
+            double danger = getDanger(testLoc, surfWave);
+            if (danger < bestDanger) {
+                bestDanger = danger;
+                bestLoc = testLoc;
+            }
+        }
+
+        if (bestLoc != null) {
+            goTo(bestLoc);
+        }
+    }
+
+    private EnemyWave getClosestWave() {
+        double minDistance = Double.MAX_VALUE;
+        EnemyWave closest = null;
+        for (EnemyWave w : waves) {
+            double dist = myLocation.distance(w.origin) - w.distanceTraveled;
+            if (dist > 0 && dist < minDistance) {
+                minDistance = dist;
+                closest = w;
+            }
+        }
+        return closest;
+    }
+
+    private double getDanger(Point2D.Double loc, EnemyWave wave) {
+        double distToEnemy = loc.distance(enemyLocation);
+        double distDanger = 0;
+        if (distToEnemy < 150) distDanger = 50.0 / distToEnemy;
+        if (distToEnemy > 600) distDanger = distToEnemy / 12.0;
+
+        double angle = Utils.normalAbsoluteAngle(Math.atan2(loc.x - wave.origin.x, loc.y - wave.origin.y));
+        double angleDiff = Utils.normalRelativeAngle(angle - wave.directAngle);
+        double gf = angleDiff / Math.asin(8.0 / wave.bulletSpeed);
+        
+        return distDanger + Math.abs(gf) * 10.0;
+    }
+
+    private Point2D.Double predictPosition(double angle, double distance) {
+        double targetX = myLocation.x + distance * Math.sin(angle);
+        double targetY = myLocation.y + distance * Math.cos(angle);
+        
+        targetX = Math.max(WALL_MARGIN, Math.min(FIELD_WIDTH - WALL_MARGIN, targetX));
+        targetY = Math.max(WALL_MARGIN, Math.min(FIELD_HEIGHT - WALL_MARGIN, targetY));
+        
+        return new Point2D.Double(targetX, targetY);
+    }
+
+    private void goTo(Point2D.Double target) {
+        double angle = Utils.normalRelativeAngle(Math.atan2(target.x - getX(), target.y - getY()) - getHeadingRadians());
+        double turnAngle = Math.atan(Math.tan(angle));
+        
+        setTurnRightRadians(turnAngle);
+        if (angle == turnAngle) {
+            setAhead(myLocation.distance(target));
         } else {
-            double guessFactor = ((double) bestBin / MIDDLE_BIN) - 1.0;
-            double enemyHeading = e.getHeadingRadians();
-            double enemyVelocity = e.getVelocity();
-            int direction = 1;
-            if (enemyVelocity != 0) {
-                double lateralVelocity = enemyVelocity * Math.sin(enemyHeading - absoluteBearing);
-                if (lateralVelocity < 0) {
-                    direction = -1;
+            setBack(myLocation.distance(target));
+        }
+    }
+
+    private static class EnemyWave {
+        Point2D.Double origin;
+        double fireTime;
+        double bulletSpeed;
+        double directAngle;
+        double distanceTraveled;
+        int direction;
+    }
+
+    private static class MyWave {
+        Point2D.Double origin;
+        double fireTime;
+        double bulletSpeed;
+        double directAngle;
+        double maxEscapeAngle;
+        int direction;
+        double[] stats;
+    }
+
+    private static class GFTargeting {
+        private static final int BINS = 31;
+        private static final int DISTANCE_SEGMENTS = 4;
+        private static final int VELOCITY_SEGMENTS = 4;
+        private final double[][][] stats = new double[DISTANCE_SEGMENTS][VELOCITY_SEGMENTS][BINS];
+
+        public double[] getStatsSegment(double distance, double velocity) {
+            int distIdx = (int) (distance / 200.0);
+            if (distIdx >= DISTANCE_SEGMENTS) distIdx = DISTANCE_SEGMENTS - 1;
+
+            int velIdx = (int) (Math.abs(velocity) / 2.0);
+            if (velIdx >= VELOCITY_SEGMENTS) velIdx = VELOCITY_SEGMENTS - 1;
+
+            return stats[distIdx][velIdx];
+        }
+
+        public double getBestAngle(double distance, double velocity, double maxEscapeAngle) {
+            double[] segmentStats = getStatsSegment(distance, velocity);
+            int bestBin = BINS / 2;
+            for (int i = 0; i < BINS; i++) {
+                if (segmentStats[i] > segmentStats[bestBin]) {
+                    bestBin = i;
                 }
             }
-            double maxEscapeAngle = Math.asin(8.0 / bulletSpeed);
-            double targetAngle = absoluteBearing + direction * guessFactor * maxEscapeAngle;
-            gunTurn = Utils.normalRelativeAngle(targetAngle - getGunHeadingRadians());
-        }
-
-        setTurnGunRightRadians(gunTurn);
-
-        // Fire only when gun is cool and alignment is highly precise
-        if (getGunHeat() == 0 && Math.abs(getGunTurnRemaining()) < 10) {
-            Bullet b = setFireBullet(bulletPower);
-            if (b != null) {
-                double enemyHeading = e.getHeadingRadians();
-                double enemyVelocity = e.getVelocity();
-                int direction = 1;
-                if (enemyVelocity != 0) {
-                    double lateralVelocity = enemyVelocity * Math.sin(enemyHeading - absoluteBearing);
-                    if (lateralVelocity < 0) {
-                        direction = -1;
-                    }
-                }
-                double maxEscapeAngle = Math.asin(8.0 / bulletSpeed);
-                Wave w = new Wave(getX(), getY(), absoluteBearing, bulletSpeed, direction, maxEscapeAngle, getTime(), distSeg);
-                waves.add(w);
-            }
-        }
-
-        // Jittering movement parameters
-        // Periodically randomize max velocity to disrupt enemy's linear/circular targeting
-        if (getTime() % 15 == 0) {
-            setMaxVelocity(4.0 + Math.random() * 4.0); // Velocity between 4 and 8
-        }
-        if (getTime() % 35 == 0) {
-            if (Math.random() < 0.4) {
-                moveDirection = -moveDirection;
-            }
-        }
-
-        // Target spacing logic: Maintain perpendicular orbit at preferred distance
-        double preferredDistance = 350.0;
-        double approachAngle = 0.0;
-        if (e.getDistance() > preferredDistance + 50) {
-            approachAngle = 0.3 * moveDirection; 
-        } else if (e.getDistance() < preferredDistance - 50) {
-            approachAngle = -0.3 * moveDirection;
-        }
-        double targetAngle = absoluteBearing + Math.PI / 2 + approachAngle;
-        
-        // Active wall smoothing & boundary check
-        double wallMargin = 60.0;
-        double width = getBattleFieldWidth();
-        double height = getBattleFieldHeight();
-        double currentX = getX();
-        double currentY = getY();
-        
-        // Push the target angle away from the walls
-        double testX = currentX + 120 * Math.sin(targetAngle);
-        double testY = currentY + 120 * Math.cos(targetAngle);
-        
-        if (testX < wallMargin) {
-            targetAngle += (moveDirection > 0 ? 0.5 : -0.5);
-        } else if (testX > width - wallMargin) {
-            targetAngle -= (moveDirection > 0 ? 0.5 : -0.5);
-        }
-        
-        if (testY < wallMargin) {
-            targetAngle -= (moveDirection > 0 ? 0.5 : -0.5) * Math.signum(Math.sin(targetAngle));
-        } else if (testY > height - wallMargin) {
-            targetAngle += (moveDirection > 0 ? 0.5 : -0.5) * Math.signum(Math.sin(targetAngle));
-        }
-
-        if (hitWallCooldown > 0) {
-            hitWallCooldown--;
-        }
-
-        // Second level safety: if we are still going to hit the wall or get too close, reverse direction immediately
-        double nextX = currentX + 60 * Math.sin(targetAngle) * moveDirection;
-        double nextY = currentY + 60 * Math.cos(targetAngle) * moveDirection;
-        if (nextX < 40.0 || nextX > width - 40.0 || nextY < 40.0 || nextY > height - 40.0) {
-            if (hitWallCooldown == 0) {
-                moveDirection = -moveDirection;
-                hitWallCooldown = 8;
-            }
-        }
-        
-        setTurnRightRadians(Utils.normalRelativeAngle(targetAngle - getHeadingRadians()));
-        setAhead(150 * moveDirection);
-
-        lastEnemyHeading = e.getHeadingRadians();
-    }
-
-    public void onHitByBullet(HitByBulletEvent e) {
-        // Change movement direction upon taking damage to disrupt enemy's targeting profile
-        moveDirection = -moveDirection;
-    }
-
-    public void onHitWall(HitWallEvent e) {
-        if (hitWallCooldown == 0) {
-            moveDirection = -moveDirection;
-            hitWallCooldown = 15;
-        }
-        setAhead(150 * moveDirection);
-    }
-    
-    public void onHitRobot(HitRobotEvent e) {
-        if (e.getEnergy() < getEnergy()) {
-            // Push aggressively through weaker targets
-            setAhead(100);
-        } else {
-            // Evade superior physical collisions
-            moveDirection = -moveDirection;
-            setAhead(150 * moveDirection);
+            return maxEscapeAngle * ((double) (bestBin - BINS / 2) / (BINS / 2));
         }
     }
 }
