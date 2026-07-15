@@ -22,7 +22,9 @@ public class MyTank extends AdvancedRobot {
     private static final double PREFERRED_DISTANCE = 410.0;
 
     private int moveDirection = 1;
+    private int stationaryHeavyDirection = 1;
     private double lastEnemyEnergy = 100.0;
+    private double lastEnemyAbsBearing = 0.0;
     private double lastEnemyHeading = 0.0;
     private boolean haveEnemyHeading = false;
     private long lastScanTime = -1000;
@@ -108,6 +110,7 @@ public class MyTank extends AdvancedRobot {
         lastScanTime = getTime();
 
         double absBearing = getHeadingRadians() + e.getBearingRadians();
+        lastEnemyAbsBearing = absBearing;
         double enemyX = getX() + Math.sin(absBearing) * e.getDistance();
         double enemyY = getY() + Math.cos(absBearing) * e.getDistance();
 
@@ -268,9 +271,9 @@ public class MyTank extends AdvancedRobot {
                 // bullets at our current bearing.  The generic response reversed orbit
                 // direction on every shot; in round-0 loss traces that left us almost
                 // stationary around 235px and eating every bullet.  Do not flip-flop the
-                // orbit here: commit to a clean perpendicular dodge and let the wider
-                // stationary-heavy orbit below reopen the range.
-                drivePerpendicularEscape(absBearing, getEnergy() < 40.0 ? 360.0 : 310.0);
+                // orbit here: commit to a persistent diagonal away+lateral dodge and let
+                // the wider stationary-heavy orbit below reopen the range.
+                driveStationaryHeavyEscape(absBearing, getEnergy() < 40.0 ? 390.0 : 340.0);
                 return;
             }
             reverseDirection();
@@ -310,13 +313,13 @@ public class MyTank extends AdvancedRobot {
             }
         }
 
-        if (stationaryHeavyShooter() && e.getDistance() < 385.0) {
-            // Once a stationary power-3 gun is confirmed, do not use the generic
-            // direct-away close escape: near the east/west edges that can settle into a
-            // nearly fixed point at ~230px, exactly where TrackFire hit every shot in
-            // round-0 losses.  Keep crossing its firing line until the wider orbit band
-            // can take over.
-            drivePerpendicularEscape(absBearing, getEnergy() < 35.0 ? 340.0 : 290.0);
+        if (stationaryHeavyShooter() && e.getDistance() < 430.0) {
+            // TrackFire follow-up traces showed that a pure perpendicular command can
+            // alternate around the same point (~285px) and let a stationary power-3 gun
+            // land nearly every shot.  Use a diagonal away+perpendicular escape so the
+            // range actually opens toward the 455px orbit while still crossing the
+            // head-on firing line.
+            driveStationaryHeavyEscape(absBearing, getEnergy() < 35.0 ? 390.0 : 340.0);
             return;
         }
 
@@ -1957,6 +1960,13 @@ public class MyTank extends AdvancedRobot {
     }
 
     public void onHitByBullet(HitByBulletEvent e) {
+        if (stationaryHeavyShooter()) {
+            // A hit from a stationary power-3 gun should not flip our orbit side or
+            // overwrite the diagonal escape with a short same-line reversal.  Continue
+            // the persistent away+lateral escape based on the bullet's incoming bearing.
+            driveStationaryHeavyEscape(lastEnemyAbsBearing, getEnergy() < 35.0 ? 410.0 : 360.0);
+            return;
+        }
         reverseDirection();
         setMaxVelocity(8.0);
         // e.getBearingRadians() is relative to our body heading.  To dodge the
@@ -2024,6 +2034,42 @@ public class MyTank extends AdvancedRobot {
         lastDirectionChangeTime = getTime();
     }
 
+
+    private void driveStationaryHeavyEscape(double threatBearing, double distance) {
+        double away = threatBearing + Math.PI;
+        double best = away + moveDirection * 0.75;
+        double bestScore = -1.0e9;
+        for (int side = -1; side <= 1; side += 2) {
+            for (int i = -5; i <= 5; i++) {
+                double a = away + side * 0.75 + i * 0.10;
+                double px = projectX(getX(), a, 180.0);
+                double py = projectY(getY(), a, 180.0);
+                if (!insideBattlefield(px, py, 24.0)) {
+                    continue;
+                }
+                double margin = Math.min(Math.min(px, getBattleFieldWidth() - px),
+                        Math.min(py, getBattleFieldHeight() - py));
+                double separation = Math.cos(Utils.normalRelativeAngle(a - away));
+                double lateral = Math.abs(Math.sin(Utils.normalRelativeAngle(a - away)));
+                // Strongly prefer one persistent dodge side to avoid tick-to-tick side
+                // switching.  Do not use moveDirection here: onHitByBullet reverses that
+                // flag, and TrackFire loss traces were exactly repeated hits followed by
+                // side flips that pinned us in place.
+                double sideBias = side == stationaryHeavyDirection ? 90.0 : 0.0;
+                double score = 1.4 * margin + 220.0 * separation + 145.0 * lateral + sideBias;
+                if (score > bestScore) {
+                    bestScore = score;
+                    best = a;
+                }
+            }
+        }
+        if (bestScore < -1.0e8) {
+            driveAwayFrom(threatBearing, distance);
+        } else {
+            setMaxVelocity(8.0);
+            driveAlongAngle(best, distance);
+        }
+    }
 
     private void drivePerpendicularEscape(double threatBearing, double distance) {
         double best = threatBearing + Math.PI / 2.0;

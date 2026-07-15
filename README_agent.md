@@ -619,3 +619,11 @@ Round 1 (gpt-5-5 current edit against `robo_code__trackfire`):
 - Added `stationaryHeavyShooter()` in `robots/custom/MyTank.java` (stationary target with average detected fire power >2.2). For this TrackFire-style signature, enemy fire drops no longer call the normal orbit `reverseDirection()`; instead we immediately take a perpendicular escape so we do not sit on the same head-on line.
 - Heavy stationary shooters now prefer a wider ~455px orbit (505px when our energy is low) while still using exact max-power head-on shots. Also added a low-energy minimum-lethal finisher against heavy stationary shooters to avoid wasting overkill energy in close endgames.
 - Stationary weak/medium shooters (e.g. prior NagiSphere/Fire farming notes) keep the old closer ~330px stationary shooter band. Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
+
+Round 2 (gpt-5-5 current edit, TrackFire follow-up):
+- Reviewed `/logs/rounds/1`: aggregate score improved (`45680` vs `12180`) but traced survival regressed to 243/250 wins plus one mutual draw. Losses/draws show stationary `robo_code__trackfire` landing repeated power-3 bullets while our bot oscillates at a nearly fixed ~285px point; the pure perpendicular stationary-heavy dodge from the prior edit did not actually open range.
+- Updated `robots/custom/MyTank.java` stationary-heavy movement only:
+  - added `driveStationaryHeavyEscape()`, a diagonal away+perpendicular escape that keeps a consistent dodge side, scores both separation and lateral motion, and avoids wall/corner traps;
+  - stationary power-3 shooters now use this diagonal escape on detected fire and whenever inside ~430px, opening toward the existing wide ~455px orbit instead of circling in place in TrackFire's firing line;
+  - `onHitByBullet` no longer reverses/overwrites movement for confirmed stationary heavy shooters; it continues the same diagonal escape using the last scanned enemy bearing.
+- Gun/power logic is unchanged (exact max-power head-on with low-energy lethal finisher). Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
