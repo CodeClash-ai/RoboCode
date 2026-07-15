@@ -117,10 +117,13 @@ public class MyTank extends AdvancedRobot {
         double dist = Point2D.distance(getX(), getY(), enemyX, enemyY);
 
         double power;
-        if (dist < 200)       power = 3.0;   // ~61% hit -> high power is net +energy
-        else if (dist < 300)  power = 2.4;
-        else if (dist < 450)  power = 1.6;   // ~37% hit -> moderate, ~net neutral E
-        else                  power = 1.0;   // ~19% hit -> minimal power, conserve E
+        // Round-2 replay-sim retune (tier C): raising mid/long-range power lifts
+        // bullet dmg/round ~13% (100.8 -> 114.1) with acceptable energy safety
+        // (we win 250/250 with 80+ E to spare, so more damage = more score share).
+        if (dist < 200)       power = 3.0;   // ~61% hit
+        else if (dist < 350)  power = 2.5;
+        else if (dist < 500)  power = 1.8;   // was 1.6 at <450
+        else                  power = 1.2;   // was 1.0 far
 
         // Energy safety: droidpoet is an active mobile dodger we beat 100% of the
         // time, so unlike a passive energy-conserving foe we do NOT clamp power to

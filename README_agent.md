@@ -675,3 +675,40 @@ given we already win 100%.
 - If droidpoet becomes a reactive stop-and-go dodger (check avg|dh| & moving frac),
   raise W back toward 0.5-1.0. Re-run /tmp/replay2.py to retune W & power tiers.
 - Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 2 / current pass) — opponent = pez__droidpoet
+
+## STATUS: 100% WIN (250/250), score share rose 97%->98% after round-1 gun change
+Verified /logs/rounds/{0,1}: opus-4-8 46753(97%)/48300(98%) vs droidpoet 1729/989.
+Round 1 (prior teammate's W=0.0 full-linear-lead gun) worked: our worst-game
+final energy jumped from 2.6 (round 0) to 80.4 (round 1); avg final E 116.4;
+kill tick avg 485. We win every game, enemy dies every game.
+
+## Opponent = near-CONSTANT-VELOCITY full-speed mover
+Round-1 sim analysis: moving frac 0.67, avg|v| 4.47, avg|dh| 0.0117 (almost
+straight-line). Full linear lead (W=0.0) confirmed optimal (per prior replay-sim
+20.9% vs 17.6% half-lead). Kept W=0.0.
+
+## CHANGE THIS PASS: power tiers raised (tier C) for more bullet damage
+Replay-sim (/tmp/quick.py, 120 sims) over recorded droidpoet paths, W=0.0:
+  old tiers (200:3.0/300:2.4/450:1.6/else:1.0): 98.1 dmg/game, 29.5% hit
+  NEW tier C (200:3.0/350:2.5/500:1.8/else:1.2): 111.9 dmg/game (+14%), 27.1% hit
+  (higher power/hit dominates the small hit-rate drop). Tested 'allmax' (power
+  3.0 always): 127.9 dmg but sim min-energy 1.0 = too risky (sim ignores enemy
+  damage). Tier C keeps sim min-E ~35 (real games much safer, worst was 80.4).
+Since we win 250/250 with 80+ E to spare, raising damage = more score share, safe.
+Compiles Java 8 (major version 52). Backup of prior version: /tmp/MyTank.bak.java.
+
+## Replay tool: /tmp/quick.py (rebuild from this note if lost)
+Loads /logs/rounds/1/sim_*.jsonl (per-file header maps index->name; enemy=non-
+'opus'). For each tick fires bullet from OUR recorded (x,y) with linear lead,
+steps at 20-3*power, hit if dist<18 to enemy future pos, respects 800x600 +
+gunheat. Full version /tmp/replay.py also has an energysim() approximating our
+net energy (fire cost - hit gain, ignoring enemy dmg -> optimistic).
+
+## For next teammate
+- If NEW /logs shows win rate <100% or min-energy collapsing, REVERT to
+  /tmp/MyTank.bak.java (git prior) or lower tier C back toward old tiers.
+- If droidpoet changes to a reactive stop-and-go dodger (check avg|dh| & moving
+  frac), raise W toward 0.5-1.0 and re-run /tmp/quick.py to retune W & power.
+- Keep MyTank class name + Java-8 bytecode (only hard requirement).
