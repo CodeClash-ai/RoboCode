@@ -2654,3 +2654,50 @@ gun. The gun (hit rate) is the lever, not movement.
   accurate -> dodging its close-range bullets is the biggest untapped win, but
   high-risk; local harness broken, trust /logs only).
 - Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 2 verification pass) — opponent = robo_code__velocirobot
+
+## STATUS: THE ROUND-1 W=0.25 GUN CHANGE WORKED BIG — NO CODE CHANGE THIS PASS
+Verified /logs/rounds/{0,1} (opponent robo_code__velocirobot, a FAST near-straight
+mover with a GOOD gun — first competitive foe in a while):
+- Round 0 (OLD W=1.0 head-on, tuned for slow florian2): opus 43310 vs velocirobot
+  7295. results_0.txt: 1774 (88%), 10/10 firsts BUT trace WIN RATE 96% — LOST 11
+  games (long close-range energy-war grinds). Enemy accuracy 36% > our 32%.
+- Round 1 (prior teammate switched gun aim to W=0.25 partial lead): opus 44478 vs
+  velocirobot 3905. HUGE improvement:
+    * win rate 96% -> 100% (full 250-sim sweep: LOSSES = 0/250, close(<20E)=0)
+    * enemy score 7295 -> 3905 (nearly HALVED)
+    * our final energy min/mean = 41.0/104.0 (comfortable margin)
+    * mean killtick 238 (down from ~long grinds), mean turns 390 (max 669, was 914)
+  The W=0.25 change (partial lead for a fast near-straight mover) is correct and
+  real-result-confirmed.
+
+## Replay-sim on ROUND-1 logs is BIASED — do NOT use it to raise W back to head-on
+Ran a W-sweep on round-1 logs (80 games): it shows W=1.0=50% > W=0.75=42% >
+W=0.25=25% > W=0.0=21.5% — MONOTONIC toward head-on. This is the KNOWN reactivity
+bias (the enemy's round-1 path was reactive to our ACTUAL W=0.25 shots, so the
+replay artificially favors head-on). The REAL cross-round game result is decisive
+and OPPOSITE: W=1.0 LOST 11 games / enemy 7295, W=0.25 won 250/250 / enemy 3905.
+DO NOT switch back to head-on off the biased replay. This is the same trap that
+regressed us to 83% vs robo_code__crazy (flat power) and slower kills vs
+myfirstkiller (raised power). Trust /logs win rate, not the replay's hit numbers.
+
+## Decision this pass: NO code change (deliberate)
+Source is IDENTICAL to the round-1 winning config (W=0.25 partial lead at line
+283, power tiers 3.0/<300 2.4/<400 1.6/<550 1.0/else, energy-war taper, low-E
+clamps, orbit ~150-180px w/ graduated inward pull). git diff on MyTank.java =
+empty. Any gun/movement edit only risks regression on a 250/250 sweep we now win
+with 41+ E to spare. Re-verified compile:
+  javac --release 8 -cp libs/robocode.jar -d robots robots/custom/MyTank.java  # OK
+  javap -v robots/custom/MyTank.class | grep "major version"  # -> 52 (Java 8)
+
+## For next teammate
+Only act if a NEW /logs shows win rate <100% or our energy collapsing to a loss
+(enemy final E > 0 while ours = 0). velocirobot is a FAST near-straight mover ->
+KEEP W=0.25 partial lead. Do NOT raise W to head-on off the biased replay-sim.
+If it becomes SLOW (avg|v| down), raise W toward 1.0; if HEAVILY-curving
+(avg|dh|>0.06), set W=0.0 (circular). Re-run the W-sweep on >=2 slices first BUT
+weight the REAL cross-round game result far above the replay hit numbers.
+The remaining lever if grinds return is WAVE SURFING (enemy gun 36% accurate) —
+high-risk, local harness broken, trust /logs only.
+Keep MyTank class name + Java-8 bytecode (only hard requirement).
