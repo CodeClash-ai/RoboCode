@@ -258,6 +258,12 @@ public class MyTank extends AdvancedRobot {
             preferredDistance = 305.0;
         } else if (fastWallCruiser()) {
             preferredDistance = 305.0;
+        } else if (easyHeadOnStopGoEnemy()) {
+            // Cliffbot2-style stop/go movers are weak and the virtual guns show
+            // near-head-on beating the damped averaged gun.  Keep the close
+            // farming range instead of falling into the wider RegullarMonk
+            // conservation profile.
+            preferredDistance = 285.0;
         } else if (activeStopGoShooter()) {
             // RegullarMonk-style bots stop/reverse constantly but fire repeated
             // weak bullets.  They are easiest to hit with fast head-on shots;
@@ -431,6 +437,14 @@ public class MyTank extends AdvancedRobot {
             } else {
                 power = Math.min(power, getEnergy() < 9 ? 0.15 : 0.45);
             }
+        } else if (easyHeadOnStopGoEnemy()) {
+            // Current Cliffbot2 traces: repeated stops and a few weak shots, but
+            // virtual waves quickly show head-on is accurate and our energy stays
+            // very high.  Do not apply the RegullarMonk low-power conservation cap
+            // to this easier stop/go target.
+            if (getEnergy() > 24 && distance < 720) {
+                power = Math.max(power, distance < 560 ? 3.0 : 2.45);
+            }
         } else if (activeStopGoShooter()) {
             // RegullarMonk-like active stop/go shooters made us lose games by
             // self-depleting with repeated power-3 misses.  Head-on replay is
@@ -497,6 +511,11 @@ public class MyTank extends AdvancedRobot {
             // For longer fixed-heading line movers, a very small velocity drift
             // beats pure head-on in offline replay without over-leading stops.
             gun = GUN_DRIFT_HEAD_ON;
+        } else if (easyHeadOnStopGoEnemy()) {
+            // Cliffbot2-style weak stop/go targets are best hit head-on; this
+            // virtual-error gate prevents overriding the averaged gun on MarkIV /
+            // Terminator-style stop-go bots where damping is better.
+            gun = GUN_HEAD_ON;
         } else if (activeStopGoShooter()) {
             // Current RegullarMonk traces: very frequent stops/reverses and
             // power-1 firing.  Offline shot replay favored head-on over linear,
@@ -649,6 +668,26 @@ public class MyTank extends AdvancedRobot {
                 && Math.abs(enemyVelocityAvg) > 3.6
                 && modestFire
                 && crazyEnemyScans <= 4;
+    }
+
+    private boolean easyHeadOnStopGoEnemy() {
+        // Cliffbot2-style signature in the current logs: many brief stops and a
+        // handful of weak shots, but the target is easy enough that head-on virtual
+        // error is clearly lower than the damped/averaged predictors.  This keeps
+        // high-power head-on farming enabled without weakening the older
+        // RegullarMonk conservation branch, which only triggers when the virtual
+        // error remains high or fire count grows large.
+        if (virtualSamples < 14 || stopGoEnemyScans <= 8 || crazyEnemyScans > 4
+                || fixedHeadingStopGoEnemy() || fixedHeadingLineEnemy() || fastWallCruiser()) {
+            return false;
+        }
+        double head = Math.min(virtualGunError[GUN_HEAD_ON], virtualGunError[GUN_DRIFT_HEAD_ON]);
+        double avg = Math.min(virtualGunError[GUN_AVERAGED], virtualGunError[GUN_CIRCULAR]);
+        return head < 56.0
+                && head + 5.0 < avg
+                && (enemyFireCount <= 6 || bestGunError() < 50.0)
+                && Math.abs(enemyTurnRateAvg) < 0.05
+                && Math.abs(enemyVelocityAvg) < 4.4;
     }
 
     private boolean activeStopGoShooter() {
