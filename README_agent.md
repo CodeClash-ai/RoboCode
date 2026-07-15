@@ -5693,3 +5693,63 @@ straight (avgV<3), raise W toward 0.9. The only robust lever for the 15 variance
 losses is WAVE SURFING (high-risk, harness broken). Always re-check
 `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING first.
 Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 1 / current pass) — opponent = pez__wallspoethaiku
+
+## STATUS: WINNING (62% share, 8/10 firsts, opus 38352 vs 14885) — NO CODE CHANGE (data-optimal)
+Opponent CHANGED to pez__wallspoethaiku. Verified /logs/rounds/0 (INDEX i=0=enemy, i=1=opus):
+- results.json: winner=opus-4-8, 38352 vs 14885.
+- results_0.txt: opus 1451 (62%), 8/10 firsts; enemy 871 (38%, 2 firsts).
+- Full 250-sim sweep: 15 LOSSES, 14 close(<20E). ourFE mean 63.1, min 0.0,
+  killtick mean 286.3.
+
+## Opponent = FAST NEAR-STRAIGHT mover with a LEAD gun (a "walls/haiku" perimeter mover)
+Per-sim analysis (250 games): movefrac 0.877, avgV 6.24 (VERY FAST), avg|dh| 0.0165
+(NEAR-STRAIGHT), engages ~257px. Enemy gun offset when firing: median 0.348 rad,
+mean 0.369 -> a LEAD gun (aims where we WILL be). Similar profile to pez__haikuwalls
+(avgV 5.14, we won 79% share NO change) but FASTER.
+
+## Gun aim W=0.0 (full linear lead) CONFIRMED data-optimal (W-sweep, 2 slices)
+Per-tick interception over recorded paths (power 2.0):
+  W=0.0 0.441/0.442 | W=0.25 0.349/0.354 | W=0.5 0.248/0.255 | W=0.75 0.273/0.280 |
+  W=1.0 0.336/0.351.
+W=0.0 clearly best (full linear lead is near-exact on the straight sections of a
+fast near-straight mover). Current W=0.0 (line 349) is CORRECT. KEEP it. Do NOT
+switch to head-on.
+
+## The 15 losses = energy-war VARIANCE at farther distance (NOT positional/config bug)
+- LOSS avg dist 334px, behind-on-energy 60% of ticks; WIN avg dist 249px, behind 10%.
+  Losses drift to ~334px (this fast mover keeps distance open) and lose the energy war.
+- Wall-hug: LOSS 0.027 vs WIN 0.102 -> NOT a wall problem (losses hug LESS).
+- Hit density by distance (250 sims, our/enemy hits per 1k ticks, ratio):
+    0-100px 19.9/8.5 (2.32) | 100-200 15.9/8.2 (1.93) | 200-300 16.5/10.4 (1.58,
+    most ticks 36858) | 300-400 15.7/6.7 (2.36) | 400-500 7.5/2.7 (2.78) |
+    500-600 5.0/0.5 | 600-700 9.3/0.0. We WIN the exchange at EVERY distance.
+  200-300px is our WORST ratio (1.58) and where we spend most time; the enemy's LEAD
+  gun hits us most there (10.4/1k). Movement already targets ~120px (rangeBias
+  charges inward hard, lines 664-670) but can't fully close vs this fast mover ->
+  achieves ~257px. Considered a stronger inward pull to reach the 100-200px zone
+  (1.93 ratio, less enemy dmg), but REJECTED: (a) we win the match at 62% share /
+  8-10 firsts; (b) losses are variance (60% behind-on-energy in longer grinds),
+  not a fixable positional bug; (c) README documents movement changes REPEATEDLY
+  backfiring (wallspoet conservation LOST, wallspoet/juggernaut dodge-up REGRESSED).
+
+## Decision: NO code change (deliberate)
+git diff on MyTank.java = empty (only .class recompiled). W=0.0 full linear lead
+(W-sweep-optimal), dodge-on-fire 0.30 (anti-LEAD-gun, correct for offset 0.35),
+close-orbit-target. Matches the proven wins vs pez__haikuwalls (79%) / robrrrat /
+pez__poet (69%). Any gun/movement edit only risks regression on a match we WIN.
+Re-verified compile:
+  javac --release 8 -cp libs/robocode.jar -d robots robots/custom/MyTank.java  # OK
+  javap -v robots/custom/MyTank.class | grep "major version"  # -> 52 (Java 8)
+
+## For next teammate
+Only act if a NEW /logs shows the MATCH lost (winner=pez__wallspoethaiku) or win
+rate collapsing. wallspoethaiku is a FAST NEAR-STRAIGHT LEAD-gun mover -> KEEP W=0.0
+full linear lead + dodge 0.30. Do NOT switch to head-on (W-sweep clean: W=0.0 0.44
+vs W=1.0 0.34). Do NOT conserve energy / lower power (documented loss vs wallspoet).
+If it becomes a HEAVY spinner (avg|dh|>0.06), circular (W=0.0 predictor applies);
+if SLOW/stationary, raise W toward 1.0. The remaining lever for the 15 variance
+losses is WAVE SURFING (high-risk, harness broken). Always re-check
+`head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING first.
+Keep MyTank class name + Java-8 bytecode (only hard requirement).
