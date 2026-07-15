@@ -251,11 +251,16 @@ public class MyTank extends AdvancedRobot {
         // net-negative bleed (we fired 2203 shots at 8% -> 34 grind losses). Taper
         // HARD past 250px so each far miss barely costs energy; keep power high only
         // in the <250px zone where our hit rate holds (30-60%).
-        if (dist < 250)       power = 3.0;
-        else if (dist < 320)  power = 2.0;
-        else if (dist < 400)  power = 0.8;
-        else if (dist < 500)  power = 0.4;
-        else                  power = 0.2;   // long range -> smallest drain if a miss
+        // vs alexbay218__shreker (moderate near-straight mover avgV 2.66, avg|dh|
+        // 0.020, head-on gun offset ~0.10 rad): MEASURED enemy hit density DROPS
+        // sharply with range (100-200px 11.1/1k, 200-300 5.8, 300-400 3.6, 400+ 1.5)
+        // while our head-on hit rate HOLDS ~50% out to 500px (replay). So keep full
+        // power out to 350px and 2.0 to 450px -- the wider zone is net-energy-POSITIVE
+        // AND far safer (fewer enemy hits). Tapers only in the truly-far low-hit zone.
+        if (dist < 350)       power = 3.0;
+        else if (dist < 450)  power = 2.0;
+        else if (dist < 550)  power = 0.8;
+        else                  power = 0.3;   // long range -> smallest drain if a miss
 
         // Energy safety clamps so a bad streak can't self-destruct us.
         if (getEnergy() < 30) power = Math.min(power, 2.0);
@@ -360,7 +365,7 @@ public class MyTank extends AdvancedRobot {
         // so when behind on energy in a grind, hold fire past 320px (was 400px) to
         // stop the net-negative bleed that caused the 34 grind losses; conserve to
         // outlast the energy-conserving foe / close to the ~230px net-positive zone.
-        if (dist > 320 && getEnergy() < enemyEnergy) allowFire = false;
+        if (dist > 450 && getEnergy() < enemyEnergy) allowFire = false;  // shreker: net-positive out to 450px, only gate truly-far shots when behind
         // Tighter alignment for distant shots (bullet spread grows with range).
         double alignThresh = (dist > 400) ? 0.09 : 0.12;
 
@@ -558,10 +563,14 @@ public class MyTank extends AdvancedRobot {
         // to cut enemy hits ~20% (our head-on hit rate holds well with range), and
         // keep motion purely tangential (see reduced fire-reversal below -- reversing
         // is BAD vs a head-on gun, it brings us back toward the incoming bullet).
-        if (enemyDistance > 430)      rangeBias = -1.2;  // far: strong inward pull to close
-        else if (enemyDistance > 320) rangeBias = -0.9;  // mid-far: firm inward
-        else if (enemyDistance > 235) rangeBias = -0.45; // approaching target ~215px
-        else if (enemyDistance < 175) rangeBias = 0.5;   // too close: push out
+        // vs alexbay218__shreker: orbit WIDER (~320px). Enemy hit density is 3x
+        // lower at 300-400px (3.6/1k) than 100-200px (11.1/1k) while our head-on hit
+        // rate holds ~50% -> the wider zone is strictly better (same accuracy, far
+        // fewer enemy hits). rangeBias closes hard when far, pushes out inside ~280px.
+        if (enemyDistance > 520)      rangeBias = -1.2;  // far: strong inward pull to close
+        else if (enemyDistance > 400) rangeBias = -0.8;  // mid-far: firm inward
+        else if (enemyDistance > 330) rangeBias = -0.35; // approaching target ~320px
+        else if (enemyDistance < 280) rangeBias = 0.5;   // too close: push out
 
         double desiredDir = absBearing + (Math.PI / 2 + rangeBias) * moveDirection;
 

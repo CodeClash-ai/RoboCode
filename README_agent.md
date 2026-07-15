@@ -4053,3 +4053,61 @@ Compiles Java 8 (major version 52), rc=0.
 - The remaining big lever vs its head-on gun is WAVE SURFING (high-risk, harness
   broken, trust /logs only). Always re-check `head -1 /logs/rounds/0/sim_0.jsonl`
   for opponent + INDEX MAPPING first. Keep MyTank class name + Java-8 bytecode.
+
+# Agent Notes (Round 1 / current pass) — opponent = alexbay218__shreker (COMPETITIVE, 25 losses)
+
+## KEY FINDING: gun aim W=1.0 head-on is CORRECT; the lever is ORBIT DISTANCE + POWER
+Round 0 result (BEFORE my change): opus-4-8 35243 vs alexbay218__shreker 13397
+(33% share). results_0.txt: opus 1190 (67%), 8/10 firsts (enemy got 2 firsts!).
+Full 250-sim sweep: 25 LOSSES, 41 close(<20E), ourFE mean 52.7 (min 0.0), games
+LONG (avg 493, max 1123). Genuinely competitive foe.
+
+## Opponent profile (250 sims; header maps idx->name, enemy=non-'opus'; i=0=enemy R0)
+- movefrac 0.70, avgV 2.66 (moderate), avg|dh| 0.020 (NEAR-STRAIGHT), engages ~249px.
+- Enemy gun: MEASURED offset ~0.10 rad off head-on when firing -> a HEAD-ON gun
+  (not a lead gun). So low fire-triggered reversal (0.15, already set) is correct.
+
+## Gun aim W=1.0 head-on CONFIRMED optimal (W-sweep 2 slices, MONOTONIC)
+Per-tick interception over recorded paths: W=0.0 0.31, W=0.5 0.37-0.38, W=0.75
+0.41, W=0.9 0.49, W=1.0 0.50-0.51. Clean monotonic to head-on. KEPT W=1.0.
+(This matches a near-straight moderate mover; NOT the tannerbot1 full-lead case.)
+
+## ROOT CAUSE + FIX: we orbited too CLOSE (215px) in the enemy's kill zone
+MEASURED enemy hit density by distance (unbiased -- its ACTUAL hits on us, 250 games):
+  0-100px 9.8/1k | 100-200px 11.1/1k | 200-300px 5.8/1k | 300-400px 3.6/1k |
+  400-500px 1.5/1k. Enemy is ~3x MORE dangerous at 100-200px than 300-400px.
+OUR head-on hit rate by distance (replay, 120 games) HOLDS ~50% out to 500px:
+  100-200 0.44 | 200-300 0.52 | 300-400 0.51 | 400-500 0.55.
+=> Orbiting WIDER is strictly better: same/better accuracy, far fewer enemy hits.
+Net-energy model (measured density + replay hr): 100-200px pw3 = -17.7/1k (BLEED!),
+200-300px +64, 300-400px pw3 +74, 400-500px pw2 +82. Same insight that beat
+lead-gun/curving foes (spinbot ~250px, jeujdapeu ~245px, dominatorx).
+
+## CHANGES THIS PASS (movement + power; gun aim UNCHANGED at W=1.0 head-on)
+1. MOVEMENT: orbit ~215px -> ~320px. rangeBias: >520 -1.2, >400 -0.8, >330 -0.35,
+   <280 +0.5. Targets the 300-400px zone (3.6/1k enemy hits vs 11.1 at 100-200).
+2. POWER tiers: was 3.0/<250 2.0/<320 0.8/<400 0.4/<500 0.2/else (tuned for
+   tannerbot1 whose hit crashed at 300px). NOW 3.0/<350 2.0/<450 0.8/<550 0.3/else
+   -- our hit rate HOLDS ~50% out to 500px here so keep power high. Replay damage
+   model over 120 games: OLD dmg 23432 -> NEW 26316 (+12%).
+3. FIRE GATE: hold-fire-when-behind threshold 320px -> 450px (net-positive out to
+   450px now, only gate the truly-far low-hit shots).
+Dodge (0.15 fire-reversal, correct vs head-on gun), energy-war taper, low-E
+clamps, enemyPassive mode ALL UNCHANGED. enemyPassive stays OFF (shreker deals us
+real damage -> damageTaken>=5). Compiles Java 8 (major version 52). Backup:
+/tmp/MyTank.bak.java (git prior = the 25-loss config, still WON 67% share).
+
+## For next teammate — VERIFY
+- Want NEW /logs: the 25 losses REDUCED (ideally <10), ourFE mean UP from 52.7,
+  enemy score DOWN from 13397, share UP from 67%, engagement dist UP from 249 to
+  ~320px. If it REGRESSED (new losses / share drop): (a) the wider orbit may have
+  cut our OWN hit rate more than the biased replay suggested -> pull orbit back to
+  ~270px (thresholds 480/360/290/<250) and power to 3.0/<300; (b) full revert =
+  /tmp/MyTank.bak.java (git prior, 25 losses but 67% share WIN).
+- shreker is a MODERATE near-straight mover with a HEAD-ON gun -> KEEP W=1.0
+  head-on + steady low-reversal orbit. Do NOT raise fire-triggered dodge (that's
+  for LEAD guns; it's counterproductive vs a head-on gun). If it becomes a FAST
+  curving dodger (avg|dh|>0.06), set W=0.0 (circular). Re-run the W-sweep + the
+  enemy-hit-density-by-distance analysis first (the density signal is UNBIASED and
+  was decisive this pass). Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for
+  opponent name + INDEX MAPPING first. Keep MyTank class name + Java-8 bytecode.
