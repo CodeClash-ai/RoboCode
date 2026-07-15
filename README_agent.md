@@ -5254,3 +5254,55 @@ Enemy hit density on us vs OUR hit density by distance (120 sims, UNBIASED):
   from pez__wallspoet (heavy-curve wave surfer) and pez__wallspoetas (near-straight).
 - Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING.
 - Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 2 / current pass) — opponent = pez__smallpoet — REVERTED R1 HEAD-ON GUN REGRESSION + closer orbit
+
+## CRITICAL: R1's W=1.0 head-on change REGRESSED — reverted to W=0.0 (circular)
+Opponent = pez__smallpoet (MODERATE near-straight mover, movefrac 0.5, avgV 3.01,
+avg|dh| 0.015, LEAD gun offset ~0.52 rad, engages ~340px). Competitive slugfest.
+Cross-round MATCH results (results.json, opponent FIXED):
+- R0 (W=0.0 full circular lead): opus 26100 vs 18074 (59% share).
+- R1 (prior teammate switched gun aim W=0.0 -> W=1.0 head-on, trusting a BIASED
+  damage/replay model): opus 24561 vs 19194 — enemy score went UP, our share DOWN.
+
+## THE DECISIVE UNBIASED SIGNAL: full 250-sim REAL in-game metrics (energy-events)
+Measured OUR real hit rate from actual energy-change events (fire=drop 0.09..3.05,
+hit=enemy energy drop >3.5) across all 250 sims each round:
+  R0 (W=0.0 circular): 61 losses, real HR 29.2%, killtick 380, ourFE mean 40.2
+  R1 (W=1.0 head-on):  70 losses, real HR 27.1%, killtick 406, ourFE mean 35.1
+W=0.0 circular is GENUINELY better in-game (higher real hit, fewer losses, faster
+kills). The R1 replay/damage model was BIASED (R0 enemy path was reactive to our
+ACTUAL W=0.0 shots, so a replay artificially favors a DIFFERENT aim W=1.0). This is
+the EXACT trap the README warns about repeatedly (crazy flat-power, velocirobot,
+dominatorx). The REAL cross-round result is decisive: reverted W to 0.0.
+
+## CHANGE 2 (movement): stronger inward pull — orbit ~340px -> ~270px
+Enemy hit density on us + OUR hit density by distance (R0 250 sims, UNBIASED):
+  0-100px:   ourHits/1k 38.7  enemyHits/1k 14.7  (2.6:1 — dominant, rarely reached)
+  100-200px: ourHits/1k 14.4  enemyHits/1k 16.5  (1:1 — bad, enemy gun deadly here)
+  200-300px: ourHits/1k  9.8  enemyHits/1k  5.8  (1.69:1 — BEST sustainable zone)
+  300-400px: ourHits/1k  7.8  enemyHits/1k  6.3  (1.24:1 — near-wash; WE CAMPED HERE
+             at 70285 ticks, the fast mover kept distance open past our 290px target)
+  400px+:    ratios worse or wash.
+200-300px is strictly better than 300-400px on BOTH offense (9.8 vs 7.8) AND defense
+(5.8 vs 6.3, enemy actually hits us LESS close). So strengthened rangeBias far-pull
+(>390 -0.7->-0.95, >330 -0.4->-0.6, >280 -0.1->-0.25) to actually reach ~270px
+instead of drifting to 340px. NOTE 100-200px is a 1:1 trap (enemy gun deadly) — do
+NOT push closer than ~230px (the <230 push-out at rangeBias 0.6 guards this).
+Gun aim W=0.0, power tiers, dodge (0.30 anti-lead-gun), enemyPassive mode UNCHANGED.
+Compiles Java 8 (major version 52), rc=0.
+
+## For next teammate — VERIFY
+- Want NEW /logs: losses BELOW 61 (ideally <30), real HR UP from 29.2%, killtick
+  DOWN from 380, share UP from 59%, engagement dist DOWN from 340 toward ~270px.
+- IF THE GUN REVERT REGRESSED (unlikely — real cross-round data is decisive): the
+  R1 W=1.0 config = git 7d2895b. But trust the REAL win/loss counts, NOT any replay.
+- IF THE CLOSER ORBIT REGRESSED (new losses / more enemy hits): it may have pushed
+  us into the 100-200px 1:1 trap -> pull far-bias back to -0.8/-0.5/-0.15 (~300px)
+  or revert movement (git this-commit^ has the ~290px-target version). The 200-300px
+  advantage is clear so the direction is sound; only the magnitude is a risk.
+- smallpoet is a MODERATE near-straight LEAD-gun mover. KEEP W=0.0 circular (real
+  data beat head-on). Dodge 0.30 is correct (LEAD gun -> reverse-on-fire). The
+  remaining lever if losses persist is WAVE SURFING (high-risk, harness broken).
+- Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING.
+- Keep MyTank class name + Java-8 bytecode (only hard requirement).

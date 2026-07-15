@@ -346,7 +346,7 @@ public class MyTank extends AdvancedRobot {
         // (distance-based, kept net-positive) still guard the crazy-bot regression.
         // Chose W=0.85: strongly toward head-on (physics: slow target -> head-on best),
         // hedged just short of pure 1.0 since replay is biased by the reactive enemy path.
-        double W = 1.0;  // vs pez__smallpoet: MODERATE near-straight mover (movefrac 0.5, avgV 3.01, avgdh 0.015) LEAD gun (offset 0.52 rad). W-sweep 2 slices peaks near HEAD-ON (W=1.0 ~0.41 vs W=0.0 circular ~0.38); dmg model W=1.0 16154/net 1894 > W=0.0 14718/1037. Near-straight moderate mover -> head-on optimal. Was 0.0 (full circular, leftover from txeverson crawler heavy spinner -- WRONG profile).
+        double W = 0.0;  // vs pez__smallpoet: REVERTED W=1.0->0.0. REAL cross-round data decisive: R0(W=0.0 circular) 61 losses/HR29.2%/killtick380 vs R1(W=1.0 head-on) 70 losses/HR27.1%/killtick406. R1 damage/replay model was BIASED -> misled to head-on. Circular is genuinely better in-game.
         // [wallspoetas] double W = 0.9;
         // [maximbot] double W = 1.0;  // vs mgalushka__maximbot: MODERATE near-straight mover (movefrac 0.68, avgV 4.51, avg|dh| 0.022, engages ~240px). W-sweep (2 slices, 80 games each) robustly peaks at HEAD-ON: W=1.0 ~0.55 vs W=0.5 ~0.35 vs W=0.0 ~0.39. Damage model W=1.0 dmg +47pct AND net energy far higher. Near-straight moderate mover -> head-on optimal (matches florian2/gruffalo/ultron/hugbot). Was 0.5 (leftover from kcanida pikachu heavy-spinner avgdh 0.149 -- wrong profile here).
         // [prev] double W = 1.0; // vs iagomonteiro13579__npcsniper
@@ -653,9 +653,9 @@ public class MyTank extends AdvancedRobot {
         // offense:defense trade (more bullet dmg + faster kills, tiny extra risk).
         // Kept the strong point-blank escape (<130 bolt, <230 push) so we still
         // never get pinned in the ~45px ramming grind that caused R0's 2 losses.
-        if (enemyDistance > 390)      rangeBias = -0.7;  // far: close in toward ~290px
-        else if (enemyDistance > 330) rangeBias = -0.4;
-        else if (enemyDistance > 280) rangeBias = -0.1;  // hold ~290px
+        if (enemyDistance > 390)      rangeBias = -0.95; // far: close HARDER toward ~270px (was -0.7; fast mover kept dist open at ~340px)
+        else if (enemyDistance > 330) rangeBias = -0.6;  // (was -0.4) reach the 200-300px zone (real hit ratio 1.69:1 vs 1.24:1 at 300-400px)
+        else if (enemyDistance > 280) rangeBias = -0.25; // (was -0.1) keep pulling to ~270px
         else if (enemyDistance < 130) rangeBias = 0.9;   // point-blank: bolt out of the kill zone
         else if (enemyDistance < 230) rangeBias = 0.6;   // too close: push out of the kill zone
         else                          rangeBias = 0.2;
