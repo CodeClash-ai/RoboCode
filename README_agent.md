@@ -10459,3 +10459,174 @@ without a clear, actionable signal.
    repository within the same call). Still the single highest-leverage infra
    fix available if a future teammate has a larger step budget to spend on it
    than usual.
+
+## Round 95 update (this round) — new opponent (admiralrasmussen__wavesurfing), first true wave-surfer seen; 3 losses traced to normal self-inflicted-attrition variance, no changes
+
+### Context
+Only `/logs/rounds/0/` exists in this environment for me. Per `trace.md` /
+`results.json`, this round's opponent is a **new** one,
+`admiralrasmussen__wavesurfing` (different from every opponent documented in
+rounds 1-94 above, and notably — per its name — very plausibly the first
+genuine **wave-surfing** dodging bot this file's history has ever faced; see
+round 1/12/13's notes repeatedly flagging "proper wave-surfing dodge" as the
+single most-suggested-but-never-implemented defensive idea, on the theory
+that no opponent had ever been sophisticated enough to need it — this
+opponent may finally be one). Result: **99% win rate (247/250)**, team score
+**45103 vs opponent's 1261** (huge ~36x margin, so still solidly dominant
+overall), but **accuracy dropped to 27%** — notably lower than the 40-95%
+range typical of almost every opponent in rounds 15-94 — and **avg
+rams/game jumped to 5.2** (well above the usual ~0.3-2.2 range), avg min
+energy dropped to 69, and games got MUCH longer (avg 784 turns, up to 1831 —
+by far the longest average game length recorded in this file's history;
+most recent rounds have averaged 300-500 turns). **3 losses** (`sim_43`,
+`sim_118`, `sim_188`), 0 ties.
+
+### Investigation
+`python3 tools/analyze_freezes.py /logs/rounds/0 --threshold 20 | grep -i
+sonnet` -> only **2 short (24/28-tick) `STUCK-RAMMING` findings**, both in
+games we won — no escape-mode regression; rounds 20/23/25/34-37/40's fixes
+are all still holding fine. The 3 losses are NOT a freeze/deadlock pattern.
+
+Traced all 3 losses' energy deltas tick-by-tick (filter to |delta|>0.5 for
+our own robot). All 3 show the **exact same signature**: our own energy
+grinds down via a very regular firing-cost cadence (mostly power 1.3-2.9
+shots roughly every 12-16 ticks, i.e. gun-cooldown-limited, matching normal
+play) while landing comparatively few real hits (consistent with the 27%
+accuracy figure), reaching **exactly 0.0 well before the game actually
+ends** in all 3 cases (`sim_43`: energy hits 0 at t=1216 of 1759 total
+ticks; `sim_118`: hits 0 at t=1292 of 1824; `sim_188`: hits 0 at t=1176 of
+1830) — interestingly, our own robot's status stays `ACTIVE` (not `DEAD`)
+for several hundred more ticks after energy first reaches 0.0 in each case,
+frozen in place, before finally flipping to `DEAD` later (e.g. `sim_43`:
+`DEAD` only appears at t=1612, ~400 ticks after energy hit 0 — this appears
+to be some kind of engine-level "disabled but not yet formally dead" state
+in this particular simulation/log format, not something previously
+documented in this file; didn't investigate further since it doesn't change
+the diagnosis — we're still functionally beaten in all 3 cases). In all 3
+losses, the opponent survives the whole game with a small but positive
+energy buffer (`sim_43`: opponent ends near 10, `sim_118`: 3.1, `sim_188`:
+12.5) — i.e. these are close, grindy, mutual-attrition-style fights (not
+one-sided routs) that happened to go the opponent's way, the same general
+"self-inflicted attrition from a lower-than-typical hit rate in an unusually
+long fight" shape documented repeatedly in this file against *other*,
+different opponents (rounds 18/25/31/33/38/63/64/88/92) — just now against
+an opponent whose evasive movement (consistent with genuine wave-surfing)
+plausibly explains BOTH the unusually low 27% accuracy AND the unusually
+long game lengths (a harder-to-hit target takes longer to whittle down,
+giving more total ticks — and more total firing-cost exposure — for a bad
+run of luck to compound).
+
+### Checked whether this is exploitable/fixable, or just a harder matchup
+Using round 12's `swing(P,p) = p*(9P-2) - P` energy-swing framework at this
+round's actual observed accuracy (`p=0.27`): `swing(2.9) ≈ +3.6`,
+`swing(1.3) ≈ +1.3` — both still comfortably **positive** on average (the
+breakeven accuracy for our power range is only ~12-13%, well below 27%), so
+on average we should still expect to out-trade this opponent over many
+shots, which the overall 99%-win/36x-score-margin result confirms — losing
+3/250 (1.2%) specific long games to variance in an otherwise-dominant
+matchup is consistent with ordinary bad luck compounding over an unusually
+long fight, not evidence of a systemic EV problem with current bullet-power
+tuning. The elevated `avg rams/game` (5.2) is also plausibly a *reasonable*
+adaptive response already happening naturally: per round 12's ramming logic
+(`onScannedRobot()`'s `enemyDistance < 60` charge-forward trigger), when
+bullets are hard to land against an evasive/wave-surfing target, closing to
+ramming range for "free" `ROBOT_HIT_BONUS` damage (1.2 net swing per
+collision, zero gun-energy cost) becomes relatively more attractive than
+usual — consistent with what's actually happening in the logs, and not
+obviously something to change without real evidence it's net-harmful (no
+sign in the score/win-rate that it is).
+
+### What I did this round (or rather, chose NOT to do)
+Given (a) a still-strongly-dominant overall result (99% win, huge 36x score
+margin), (b) all 3 losses tracing cleanly to the same well-established
+"ordinary variance in an unusually long/hard fight" pattern documented
+across many earlier rounds against different opponents (not a new or
+recurring bug class), (c) the swing-math confirming our current bullet-power
+tuning is still solidly net-positive even at this lower 27% accuracy, (d)
+clean freeze-detector output (only 2 short, benign, non-costly findings),
+and (e) no local battle-testing available to validate any change before a
+full future round's real match anyway, I made **no changes to
+`MyTank.java`** this round — consistent with this file's very
+long-established pattern (rounds 6, 13, 15, 21, 22, 26, 27, 28, 29, 32, 33,
+38, 39, 41, 42, 48-94) of not touching already-working code without a
+clear, actionable signal of underperformance. I specifically considered (and
+rejected, per the same round-11-vs-12 cautionary lesson repeated in this
+file's history) any kind of "throttle back offense when low on energy"
+adjustment — the swing-math above shows that would be directionally wrong
+at this accuracy level, mirroring exactly why round 12 had to reverse round
+11's mistaken energy-throttle change.
+
+### What I did NOT get to
+- Did not verify by inspection/decompilation whether `admiralrasmussen__
+  wavesurfing` is a *literal* wave-surfing implementation (only inferred
+  from its name + the observed low-accuracy/long-game signature, which is
+  exactly what a genuine wave-surfer would produce against our current
+  fixed-orbit-plus-radial-blend movement) — if a future teammate has time
+  and wants to confirm, the opponent's own source isn't available to us
+  (only the compiled robot competes), but repeated exposure across future
+  rounds with consistently-low accuracy against it specifically (vs. our
+  otherwise 40-95% typical range against everything else) would be strong
+  circumstantial confirmation.
+- Did not build the actual wave-surfing dodge for OUR OWN bot (suggested
+  since round 1, repeated in rounds 12/13/15/16 — round 16 implemented a
+  much simpler "dodge on fire" reactive juke instead, see that section
+  above) — this remains the single most significant unimplemented
+  defensive idea in this file's history, and this round's opponent (if it
+  really is a wave-surfer) would be an interesting test case for it, but
+  implementing a full wave-surf without any way to locally validate it
+  first (per every previous round's noted local-battle-runner limitation)
+  felt too risky to attempt with only 1 round's data and an already
+  strongly-winning baseline (99% win, huge score margin) — there's no
+  urgent need, just a long-standing "could be even better" opportunity.
+- Did not dig into why our own robot's status stays `ACTIVE` (not `DEAD`)
+  for ~400 ticks after energy first hits exactly 0.0 in each loss (a
+  previously-undocumented log/engine quirk in this particular
+  simulation format) — didn't change the diagnosis (we're still
+  functionally beaten either way) so wasn't worth spending remaining steps
+  on, but flagging in case it's relevant to a future investigation (e.g. if
+  a future round's freeze-detector needs to account for "0-energy but not
+  yet DEAD" as a distinct state, analogous to round 26's `POST-VICTORY-TAIL`
+  or round 11's `DEAD`-exclusion additions to `analyze_freezes.py`).
+
+### Suggestions for next teammate
+1. **First step, as always**: check `/logs/rounds/<N>/trace.md` (or
+   `results.json` + per-`sim_*.jsonl` `winner` fields if `trace.md` is
+   missing, per round 68's note) for the actual opponent this round, and run
+   `python3 tools/analyze_freezes.py /logs/rounds/<N> --threshold 20 | grep -i
+   sonnet` as the standard regression check (should print nothing or only
+   short/benign findings, per rounds 48-95's clean baseline).
+2. If `admiralrasmussen__wavesurfing` reappears, this is a genuinely
+   valuable comparison point (the first real accuracy-under-30%,
+   game-length-over-700-turns opponent seen in a very long time, alongside
+   `pez__gf1` from rounds 11-12 as one of the toughest matchups in this
+   file's history). Check whether the loss count stays low (~1-2%, per this
+   round's 3/250 baseline) or climbs — if losses become materially more
+   frequent, that would be the first real signal that either (a) the
+   opponent has some further behavior our fixed movement doesn't handle
+   well, or (b) it's genuinely time to attempt a real wave-surfing dodge for
+   our own bot rather than relying on the current fixed-orbit +
+   round-16-dodge-on-fire + round-47-radial-blend combination.
+3. `alpian__ianstank` (rounds 43-44's corner-camping opponent) and
+   `pez__gf1` (rounds 11-12, ~14% tie rate from mutual energy attrition, the
+   *other* toughest opponent in this file's history) both remain
+   outstanding high-value direct re-tests of the accumulated fix stack —
+   neither has reappeared in a very long time.
+4. If a genuinely different/tougher opponent shows up with new symptoms, the
+   diagnostic playbook accumulated across rounds 18/25/31/33/38/43-94 is
+   well-documented above: check (a) freeze/escape-mode health via
+   `analyze_freezes.py`, (b) opponent's position-range vs. our own
+   (corner-camper detection), (c) whether our distance-to-enemy converges
+   toward `effectivePreferredDistance` over time (round 47's radial-blend fix
+   should now handle this generally), (d) energy-delta tracing for the
+   self-inflicted-attrition signature, and (e) round 12's `swing(P,p)`
+   formula to sanity-check whether current bullet-power tuning is still net-
+   positive at the observed accuracy before considering any throttle-based
+   change (per the round-11-vs-12 cautionary history).
+5. Local headless battle-runner: still unresolved after 94+ rounds of
+   attempts (see round 6's section for the most detailed known blocker,
+   `RepositoryManager.loadSelectedRobots` not seeing a freshly-reloaded
+   repository within the same call). Still the single highest-leverage infra
+   fix available if a future teammate has a larger step budget to spend on it
+   than usual — would be especially valuable now if a genuine wave-surfing
+   dodge is ever attempted, since that's exactly the kind of change that's
+   hard to validate purely from post-hoc log analysis.
