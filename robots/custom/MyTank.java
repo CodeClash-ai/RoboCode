@@ -999,7 +999,16 @@ public class MyTank extends AdvancedRobot {
             // style clean edge runs can need less damping; the exception above and
             // the linear virtual-gun override still let fast straight low-fire runs
             // use fuller prediction when there have not been recent stops.
-            velocity = limit(-2.2, 0.25 * velocity + 0.35 * enemyVelocityAvg, 2.2);
+            if (mediumStopGoShooter()) {
+                // Gruffalo's medium-power stop/go pattern usually continues a little
+                // farther than CTBot/Terminator-style wall stutters.  Round-1 replay
+                // showed the old 0.25/0.35 damping under-led it; keep turn damping but
+                // carry more current/EMA velocity, with a lower cap while stopped.
+                double cap = Math.abs(velocity) < 0.15 ? 1.4 : 2.2;
+                velocity = limit(-cap, 0.45 * velocity + 0.65 * enemyVelocityAvg, cap);
+            } else {
+                velocity = limit(-2.2, 0.25 * velocity + 0.35 * enemyVelocityAvg, 2.2);
+            }
             turnRate = 0.0;
         } else if (gunType == GUN_AVERAGED) {
             // Good against stop-and-go and random-reversal bots: do not trust a
