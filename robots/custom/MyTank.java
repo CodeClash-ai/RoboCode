@@ -37,6 +37,7 @@ public class MyTank extends AdvancedRobot {
     private int crazyEnemyScans = 0;
     private int stopGoEnemyScans = 0;
     private int closeRammerScans = 0;
+    private int trackerApproachScans = 0;
     private double enemyVelocityAvg = 0.0;
     private double enemySpeedAvg = 0.0;
     private double enemyTurnRateAvg = 0.0;
@@ -173,12 +174,25 @@ public class MyTank extends AdvancedRobot {
         // position is better described by the current straight-line velocity than
         // by the generic damped harmless-runner gun, so track a narrow rammer
         // signature for an early linear override.
+        double enemyRadialVelocity = e.getVelocity() * Math.cos(e.getHeadingRadians() - absBearing);
         if (e.getDistance() < 285.0 && Math.abs(e.getVelocity()) > 2.0
                 && Math.abs(scanTurnRate) < 0.035 && enemyFireCount <= 3
                 && wallEnemyScans <= 8 && crazyEnemyScans <= 4) {
             closeRammerScans = Math.min(40, closeRammerScans + 2);
         } else {
             closeRammerScans = Math.max(0, closeRammerScans - 1);
+        }
+        // sample.Tracker-style bots point at us and repeatedly drive down the
+        // bearing line, occasionally pausing to fire heavy bullets.  They are easy
+        // linear targets, but if we let the generic close orbit resume at ~260px
+        // they can leak point-blank power-3 damage.  Track sustained radial
+        // approaches separately from harmless field-crossing straight runners.
+        if (e.getDistance() < 430.0 && enemyRadialVelocity < -2.0
+                && Math.abs(e.getVelocity()) > 3.5 && Math.abs(scanTurnRate) < 0.030
+                && wallEnemyScans <= 8 && crazyEnemyScans <= 4 && enemyFireCount <= 8) {
+            trackerApproachScans = Math.min(50, trackerApproachScans + 2);
+        } else {
+            trackerApproachScans = Math.max(0, trackerApproachScans - 1);
         }
 
         updateVirtualGuns(enemyX, enemyY);
@@ -228,6 +242,13 @@ public class MyTank extends AdvancedRobot {
             // Driving directly away is often into the wall; sidestep the firing line
             // until the range opens instead of sitting in the corner.
             drivePerpendicularEscape(absBearing, 260.0);
+            return;
+        }
+        if (lowFireTracker() && e.getDistance() < 390.0) {
+            // Tracker-like chasers deliberately close the bearing line.  Keep a wider
+            // direct separation band than RamFire so its occasional power-3 shots do
+            // not become point-blank trades while our linear gun farms the approach.
+            driveAwayFrom(absBearing, 380.0);
             return;
         }
         if (lowFireRammer() && e.getDistance() < 300.0) {
@@ -318,6 +339,11 @@ public class MyTank extends AdvancedRobot {
             preferredDistance = 305.0;
         } else if (fastWallCruiser()) {
             preferredDistance = 305.0;
+        } else if (lowFireTracker()) {
+            // Tracker-like chasers fire more often than RamFire and intentionally
+            // close on our current position.  A wider band cuts their close-range
+            // power-3 leakage while still keeping linear bullet flight short.
+            preferredDistance = 355.0;
         } else if (lowFireRammer()) {
             // RamFire-like opponents try to close directly.  Keep a short bullet
             // flight but maintain just enough spacing to avoid long pin loops.
@@ -485,6 +511,11 @@ public class MyTank extends AdvancedRobot {
         }
         if (fastWallCruiser() && getEnergy() > 14 && distance < 820) {
             power = Math.max(power, distance < 650 ? 3.0 : 2.55);
+        }
+        if (lowFireTracker() && getEnergy() > 14 && distance < 760) {
+            // The approach is highly predictable; max-power linear shots shorten
+            // the round and reduce the time available for close-range Tracker fire.
+            power = Math.max(power, distance < 640 ? 3.0 : 2.55);
         }
         if (crazyEnemyScans > 3) {
             // High-speed continuous turners are easier to hit with faster,
@@ -752,6 +783,11 @@ public class MyTank extends AdvancedRobot {
             // favors the normal averaged stop/reversal predictor over head-on,
             // linear, circular, or the old wall-damped special case.
             gun = GUN_AVERAGED;
+        } else if (lowFireTracker()) {
+            // Tracker drives almost straight along the bearing line toward us; lead
+            // its current velocity and do not let harmless-runner damping under-lead
+            // the charge.
+            gun = GUN_LINEAR;
         } else if (lowFireRammer()) {
             // RamFire-style direct chargers have very low turn rate and usually
             // continue their current line during bullet flight; offline replay of
@@ -870,6 +906,18 @@ public class MyTank extends AdvancedRobot {
             }
         }
         return best;
+    }
+
+    private boolean lowFireTracker() {
+        return trackerApproachScans > 5
+                && straightEnemyScans > 2
+                && enemyFireCount <= 8
+                && wallEnemyScans <= 8
+                && crazyEnemyScans <= 4
+                && Math.abs(enemyTurnRateAvg) < 0.035
+                && !fixedHeadingStopGoEnemy()
+                && !fixedHeadingLineEnemy()
+                && !fastWallCruiser();
     }
 
     private boolean lowFireRammer() {
