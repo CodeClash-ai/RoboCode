@@ -1138,3 +1138,37 @@ some losses. Win-game damage drops slightly (still easily kills the 100-HP enemy
   sim_*.jsonl (header maps idx->name, enemy=non-'opus'), fire W=0.75 lead bullet
   from our recorded (x,y), step at 20-3*power, hit if <18px to enemy future pos.
 - Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 1 / current) -- opponent = robo_code__regullarmonk
+
+## KEY FINDING: opponent is a LINEAR OSCILLATOR (very exploitable)
+Analyzed /logs/rounds/0/sim_*.jsonl (250 games, REAL opponent now present):
+- Moves back-and-forth along a FIXED heading (bh constant ~4.34, NEVER turns body).
+- Pauses at each endpoint: ~54% of ticks STATIONARY (|v|<0.5). Max speed 8.
+- Its GUN barely tracks us: gun offset from head-on-to-us is ~pi/2 constant, so
+  its aim is poor -> we win the DAMAGE battle. But prior versions LOST the ENERGY
+  war (our finalE ~7 vs enemy ~26) by orbiting far (~485px) with low hit rate.
+
+## Replay-sim (tools/replay_hitrate.py) hit-rate results, realistic fire timing:
+- HEAD-ON aim (W=1.0): 12.9% overall = DOUBLE the full-lead (6.8%). Lead
+  overshoots the pauses/reversals. Head-on wins because target is stationary ~half
+  the time and oscillates around a center.
+- Hit rate is dominated by DISTANCE (head-on): 100-200px=66%, 200-300px=29%,
+  300-400px=19%, 400-500px=9%. We were spending only 3% of ticks <300px.
+
+## Changes this round
+1. Gun W = 1.0 (pure HEAD-ON) -- was 0.75. Best vs this oscillator.
+2. Power tiers rescaled for closer combat: 3.0<250px, 2.5<400, 2.0<500, 1.5 else.
+3. Movement rangeBias: orbit CLOSER (~330px) instead of ~485px. Pull in when
+   dist>380, push out when dist<280. This raises our head-on hit rate massively.
+Rationale: enemy gun is inaccurate so closing is low-risk; closing 2-3x's our hit rate.
+Compiles to Java 8 (major version 52), rc=0.
+
+## Tools
+- tools/replay_hitrate.py : per-tick head-on/lead/hybrid hit-rate & by-distance
+  breakdown from sim logs. Edit `files` glob for the round dir.
+
+## Verify next round
+Check new /logs/rounds/0/results_*.txt: want higher Bullet Dmg AND higher finalE
+(energy war). If enemy suddenly moves differently, re-run tools/replay_hitrate.py.
+Backup of prior MyTank at /tmp (not persisted) -- git has history if needed.

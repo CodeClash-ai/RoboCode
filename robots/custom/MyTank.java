@@ -150,10 +150,19 @@ public class MyTank extends AdvancedRobot {
         //  - keep power 3.0 only where hit rate clears break-even (<300px, 52%),
         //  - taper power at mid/long range so each miss costs LESS energy while
         //    still landing meaningful damage on hits.
-        if (dist < 300)       power = 3.0;   // 52% hit -> net +1.68/shot
-        else if (dist < 450)  power = 2.2;   // ~29% hit -> minimize per-miss cost
-        else if (dist < 550)  power = 2.0;   // ~31% hit
-        else                  power = 1.4;   // 18.5% hit -> low power = tiny drain
+        // ==== TUNING vs robo_code__regullarmonk (LINEAR OSCILLATOR) ====
+        // This opponent moves back-and-forth along a FIXED heading (never turns),
+        // pausing at each endpoint (~54% of ticks stationary). Replay-sim over 250
+        // recorded games shows HEAD-ON aim (W=1.0) hits ~13% overall but is DOUBLE
+        // the full-lead rate (6.8%) -- linear lead overshoots its pauses/reversals.
+        // Hit rate is dominated by DISTANCE: 100-200px=66%, 200-300px=29%,
+        // 400-500px=9%. Prior versions orbited at ~485px (only 3% of ticks <300px)
+        // and LOST the energy war (our finalE 7 vs enemy 26). Fix: orbit CLOSER
+        // (~330px) to raise hit rate, and use head-on aim.
+        if (dist < 250)       power = 3.0;
+        else if (dist < 400)  power = 2.5;
+        else if (dist < 500)  power = 2.0;
+        else                  power = 1.5;
 
         // Energy safety clamps so a bad streak can't self-destruct us.
         if (getEnergy() < 30) power = Math.min(power, 2.0);
@@ -194,7 +203,7 @@ public class MyTank extends AdvancedRobot {
         // (distance-based, kept net-positive) still guard the crazy-bot regression.
         // Chose W=0.85: strongly toward head-on (physics: slow target -> head-on best),
         // hedged just short of pure 1.0 since replay is biased by the reactive enemy path.
-        double W = 0.75;  // ROUND-1 vs tibola__markiv: replay-sim peak 45.0% at W=0.75 (moderate curving mover, avg|v| 2.0, 0.052 rad/tick)
+        double W = 1.0;  // HEAD-ON: best vs regullarmonk linear oscillator (replay-sim 13% vs 6.8% lead)
         double predX = W * enemyX + (1 - W) * leadX;
         double predY = W * enemyY + (1 - W) * leadY;
 
@@ -244,9 +253,11 @@ public class MyTank extends AdvancedRobot {
         // hits) and drops off sharply beyond 450px (139 hits >500). It out-trades us
         // in 13 losses at close range. Orbit FURTHER OUT (~450px) to slash enemy
         // accuracy; our own hit rate stays ~40% at 450-550px per replay-sim.
+        // vs regullarmonk (linear oscillator): orbit CLOSER (~330px) to boost our
+        // head-on hit rate (66% at 100-200px, 29% at 200-300px, only 9% at 450px).
         double rangeBias = 0.0;
-        if (enemyDistance > 500) rangeBias = -0.35;      // pull in toward ~450px
-        else if (enemyDistance < 400) rangeBias = 0.45;  // push out to ~450px sweet spot
+        if (enemyDistance > 380) rangeBias = -0.45;      // pull in toward ~330px
+        else if (enemyDistance < 280) rangeBias = 0.45;  // push out if too close
 
         double desiredDir = absBearing + (Math.PI / 2 + rangeBias) * moveDirection;
 
