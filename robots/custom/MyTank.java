@@ -221,6 +221,15 @@ public class MyTank extends AdvancedRobot {
             driveAwayFrom(absBearing, 240.0);
             return;
         }
+        if (lowFireRammer() && e.getDistance() < 300.0) {
+            // sample.RamFire-style chargers keep driving straight at us and only
+            // leak score through point-blank shots/collisions.  Do not wait for the
+            // generic 225px close-escape threshold: once the rammer signature is
+            // confirmed, keep stretching the range while the linear gun fires down
+            // its charge line.
+            driveAwayFrom(absBearing, 285.0);
+            return;
+        }
         if (e.getDistance() < 225.0
                 && (harmlessLowFireEnemy() || wallEnemyScans > 2 || stopGoEnemyScans > 4
                         || Math.abs(enemyVelocityAvg) < 1.2)) {
@@ -339,6 +348,7 @@ public class MyTank extends AdvancedRobot {
         double distanceOffset = limit(-0.62, (e.getDistance() - preferredDistance) / 430.0, 0.55);
         double desired = absBearing + moveDirection * (Math.PI / 2.0 - distanceOffset);
         if (e.getDistance() < 118
+                || (lowFireRammer() && e.getDistance() < 300)
                 || (e.getDistance() < 225
                         && (harmlessLowFireEnemy() || wallEnemyScans > 2 || stopGoEnemyScans > 4
                                 || Math.abs(enemyVelocityAvg) < 1.2))) {
@@ -726,8 +736,8 @@ public class MyTank extends AdvancedRobot {
 
     private boolean lowFireRammer() {
         return closeRammerScans > 4
-                && harmlessLowFireEnemy()
-                && straightEnemyScans > 4
+                && enemyFireCount <= 4
+                && straightEnemyScans > 2
                 && wallEnemyScans <= 8
                 && crazyEnemyScans <= 4
                 && !fixedHeadingStopGoEnemy()
