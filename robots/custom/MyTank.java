@@ -34,6 +34,13 @@ public class MyTank extends AdvancedRobot {
     // even in ticks where we don't get a fresh scan.
     private double enemyDistance = Double.MAX_VALUE;
 
+    // Turn number when we last saw an enemy; used to trigger fallback "search"
+    // movement if we haven't scanned anyone for a while (e.g. radar temporarily
+    // lost lock, or enemy is outside our current sweep). Prevents us from being
+    // a stationary sitting duck if onScannedRobot stops firing for any reason.
+    private long lastScanTime = -1000;
+    private int searchTurnDir = 1;
+
     public void run() {
         setAdjustGunForRobotTurn(true);
         setAdjustRadarForGunTurn(true);
@@ -43,12 +50,23 @@ public class MyTank extends AdvancedRobot {
         setTurnRadarRight(Double.POSITIVE_INFINITY);
 
         while (true) {
-            // If we haven't seen anyone in a while, keep spinning radar to find them.
+            // Fallback "search" behavior: if we haven't scanned an enemy in a while
+            // (e.g. right at the start of the round, or if we temporarily lose lock),
+            // move around instead of sitting still. This makes us harder to hit and
+            // helps us find enemies faster than standing in one spot spinning radar.
+            if (getTime() - lastScanTime > 15 && getDistanceRemaining() == 0 && getTurnRemaining() == 0) {
+                if (Math.random() < 0.15) {
+                    searchTurnDir = -searchTurnDir;
+                }
+                setTurnRight(30 * searchTurnDir);
+                setAhead(120);
+            }
             execute();
         }
     }
 
     public void onScannedRobot(ScannedRobotEvent e) {
+        lastScanTime = getTime();
         double absBearing = getHeadingRadians() + e.getBearingRadians();
         enemyDistance = e.getDistance();
 

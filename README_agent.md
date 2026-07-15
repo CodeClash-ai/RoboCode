@@ -81,3 +81,79 @@
 3. Try to resolve the local headless-battle-running issue above so future rounds can
    actually validate behavior before submitting, rather than relying solely on
    after-the-fact match logs.
+
+## Round 2 update (this round)
+
+### Key finding: our bot was NEVER MOVING in round 1's actual matches
+Wrote `tools/analyze_sim_logs.py` (new, kept in repo) to analyze `/logs/rounds/<N>/sim_*.jsonl`.
+Run it like:
+```
+python3 tools/analyze_sim_logs.py /logs/rounds/1
+```
+Findings:
+- **Round 0** and **Round 1** sim logs both show the `"robots"` header with only
+  ONE entry (`{"0": "sonnet_5"}`) for all 250/250 recorded games — the opponent
+  (`technischeinformatica__tearsofsteel`) never appears at all, in either round.
+  Zero bullets ever appear in any game log in either round. This all but confirms
+  the opponent bot is failing to load into the actual match on the platform side
+  (not something we can fix from our repo — their `robots/custom/MyTank.java`
+  literally uses the exact same `package custom; class MyTank` as ours, on a
+  different git branch (`human/technischeinformatica/tearsofsteel`); this looks
+  like a likely source of a merge/namespace collision when the platform builds
+  the battle, but there's nothing actionable in our own submission to fix that).
+  Net effect: we've been winning by walkover both rounds, not through actual
+  combat superiority. Assume this may or may not be fixed in later rounds —
+  don't over-trust "100% win rate" as a signal that our combat logic is good.
+- **However**, I found a *real, fixable* problem in round 1's bot: the
+  previous rewrite (`MyTank extends AdvancedRobot`) put ALL movement and firing
+  logic inside `onScannedRobot(...)`. Since the opponent never showed up, that
+  handler never fired even once in 250/250 games, so our tank sat completely
+  motionless (`x`, `y`, `v` never changed for the entire 152-turn game — verified
+  with the analysis script) the whole match, every match. Contrast with round 0's
+  much simpler bot (bare `ahead(400)` loop in `run()`, independent of scanning),
+  which *did* move around every game.
+  - This was a latent bug: if a working opponent ever *does* show up (e.g. if the
+    platform fixes whatever's preventing their bot from loading), our tank would
+    have been a stationary sitting duck until first scanning them, then also
+    would stop moving again anytime `onScannedRobot` doesn't fire for a tick
+    (e.g. brief radar lock loss). Very risky for actual combat, purely
+    accidental that it didn't matter yet.
+
+### Fix applied this round
+Patched `robots/custom/MyTank.java`:
+- Added `lastScanTime` / `searchTurnDir` fields.
+- In `run()`'s main loop, added a fallback "search" movement block: if we
+  haven't scanned any enemy in the last 15 ticks AND we're not mid-turn/mid-move
+  already (`getDistanceRemaining() == 0 && getTurnRemaining() == 0`), we issue a
+  `setTurnRight(...)` + `setAhead(120)` patrol move (with an occasional random
+  direction flip) instead of sitting still. This guarantees the tank is always
+  moving/searching by default, and the existing onScannedRobot-driven
+  orbit-strafe + linear-prediction-targeting logic still fully takes over
+  (overwrites the pending move/turn commands) the instant an enemy is actually
+  scanned, so real combat behavior from round 1 is unchanged — this is a
+  pure robustness/coverage improvement, not a rewrite of the combat logic.
+- Verified `javac -cp libs/robocode.jar -d robots robots/custom/MyTank.java`
+  compiles clean with no errors/warnings, `.class` file is committed/up to date
+  in `robots/custom/MyTank.class`.
+
+### Suggestions for next teammate
+1. Re-run `python3 tools/analyze_sim_logs.py /logs/rounds/2` (once round 2's
+   logs exist) as your FIRST step. Check:
+   - Does `robots` header now have 2+ entries? If yes: the opponent is finally
+     loading for real, and you have actual combat data to tune against (check
+     accuracy, avg damage dealt/taken from `trace.md`, and consider iterating on
+     `PREFERRED_DISTANCE`, bullet power curve, movement pattern, etc.)
+   - Does our own robot move at all now (`"moved": {"0": true}` in the
+     script's example output / non-single-valued x/y across the game)? This
+     should now be true even with a 1-robot walkover thanks to this round's fix
+     — if it's somehow still false, something regressed, look at `run()` in
+     `MyTank.java` first.
+2. If the opponent is still a no-show, there isn't much more to validate
+   locally (headless local battle running in this sandbox has not been gotten
+   to work — see previous round's notes below for what was tried). Focus on
+   defensive-in-depth code review of `MyTank.java` instead (targeting math,
+   wall avoidance, edge cases) since you can't easily get feedback other than
+   real match results.
+3. Still unresolved: getting `./robocode.sh -battle ... -nodisplay` to actually
+   run a 2-robot local battle in this sandbox for pre-submission validation.
+   See "Known limitation" section above (from round 1) for what's been tried.
