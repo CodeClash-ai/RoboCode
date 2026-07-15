@@ -257,9 +257,17 @@ public class MyTank extends AdvancedRobot {
         // while our head-on hit rate HOLDS ~50% out to 500px (replay). So keep full
         // power out to 350px and 2.0 to 450px -- the wider zone is net-energy-POSITIVE
         // AND far safer (fewer enemy hits). Tapers only in the truly-far low-hit zone.
-        if (dist < 400)       power = 3.0;   // shreker: hit rate flat ~29% to 500px; keep power up at wider ~370px orbit
-        else if (dist < 500)  power = 2.0;
-        else if (dist < 580)  power = 0.8;
+        // vs pez__wallspoet (ACTIVE WAVE SURFER: dodges near-perfectly, our REAL hit
+        // rate is only ~5%% at EVERY distance while it fires back and deals ~55 dmg/game).
+        // We were firing ~2x more shots than the enemy (5147 vs 2879) at the same ~5%%
+        // hit rate -> we bled ~2x more energy and LOST 88/250 games in the energy war.
+        // FIX: CONSERVE. Fire lower power (cheaper misses), and hold fire at long range.
+        // Net-firing-energy model over 150 games: full-range power3 = -11271, but
+        // capping to <=250px at power<=2 = -1216 (~9x less bleed). We can't out-hit a
+        // wave surfer, so we must out-LAST it by firing far less at lower power.
+        if (dist < 250)       power = 2.0;   // wallspoet: closest zone, moderate power
+        else if (dist < 400)  power = 1.2;   // mid: low power so each miss barely drains
+        else if (dist < 500)  power = 0.6;
         else                  power = 0.3;   // long range -> smallest drain if a miss
 
         // Energy safety clamps so a bad streak can't self-destruct us.
@@ -330,7 +338,7 @@ public class MyTank extends AdvancedRobot {
         // (distance-based, kept net-positive) still guard the crazy-bot regression.
         // Chose W=0.85: strongly toward head-on (physics: slow target -> head-on best),
         // hedged just short of pure 1.0 since replay is biased by the reactive enemy path.
-        double W = 1.0;  // vs vikdov__dominatorx (STOP-AND-GO dodger: bimodal velocity 33% full-speed v=8, 15% stopped, movefrac 0.82, avgV 4.59, avg|dh| 0.0685, engages ~256px, aggressive good gun fires ~22/game like us). W-sweep replay 2 slices MONOTONIC to head-on: W=1.0 0.440/0.416 vs W=0.0 circular 0.265/0.245. Replay is BIASED TOWARD W=0.0 (enemy path reactive to our OLD circular shots) yet head-on wins by ~18pts DESPITE the anti-bias -> very strong signal. Stop-and-go dodgers defeat any lead (they stop/reverse) -> head-on best (matches alpian__ianstank, trex deepthought). Was 71/250 losses under W=0.0; head-on should raise hit rate ~25%->38% and cut losses.  [prior tuning history in comment block above]
+        double W = 0.5;  // vs pez__wallspoet (active wave surfer): W-sweep replay peaks at W=0.5 (0.36-0.38) but REAL hit rate is ~5% at all ranges (it wave-surfs). Aim tuning is minor; the real lever is CONSERVING energy (fire less, lower power, orbit ~420px min-enemy-hit zone). [prev W=1.0 vs vikdov__dominatorx (STOP-AND-GO dodger: bimodal velocity 33% full-speed v=8, 15% stopped, movefrac 0.82, avgV 4.59, avg|dh| 0.0685, engages ~256px, aggressive good gun fires ~22/game like us). W-sweep replay 2 slices MONOTONIC to head-on: W=1.0 0.440/0.416 vs W=0.0 circular 0.265/0.245. Replay is BIASED TOWARD W=0.0 (enemy path reactive to our OLD circular shots) yet head-on wins by ~18pts DESPITE the anti-bias -> very strong signal. Stop-and-go dodgers defeat any lead (they stop/reverse) -> head-on best (matches alpian__ianstank, trex deepthought). Was 71/250 losses under W=0.0; head-on should raise hit rate ~25%->38% and cut losses.  [prior tuning history in comment block above]
         // [prev] double W = 1.0; // vs iagomonteiro13579__npcsniper
         // [old] double W = 1.0; // HEAD-ON best vs alpian__ianstank (stop-and-reverse oscillator, ~50% stationary). Replay-sim 80 games: W=1.0 hits 40.3% vs W=0.0 21.4%.
         double predX = W * enemyX + (1 - W) * leadX;
@@ -359,6 +367,13 @@ public class MyTank extends AdvancedRobot {
         // the truly long, low-hit shots (>550px) when we're behind on energy.
         boolean allowFire = true;
         if (dist > 550 && getEnergy() < enemyEnergy) allowFire = false;
+        // vs pez__wallspoet (active wave surfer, ~5%% hit at ALL ranges): firing far
+        // is pure energy suicide. HOLD FIRE past 450px always (net -8416 at cap 400
+        // vs -1216 at cap 250 in the energy model). Also hold fire past 350px when
+        // behind on energy so a cold streak can't drain us below the enemy. We win
+        // this matchup by CONSERVING energy and out-lasting the dodger, not by hits.
+        if (dist > 450) allowFire = false;
+        if (dist > 350 && getEnergy() < enemyEnergy) allowFire = false;
         // In the grind-loss state (behind on energy) don't waste far low-hit
         // shots (400px+ hit rate ~20% = net-negative); conserve to outlast.
         // vs tannerrogalsky__tannerbot1: our hit rate CRASHES beyond 320px (8%),
@@ -573,10 +588,14 @@ public class MyTank extends AdvancedRobot {
         // 2.6, 500-600 1.7). Losses = pure energy-war variance at SAME dist as wins
         // (319px both). Since accuracy is range-independent but the enemy hits us far
         // less at range, orbit WIDER (~370px) to cut enemy hits with ~no accuracy loss.
-        if (enemyDistance > 560)      rangeBias = -1.2;  // far: strong inward pull to close
-        else if (enemyDistance > 440) rangeBias = -0.8;  // mid-far: firm inward
-        else if (enemyDistance > 380) rangeBias = -0.35; // approaching target ~370px
-        else if (enemyDistance < 340) rangeBias = 0.5;   // too close: push out
+        // vs pez__wallspoet (active wave surfer): enemy hits us LEAST at 400-500px
+        // (~5/1k) and MOST at 100-200px (12.9/1k). Our hit rate is ~5%% everywhere so
+        // there's no accuracy reason to close. Orbit ~420px = min enemy damage zone,
+        // just under the 450px fire cap. We win by conserving energy + taking fewer hits.
+        if (enemyDistance > 580)      rangeBias = -1.1;  // far: pull in to ~420px
+        else if (enemyDistance > 470) rangeBias = -0.7;  // mid-far: firm inward
+        else if (enemyDistance > 420) rangeBias = -0.3;  // approaching target ~420px
+        else if (enemyDistance < 380) rangeBias = 0.5;   // too close: push out to safe zone
 
         double desiredDir = absBearing + (Math.PI / 2 + rangeBias) * moveDirection;
 

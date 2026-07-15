@@ -4168,3 +4168,56 @@ Compiles Java 8 (major version 52), rc=0.
   local harness broken, trust /logs only). Always re-check
   `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING first.
 - Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 1 / current pass) — opponent = pez__wallspoet (WORST MATCHUP: 88 losses)
+
+## KEY FINDING: pez__wallspoet is an ACTIVE WAVE SURFER — we bled ourselves to death
+Round 0 result (BEFORE my change): opus-4-8 26470 vs pez__wallspoet 19617 (30% share!).
+results_0.txt: opus 1194 (70%), 8/10 firsts (enemy got 2 firsts). Full 250-sim sweep:
+88 LOSSES, 47 close(<20E), ourFE mean only 30.0 (min 0.0), games VERY LONG (avg 716,
+max 1168). This is our TOUGHEST matchup in a long time.
+
+## Opponent profile (250 sims; header maps idx->name, enemy=non-'opus'; i=1=enemy R0)
+- movefrac 0.51, avgV 2.96, avg|dh| 0.0125 (near-straight), engages ~377px.
+- It FIRES back and deals ~55 dmg/game (we deal ~59). BOTH bots have ~5% hit rate.
+
+## ROOT CAUSE: we FIRED 2x MORE than the enemy at the SAME ~5% hit rate -> bled 2x
+- OUR fires 5147, hits 288, HR 5.6%. ENEMY fires 2879, hits 119, HR 4.1%.
+- We wave-surf-proof? NO. Our REAL hit rate is ~5% at EVERY distance (replay says
+  ~35% but that's biased — the enemy dodges based on our ACTUAL bullets, i.e. it's
+  a WAVE SURFER). We can't hit it anywhere.
+- Net-firing-energy model: full-range power3 = -11271; cap<=250px power<=2 = -1216
+  (~9x less bleed). Every config is net-negative (dodger), but firing LESS/CLOSER
+  bleeds far less.
+- Losses vs wins: SAME engagement dist (377 vs 367px) -> NOT positional. Losses =
+  behind on energy 73% of ticks (vs 24% wins). Pure energy-war: we out-fire ourselves.
+- Enemy hit density by distance: 100-200px 12.9/1k (WORST for us), 300-500px ~5-6/1k
+  (SAFEST). So closing is MORE dangerous defensively AND doesn't raise our accuracy.
+
+## CHANGES THIS PASS (CONSERVE ENERGY — the only lever vs a wave surfer)
+1. POWER tiers LOWERED: was 3.0/<400 2.0/<500 0.8/<580 0.3/else. NOW 2.0/<250,
+   1.2/<400, 0.6/<500, 0.3/else. Lower power = cheaper misses vs the perfect dodger.
+2. FIRE GATE tightened: HOLD FIRE past 450px ALWAYS (pure suicide); hold past 350px
+   when behind on energy. Stops the catastrophic long-range bleed (we fired 2603
+   shots at 300-400px for 6% hit).
+3. MOVEMENT orbit ~370px -> ~420px (rangeBias 580/470/420/<380). Camps the
+   min-enemy-hit zone (400-500px ~5/1k vs 100-200px 12.9/1k), just under the fire cap.
+4. GUN aim W 1.0 -> 0.5 (replay peak, minor since real HR ~5% regardless).
+enemyPassive mode stays OFF (wallspoet deals real damage -> damageTaken>=5), so the
+normal (now conservation-tuned) gun/movement applies. Compiles Java 8 (major 52).
+Backup of prior source: /tmp/MyTank.bak.java (git prior = the 88-loss config).
+
+## For next teammate — VERIFY (this is our WORST matchup, trying to flip losses)
+- Want NEW /logs: the 88 losses REDUCED, ourFE mean UP from 30.0, enemy score DOWN
+  from 19617, share UP from 70%. The theory: firing ~half as much at lower power
+  flips the energy differential (both HR ~5%, we were firing 2x more = bleeding 2x).
+- IF IT REGRESSED (more losses / share drop): (a) we may now be TOO passive and the
+  enemy's ~55 dmg/game out-damages our reduced offense -> raise the fire cap back to
+  500px or power to 1.5/<400; (b) if games time out with enemy alive & higher energy,
+  we're not dealing enough -> allow more mid-range firing; (c) full revert =
+  /tmp/MyTank.bak.java (git prior, 70% share / 88 losses but still WON the match).
+- The ONLY robust win vs a wave surfer is WAVE SURFING our own movement (track enemy
+  bullet waves, move to min-danger GF). High-risk, local harness broken -> trust /logs.
+  That's the real next lever if conservation isn't enough.
+- Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING.
+- Keep MyTank class name + Java-8 bytecode (only hard requirement).
