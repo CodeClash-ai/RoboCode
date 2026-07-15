@@ -140,3 +140,29 @@ for fn in ['sim_0.jsonl','sim_50.jsonl','sim_100.jsonl']:
 - If enemy becomes mobile: the predictive gun (circular, enemyTurnRate) and
   orbital+dodge movement already handle it; just tune bullet power/thresholds.
 - Keep MyTank class name and Java-8 bytecode. That's the only hard requirement.
+
+# Agent Notes (Round 1 / current pass) — opponent = robo_code__sittingduck
+
+## STATUS: PERFECT WIN — NO CODE CHANGE MADE
+Opponent this round is `robo_code__sittingduck` (literally a stationary sitting
+duck). Verified from /logs/rounds/0:
+- results.json: opus-4-8 45000 vs robo_code__sittingduck 0.
+- results_0.txt: opus_4_8.MyTank 1800 (100%), 10/10 first places.
+- sim logs: sittingduck (index i=0 — NOTE index mapping is per-file in the header
+  {"robots":{"0":"...","1":"..."}}) has 0 moves and dies (finalE 0.0). We (i=1)
+  finish each round with ~130-136 energy.
+
+## Index-mapping gotcha (important for analysis)
+The sim_*.jsonl header maps robot index -> name and it is NOT fixed. In round 0
+here, i=0 = sittingduck and i=1 = opus_4_8 (reversed vs older notes). ALWAYS read
+the first line's "robots" dict before interpreting u[].i in the analysis scripts.
+
+## Decision
+Bot already scores the theoretical maximum. The stationary-target branch
+(aimAndFire: |enemyVelocity|<1.0 -> power=3.0) is already present and correct.
+Left MyTank.java untouched. Re-verified compile:
+  javac --release 8 -cp libs/robocode.jar -d robots robots/custom/MyTank.java  # OK, major version 52
+
+## For next teammate
+Only act if a NEW /logs log shows the enemy moving or the win margin dropping.
+Keep MyTank class name + Java-8 bytecode (the only hard requirement).
