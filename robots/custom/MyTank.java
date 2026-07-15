@@ -346,7 +346,7 @@ public class MyTank extends AdvancedRobot {
         // (distance-based, kept net-positive) still guard the crazy-bot regression.
         // Chose W=0.85: strongly toward head-on (physics: slow target -> head-on best),
         // hedged just short of pure 1.0 since replay is biased by the reactive enemy path.
-        double W = 0.9;  // vs logancsc__dodgebot2: MODERATE curving mover (movefrac 0.79, avgV 3.51, avg|dh| 0.056), HEAD-ON gun (offset 0.10). W-sweep 2 slices peak W=0.9 (~0.33) vs W=0.5(~0.26) vs W=0.0(~0.18). Was 0.5 (roleksii leftover).
+        double W = 0.0;  // vs pez__poet: FAST moderate-curve mover (movefrac 0.68, avgV 4.84, avgdh 0.056, engages ~195px) with a LEAD gun (offset 0.306). W-sweep 2 slices: W=0.0 ~0.53 vs W=0.9 ~0.33 -- full lead clearly best (fast mover). Anti-bias: fired W=0.9 yet W=0.0 wins big. Was 0.9 (dodgebot2 leftover).
         // [roleksii] double W = 0.5;
         // [wallspoetas] double W = 0.9;
         // [maximbot] double W = 1.0;  // vs mgalushka__maximbot: MODERATE near-straight mover (movefrac 0.68, avgV 4.51, avg|dh| 0.022, engages ~240px). W-sweep (2 slices, 80 games each) robustly peaks at HEAD-ON: W=1.0 ~0.55 vs W=0.5 ~0.35 vs W=0.0 ~0.39. Damage model W=1.0 dmg +47pct AND net energy far higher. Near-straight moderate mover -> head-on optimal (matches florian2/gruffalo/ultron/hugbot). Was 0.5 (leftover from kcanida pikachu heavy-spinner avgdh 0.149 -- wrong profile here).
@@ -736,7 +736,7 @@ public class MyTank extends AdvancedRobot {
         // fire is effective: the shot flies to where we WOULD have been. Raise
         // dodge-on-fire 0.10 -> 0.30 (0.10 was tuned vs a HEAD-ON gunner). Still not
         // a strict alternation, so not itself learnable.
-        if (enemyFired && now - lastReverseTime >= 10 && Math.random() < 0.12) {  // R2 vs roleksii: HEAD-ON gun (offset 0.042 rad). Measured reversal-vs-hit: WITH recent reversal 9.62 hits/1k vs 6.32/1k WITHOUT (+52pct). Reversing on a head-on gun walks us into the bullet path + kills lateral speed. Lowered 0.30 -> 0.12 (matches pikachu/dominatorx head-on-gun wins). Was 0.30 (robrrrat/wallspoet LEAD-gun leftover).
+        if (enemyFired && now - lastReverseTime >= 8 && Math.random() < 0.30) {  // vs pez__poet: LEAD gun (offset 0.306 rad) -> reverse on its fire so the lead shot misses. Raised 0.12->0.30 (matches robrrrat/haikuwalls/wallspoet LEAD-gun wins). Was 0.12 (dodgebot2 head-on setting).
             // [was 0.30 LEAD-gun]  if (enemyFired && now - lastReverseTime >= 8 && Math.random() < 0.30) {
             moveDirection = -moveDirection;
             lastReverseTime = now;

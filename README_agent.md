@@ -5590,3 +5590,56 @@ block changed. Backup: /tmp/MyTank.bak.java. Compiles Java 8 (major version 52).
   (0.12, head-on gun). The closer-orbit direction is the proven lever (R1 flip).
 - Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING.
 - Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 1 / current pass) — opponent = pez__poet (WE WERE LOSING THE MATCH 140/250)
+
+## CRITICAL: we LOST round 0 — opus 20652 vs pez__poet 28662 (winner=pez__poet)
+Full 250-sim sweep: 110 WINS / 140 LOSSES, ourFE mean only 20.8 (min 0.0).
+results_0.txt: pez__poet 1171 (62%, 6 firsts) vs opus 731 (38%, 4 firsts). Match lost.
+
+## Opponent = FAST moderate-curve mover with a LEAD gun (index i=1; read header)
+movefrac 0.68, avgV 4.84 (FAST), avg|dh| 0.056 (moderate curve), engages ~195px.
+Enemy gun offset when firing: median 0.306 rad, mean 0.36 -> a LEAD gun (aims where
+we WILL be). This is a DIFFERENT bot from pez__wallspoet/wallspoetas/smallpoet.
+
+## ROOT CAUSE: gun aim was WRONG (W=0.9 near-head-on, leftover from dodgebot2)
+The gun was left at W=0.9 (near head-on, tuned for the SLOW dodgebot2). WRONG for
+this FAST mover. Under W=0.9 our real hit rate was only ~7.6/1k at 100-200px (where
+we spent most ticks) -> net-energy-NEGATIVE -> we bled out (140 losses).
+
+## CHANGES THIS PASS (gun aim + dodge; both validated, compile Java 8 major 52)
+1. GUN aim W: 0.9 -> 0.0 (FULL CIRCULAR/LINEAR LEAD). W-sweep 2 independent 80-game
+   slices: W=0.0 ~0.53 vs W=0.9 ~0.33 vs W=0.5 ~0.34 -- full lead clearly best (fast
+   mover). ANTI-BIAS: we FIRED W=0.9 so the replay bias favors W=0.9, yet W=0.0 wins
+   by ~20pts -> very trustworthy. Damage/net-energy model (120 games, distance-tiered
+   power + gunheat) DECISIVE: W=0.9 dmg 120547 net -2894 (BLEEDING) -> W=0.0 dmg
+   191937 (+59%) net +37637 (we GAIN energy). hit rate 31% -> 49%. (line 349)
+2. DODGE-on-fire: 0.12 -> 0.30 (rate-limit 10 -> 8). Enemy uses a LEAD gun (offset
+   0.306) -> reverse on its fire so the lead shot flies to the far side + misses.
+   (0.12 was the dodgebot2 HEAD-ON-gun setting -- wrong for a lead gun; 0.30 matches
+   the robrrrat/haikuwalls/wallspoet LEAD-gun wins.) (line 739)
+
+## Movement UNCHANGED (deliberate)
+Orbit holds ~120px (dodgebot2 leftover). With the new W=0.0 gun our hit rate is 81%
+@0-100px, 48% @100-200px, 43% @200-300px -- the ~120px close orbit sits in our best
+zones and we already WIN the 0-100px exchange (29.4 vs 16.6 hits/1k). Left movement
+alone (README documents movement changes REPEATEDLY backfiring). The gun+dodge fix
+is the decisive lever; should flip the match.
+
+## Tools: /tmp/wsweep.py (W-sweep 2 slices), /tmp/dmg.py (damage/net-energy model),
+/tmp/dist.py (hit rate by distance). Rebuild from prior notes if lost. Backup of the
+losing R0 source: /tmp/MyTank.bak.java.
+
+## For next teammate — VERIFY (this is a MATCH-LOSS we're trying to flip)
+- Want NEW /logs: winner=opus-4-8, the 140 losses REDUCED (ideally <30), ourFE mean
+  UP from 20.8, enemy score DOWN from 28662, share UP from 38%, firsts UP from 4/10.
+- IF STILL LOSING / REGRESSED: (a) if W=0.0 overshoots (enemy became reactive
+  stop-and-go), raise W toward 0.5 and re-run /tmp/wsweep.py on >=2 slices -- BUT the
+  anti-bias + fast-mover profile strongly support W=0.0; (b) if the raised dodge made
+  us MORE hittable (rare -- lead gun), lower to 0.20; (c) full revert =
+  /tmp/MyTank.bak.java (git prior = the 140-loss config that LOST).
+- pez__poet is a FAST moderate-curve LEAD-gun mover -> KEEP W=0.0 full lead + dodge
+  0.30. If it becomes SLOW/near-straight (avgV<3), raise W toward 0.9; if a HEAVY
+  spinner (avg|dh|>0.09), W=0.0 circular already applies.
+- Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING.
+- Keep MyTank class name + Java-8 bytecode (only hard requirement).
