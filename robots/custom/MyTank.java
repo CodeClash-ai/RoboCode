@@ -489,9 +489,9 @@ public class MyTank extends AdvancedRobot {
         } else if (crazyEnemyScans > 4) {
             gun = GUN_CIRCULAR;
         } else if (fixedHeadingStopGoEnemy()) {
-            // Ian's Tank moves back and forth along one fixed body-heading line.
-            // Aim at the learned midpoint of that line segment (via the drift-head
-            // virtual gun slot) instead of chasing the current endpoint/jitter.
+            // Fixed-heading oscillators use the drift-head-on virtual gun slot for
+            // learned-axis aiming: tight weak oscillators aim near the opposite
+            // endpoint, while broader stop/go variants keep the safer midpoint.
             gun = GUN_DRIFT_HEAD_ON;
         } else if (fixedHeadingLineEnemy()) {
             // For longer fixed-heading line movers, a very small velocity drift
@@ -804,6 +804,9 @@ public class MyTank extends AdvancedRobot {
             return new double[] {enemyX, enemyY};
         }
         if (gunType == GUN_DRIFT_HEAD_ON) {
+            if (weakFixedAxisOscillator() && enemyAxisSamples > 18) {
+                return predictAxisOppositeEndpoint(enemyX, enemyY);
+            }
             if (fixedHeadingStopGoEnemy() && enemyAxisSamples > 18) {
                 return predictAxisMidpoint(enemyX, enemyY);
             }
@@ -876,6 +879,31 @@ public class MyTank extends AdvancedRobot {
         enemyAxisMin = Math.min(enemyAxisMin, axis);
         enemyAxisMax = Math.max(enemyAxisMax, axis);
         enemyAxisSamples++;
+    }
+
+
+    private double[] predictAxisOppositeEndpoint(double enemyX, double enemyY) {
+        // Tarektank-style fixed-axis oscillators tend to reverse between the two
+        // learned endpoints during our bullet flight.  Aiming at the midpoint was
+        // safe, but trace replay for the current opponent shows the opposite end
+        // of the compact segment is hit far more often.  Pull the aim point a
+        // little inward from the exact endpoint so minor axis-learning noise or
+        // robot-width clipping does not overshoot.
+        double span = enemyAxisMax - enemyAxisMin;
+        double mid = (enemyAxisMin + enemyAxisMax) / 2.0;
+        double ux = Math.sin(enemyAxisHeading);
+        double uy = Math.cos(enemyAxisHeading);
+        double px = -Math.cos(enemyAxisHeading);
+        double py = Math.sin(enemyAxisHeading);
+        double currentAxis = enemyX * ux + enemyY * uy;
+        double inset = limit(8.0, 0.15 * span, 16.0);
+        double targetAxis = currentAxis > mid ? enemyAxisMin + inset : enemyAxisMax - inset;
+        double perp = enemyX * px + enemyY * py;
+        double predictedX = ux * targetAxis + px * perp;
+        double predictedY = uy * targetAxis + py * perp;
+        return new double[] {
+                limit(18.0, predictedX, getBattleFieldWidth() - 18.0),
+                limit(18.0, predictedY, getBattleFieldHeight() - 18.0)};
     }
 
     private double[] predictAxisMidpoint(double enemyX, double enemyY) {
