@@ -5161,3 +5161,141 @@ up to date. Old (pre-this-round) version preserved at
    than usual — this round's fix in particular is exactly the kind of thing
    that could have been confirmed or refuted in minutes with a working local
    test harness, instead of requiring another full round's real-match data.
+
+## Round 41 update (this round) — validated round 40's execute()-removal fix, confirmed healthy, no code changes
+
+### Context
+Only `/logs/rounds/0/` exists in this environment for me. Per `trace.md` /
+`results.json`, this round's opponent is a **new** one, `philipmjohnson__dacruzer`
+(different from every opponent documented in rounds 1-40 above). Result:
+**100% win rate (250/250)**, team score **44861 vs opponent's 771**, 70%
+accuracy, avg speed 6.5, avg walls/game 2.3, avg rams/game 0.4, avg min
+energy 93. **Zero losses, zero ties.** Opponent is weak (0% win rate, 9%
+accuracy, avg speed 4.9, dies avg turn 306).
+
+Note: this is a *different* opponent than `robo_code__fire` (rounds 39-40,
+the opponent whose real match data round 40's own environment used to
+diagnose and fix the manual-`execute()`-inside-event-handler bug), so this
+round's clean result is a generalization check (does the fix hold against a
+brand-new opponent too?) rather than a direct same-opponent re-test.
+
+### Validation performed
+1. **Confirmed round 40's fix is still intact** (no accidental reversion):
+   `diff archive/round1_backups/MyTank.java.before_round40_execute_fix
+   robots/custom/MyTank.java` shows exactly the expected 6 removed
+   `execute();` call sites (inside `reissueEscape()`'s two branches,
+   `onScannedRobot()`'s ramming-trigger/orbit-movement tail,
+   `onHitByBullet()`'s dodge/juke tail, and `onHitRobot()`'s "press forward"
+   branch) plus the explanatory comment block — nothing else changed,
+   `MyTank.java` is 1088 lines, unchanged from round 40's committed version.
+2. `python3 tools/analyze_freezes.py /logs/rounds/0 --threshold 20 | grep -i
+   sonnet | wc -l` -> **20 findings**, all short (20-44 ticks): mostly benign
+   "radar heading frozen" (16 findings, 20-38 ticks — the well-established
+   benign "radar genuinely settled on a near-stationary-relative target"
+   pattern from rounds 15/29/32/33/39, not the round-4 freeze bug) plus a
+   handful of short `STUCK-RAMMING` (4 findings, 33-44 ticks). None run to
+   game-end, none correlate with a loss (there are zero losses this round).
+   This is squarely in the same healthy range rounds 27-33/38/39 established
+   post-fix, and specifically **NOT** a recurrence of the rounds 34-36
+   catastrophic pattern (hundreds-of-ticks, never-converging, game-ending
+   freezes) — good continued evidence the whole escape-mode saga (rounds
+   34-37) plus round 40's execute()-removal fix are BOTH holding up well
+   against yet another new opponent.
+3. **New check this round, specifically targeting round 40's own suggested
+   follow-up** ("does gun heading (`gh`) ever freeze during a
+   `HIT_WALL`/`HIT_ROBOT` streak?"): wrote an ad-hoc per-file scan (not yet
+   committed as a script — see suggestion below) checking, for every tick
+   where our own robot's status is `HIT_WALL` or `HIT_ROBOT`, whether `gh`
+   stayed byte-identical to the previous such tick. Result: out of 3816
+   total contact-ticks checked across all 250 games, the longest such
+   "frozen `gh` during contact" streak found was **43 ticks** (one game),
+   with most contact episodes showing much shorter (6-13 tick) streaks. **I
+   want to flag this honestly rather than overclaim a clean bill of health**:
+   a `gh`-unchanged streak during contact is NOT automatically a bug the way
+   it was in round 40's traced case — if the enemy is roughly stationary
+   relative to us and the gun is already correctly aimed, holding the same
+   `gh` for several ticks is exactly the CORRECT behavior (no need to keep
+   turning a gun that's already on target), and gun cooldown alone
+   (`getGunHeat() == 0` gate before firing) means a several-tick gap between
+   meaningful gun updates is unremarkable. Round 40's original finding was
+   a **30+ tick freeze that started at the exact moment `onHitWall()` first
+   fired** and coincided with zero landed hits and mounting losses — a much
+   more specific signature than "gh didn't change for N ticks" alone. I did
+   NOT cross-reference this round's longer (32-43 tick) streaks against
+   hit/energy outcomes to confirm they're benign (ran out of budget for a
+   full per-case trace this round) — see suggestions below for how a future
+   teammate could tighten this check into something more conclusive (e.g.
+   only flag if hits-on-opponent are also zero for the whole streak AND the
+   streak starts right when `HIT_WALL`/`HIT_ROBOT` status first begins).
+   Given zero losses this round and no other evidence of a problem, I'm
+   treating this as likely benign/inconclusive rather than a new bug, but
+   flagging clearly rather than declaring full confidence.
+4. `python3 tools/analyze_power_accuracy.py /logs/rounds/0 --bucket-width
+   0.5` -> sanity check: 22.9 shots/game combined vs `trace.md`'s
+   20.4+3.5=23.9 (within ~4%, tool still trustworthy per round 28's fix).
+   `sonnet_5`'s power ~1.0-1.5 bucket (round 17's velocity cap for fast
+   enemies) dominates shot volume this round (3448 of 5102 total shots) at a
+   very high 78.7% accuracy; the merged 2.5-3.0 bucket (round 30's 2.9-cap
+   change) shows a comparatively low 30.3% accuracy (1215 shots). This adds
+   one more (opponent-specific) data point to the ongoing, still-inconclusive
+   cross-round accuracy-by-power investigation (rounds 22/28/29/30/31/32/33/38
+   have gone back and forth on whether this is power-driven or
+   opponent/situation-driven) — did not act on it, consistent with round 32's
+   established caution against over-generalizing from single-opponent samples.
+5. `javac -Xlint:all -cp libs/robocode.jar -d robots robots/custom/MyTank.java`
+   compiles clean, no errors/warnings. `.class` up to date.
+
+### What I did this round (or rather, chose NOT to do)
+Given a fully healthy result (100% win, 0 losses, 0 ties, freeze findings all
+short and benign-looking, tooling sanity checks green, round 40's fix
+confirmed intact and not obviously causing any new problem) against a new but
+weak opponent, I made **no changes to `MyTank.java`** this round — consistent
+with this file's long-established pattern (rounds 6, 13, 15, 21, 22, 26, 27,
+28, 29, 32, 33, 38, 39) of not touching already-working code without a fresh,
+clear, actionable signal. Given how costly the rounds 34-37 escape-mode
+iteration turned out to be (4 rounds to fully stabilize), and that round 40's
+fix is still relatively fresh (only 1 prior round of real-match data, against
+a different opponent, before this round's second confirmation), continuing to
+let it "bake" with more real-match observations before touching that code
+path again still seems like the right call.
+
+### Suggestions for next teammate
+1. **First step, as always**: check `/logs/rounds/<N>/trace.md` for the
+   actual opponent this round, and run
+   `python3 tools/analyze_freezes.py /logs/rounds/<N> --threshold 20 | grep -i
+   sonnet` as the standard regression check. Should show mostly-short
+   (well under 50-tick) findings if healthy, per the now 3-times-confirmed
+   (rounds 38, 39, and this round, across 3 different opponents)
+   post-round-37/40 baseline.
+2. **Tighten the "gh frozen during contact" check into a real, committed
+   tool** (I only ran an ad-hoc, not-yet-committed version this round — see
+   point 3 above for the exact caveat about false positives from a
+   legitimately-already-aimed gun). A more conclusive version would flag a
+   contact-streak specifically when: (a) `gh` is frozen for the WHOLE
+   streak, (b) the streak starts at (or very near) the first tick of that
+   `HIT_WALL`/`HIT_ROBOT` episode, AND (c) zero bullets from us hit the
+   opponent during the streak (cross-reference against the `b` bullet list's
+   `HIT_VICTIM` entries with matching owner) — this combination is what
+   made round 40's original finding a genuine bug rather than "gun already
+   correctly aimed". Consider adding this as `tools/analyze_gun_freeze.py`
+   or extending `analyze_freezes.py` with a third labeled category
+   (`GUN-STARVED`?) analogous to how round 15 added the `STUCK-RAMMING`
+   label.
+3. If `robo_code__fire` (rounds 39-40, the opponent that originally exposed
+   the execute()-removal bug) reappears, that would be the most direct
+   same-opponent re-test of round 40's fix — compare against round 40's own
+   round-1 baseline (99% win, 2 losses, avg min energy 87, the LAST result
+   recorded before the fix) to see if losses drop to 0 and avg min energy
+   rises further.
+4. `pez__gf1` (rounds 11-12, ~14% tie rate from mutual energy attrition)
+   remains the toughest opponent in this file's history and the single most
+   valuable target for directly re-testing the FULL accumulated stack of
+   fixes since round 12 (energy-math, ramming, dodge-on-fire, wall-margin,
+   the now-stabilized escape-mode mechanism, and round 40's execute()-removal
+   fix) — still hasn't reappeared after 29 rounds.
+5. Local headless battle-runner: still unresolved after 40+ rounds of
+   attempts (see round 6's section for the most detailed known blocker,
+   `RepositoryManager.loadSelectedRobots` not seeing a freshly-reloaded
+   repository within the same call). Still the single highest-leverage infra
+   fix available if a future teammate has a larger step budget to spend on it
+   than usual.
