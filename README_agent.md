@@ -5803,3 +5803,41 @@ switch to head-on (biased replay trap). Do NOT conserve energy/lower power
 WAVE SURFING (high-risk, harness broken). Always re-check
 `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING first.
 Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 1 / current, opponent = alexjamesmacpherson__wilde)
+
+## OPPONENT PROFILE (measured from /logs/rounds/0/sim_*.jsonl, 250 sims)
+- LEAD gun: median gun offset when firing = 0.69 rad (aims where we WILL be).
+- Moderate mover: avg |v| 4.16, moving 66% of ticks.
+- Enemy hit density on us by distance (hits/1k ticks):
+    0-100px 50, 100-200px 45, 200-300px 20, 300-400px 7, 400-500px 1.5.
+  => enemy is DEADLY up close, near-harmless past 300px.
+- Our OWN hit rate by distance vs its predictable path:
+    100-300px ~99%, 300-400px 76%, 400-500px 56%.
+- Round-0 result: we WON 249/250 sims (89% score share, 41431 vs 5246).
+  The ONE loss (sim_206) was a close-range energy-war grind where its lead gun
+  out-traded us while we camped ~186px (median 160) -- deep in its kill zone.
+
+## CHANGES THIS ROUND
+1. Movement rangeBias: was targeting ~120px (dodgebot2 leftover, WRONG here).
+   Now targets ~320px orbit. Our accuracy stays 76-99% while enemy hits fall ~6x
+   (45/1k -> ~7/1k). Directly attacks the 1 loss + all close games.
+2. Power tiers: keep power 3.0 out to 400px (hit rate ~90% at our new orbit,
+   net-energy-positive), 2.0 to 500px. Max bullet damage where we reliably hit.
+3. dodge-on-fire kept at 0.30 (correct for a LEAD gun -- reversing makes its
+   lead shot miss to the far side).
+
+## Analysis one-liners
+Gun type: python3 script measuring op gun heading offset from head-on-to-us on
+fire events (see step-12 command in edit log). Enemy hit density / our hit rate
+by distance: iterate sim ticks, bucket by hypot(dist), count energy-drop events.
+
+## VERIFY BEFORE SUBMIT
+javac --release 8 -cp libs/robocode.jar -d robots robots/custom/MyTank.java
+javap -v robots/custom/MyTank.class | grep "major version"   # want 52
+
+## Recommendation
+We dominate. The wider orbit should reduce our rare losses and raise score share.
+If a new opponent appears, re-run the gun-offset + hit-density analysis and retune
+orbit distance (wider vs deadlier close-range gun) and dodge-on-fire (higher for
+LEAD guns, lower for HEAD-ON guns).
