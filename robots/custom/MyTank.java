@@ -347,11 +347,13 @@ public class MyTank extends AdvancedRobot {
         // from the battlefield edges before we commit to it.
         double preferredDistance;
         if (spinBotEnemy()) {
-            // SpinBot follows a compact, very predictable circle.  Stay in a
-            // short-to-moderate exchange band: close enough for quick circular
-            // max-power hits, but not so close that its spinning gun gets free
-            // point-blank intersections.
-            preferredDistance = 340.0;
+            // SpinBot follows a compact, very predictable circle.  Round 1 showed
+            // the circular/max-power specialization is very safe (large end-energy
+            // surplus), so after a few virtual waves confirm the exact circle, pull
+            // in from the conservative 340px band to shorten bullet flight and kill
+            // before its random spinning gun can leak stray hits.  Keep the wider
+            // cold-start range for awkward spawn/wall approaches.
+            preferredDistance = (virtualSamples > 10 && virtualGunError[GUN_CIRCULAR] < 55.0) ? 305.0 : 340.0;
         } else if (velociRobotEnemy()) {
             // VelociRobot-style target in the current logs: medium-fast low-turn
             // straight runs with frequent weak fire.  It is not a continuous Crazy
@@ -851,7 +853,12 @@ public class MyTank extends AdvancedRobot {
         if (stationaryScans > 5) {
             gun = GUN_HEAD_ON;
         } else if (spinBotEnemy()) {
-            gun = GUN_CIRCULAR;
+            // Pure circular is normally exact for sample.SpinBot, but near walls the
+            // damped averaged predictor can occasionally score better.  Let virtual
+            // evidence override only on a clear margin so the cold-start exact-circle
+            // advantage from round 1 remains intact.
+            gun = (virtualSamples > 20 && virtualGunError[GUN_AVERAGED] + 6.0 < virtualGunError[GUN_CIRCULAR])
+                    ? GUN_AVERAGED : GUN_CIRCULAR;
         } else if (velociRobotEnemy()) {
             // For this medium-speed weak shooter, damped averaged prediction is usually
             // best, but trace replay shows pure head-on is competitive and sometimes
