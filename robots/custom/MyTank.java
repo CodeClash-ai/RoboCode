@@ -257,9 +257,9 @@ public class MyTank extends AdvancedRobot {
         // while our head-on hit rate HOLDS ~50% out to 500px (replay). So keep full
         // power out to 350px and 2.0 to 450px -- the wider zone is net-energy-POSITIVE
         // AND far safer (fewer enemy hits). Tapers only in the truly-far low-hit zone.
-        if (dist < 350)       power = 3.0;
-        else if (dist < 450)  power = 2.0;
-        else if (dist < 550)  power = 0.8;
+        if (dist < 400)       power = 3.0;   // shreker: hit rate flat ~29% to 500px; keep power up at wider ~370px orbit
+        else if (dist < 500)  power = 2.0;
+        else if (dist < 580)  power = 0.8;
         else                  power = 0.3;   // long range -> smallest drain if a miss
 
         // Energy safety clamps so a bad streak can't self-destruct us.
@@ -365,7 +365,7 @@ public class MyTank extends AdvancedRobot {
         // so when behind on energy in a grind, hold fire past 320px (was 400px) to
         // stop the net-negative bleed that caused the 34 grind losses; conserve to
         // outlast the energy-conserving foe / close to the ~230px net-positive zone.
-        if (dist > 450 && getEnergy() < enemyEnergy) allowFire = false;  // shreker: net-positive out to 450px, only gate truly-far shots when behind
+        if (dist > 500 && getEnergy() < enemyEnergy) allowFire = false;  // shreker: hit rate flat to 500px; only gate truly-far shots when behind
         // Tighter alignment for distant shots (bullet spread grows with range).
         double alignThresh = (dist > 400) ? 0.09 : 0.12;
 
@@ -567,10 +567,16 @@ public class MyTank extends AdvancedRobot {
         // lower at 300-400px (3.6/1k) than 100-200px (11.1/1k) while our head-on hit
         // rate holds ~50% -> the wider zone is strictly better (same accuracy, far
         // fewer enemy hits). rangeBias closes hard when far, pushes out inside ~280px.
-        if (enemyDistance > 520)      rangeBias = -1.2;  // far: strong inward pull to close
-        else if (enemyDistance > 400) rangeBias = -0.8;  // mid-far: firm inward
-        else if (enemyDistance > 330) rangeBias = -0.35; // approaching target ~320px
-        else if (enemyDistance < 280) rangeBias = 0.5;   // too close: push out
+        // ROUND-2 vs alexbay218__shreker (this pass): MEASURED (lag-corrected) our
+        // hit rate is FLAT ~28-33% at EVERY distance, while enemy hit density DROPS
+        // sharply with range (100-200px 12.6/1k, 200-300 4.9, 300-400 5.2, 400-500
+        // 2.6, 500-600 1.7). Losses = pure energy-war variance at SAME dist as wins
+        // (319px both). Since accuracy is range-independent but the enemy hits us far
+        // less at range, orbit WIDER (~370px) to cut enemy hits with ~no accuracy loss.
+        if (enemyDistance > 560)      rangeBias = -1.2;  // far: strong inward pull to close
+        else if (enemyDistance > 440) rangeBias = -0.8;  // mid-far: firm inward
+        else if (enemyDistance > 380) rangeBias = -0.35; // approaching target ~370px
+        else if (enemyDistance < 340) rangeBias = 0.5;   // too close: push out
 
         double desiredDir = absBearing + (Math.PI / 2 + rangeBias) * moveDirection;
 

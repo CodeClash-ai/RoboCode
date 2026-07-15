@@ -4111,3 +4111,60 @@ real damage -> damageTaken>=5). Compiles Java 8 (major version 52). Backup:
   enemy-hit-density-by-distance analysis first (the density signal is UNBIASED and
   was decisive this pass). Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for
   opponent name + INDEX MAPPING first. Keep MyTank class name + Java-8 bytecode.
+
+# Agent Notes (Round 2 / current pass) — opponent = alexbay218__shreker
+
+## STATUS: R1's orbit-wider (215->320px) change improved us 67%->73% (8->9 firsts,
+## enemy 13397->12283). R1 full 250-sim sweep: 17 LOSSES (down from R0's 25),
+## close(<20E) 21, meanOFE 48.7, meanTurns 530, meanDist 319px.
+
+## KEY FINDING (lag-corrected, DECISIVE): our hit rate is FLAT ~29% at ALL ranges;
+## enemy hit density DROPS sharply with range -> orbit WIDER
+Measured our hit rate (matched each fire to a subsequent enemy dmg event with
+bullet-travel lag) + enemy hit density by distance (round-1 250 sims):
+  100-200px: ourHR 0.31, enemyHits 12.6/1k
+  200-300px: ourHR 0.29, enemyHits  4.9/1k
+  300-400px: ourHR 0.28, enemyHits  5.2/1k  (we spent 73820 ticks here — most time)
+  400-500px: ourHR 0.29, enemyHits  2.6/1k
+  500-600px: ourHR 0.22, enemyHits  1.7/1k
+Our accuracy is essentially RANGE-INDEPENDENT (28-33%), but the enemy hits us ~5x
+LESS at 400-500px than 100-200px. LOSSES vs WINS: IDENTICAL engagement dist (319px
+both) -> NOT positional; pure energy-war VARIANCE (behind on energy 66% of loss
+ticks vs 18% in wins). Since firing is ~net-neutral (29% hit ~= 33% break-even),
+we win via SURVIVAL, not the per-shot trade -> minimize enemy hits = orbit wider.
+
+## Enemy = MODERATE near-straight mover with a HEAD-ON gun (confirmed)
+movefrac 0.74, avgV 2.79, avg|dh| 0.017. Enemy gun offset when firing: median
+0.139 rad (aims ~current pos = HEAD-ON gun) -> steady tangential motion (low
+fire-triggered reversal, already 0.15) is correct; do NOT raise dodge (that's for
+LEAD guns). Gun aim W-sweep (2 slices, biased toward the tested aim): round-0
+favors W=1.0 (33.4%), round-1 favors W=0.9 (28.1%) — within ~1-2pt noise. KEPT
+W=1.0 head-on (don't chase small biased-replay diffs; matches near-straight mover).
+
+## CHANGE THIS PASS (movement + power; gun aim UNCHANGED at W=1.0 head-on)
+1. MOVEMENT: orbit ~320px -> ~370px. rangeBias thresholds 520/400/330/<280 ->
+   560/440/380/<340 (push out inside 340px, hold ~370px). Camps the 300-400px zone
+   (~4-5/1k) fully instead of straddling into 200-300 higher-density; enemy hits us
+   less with ~no accuracy loss (flat HR).
+2. POWER: 3.0/<350 -> 3.0/<400 (keep full power at the wider orbit so DAMAGE OUTPUT
+   is UNCHANGED — kill speed preserved), 2.0/<500, 0.8/<580, 0.3/else.
+3. FIRE GATE: hold-fire-when-behind 450px -> 500px (HR flat to 500px).
+Net-energy model (measured flat HR + density): 320px -162/1k -> 370px -154/1k,
+SAME ourDmg/1k 1450 (power stays 3.0). Modest but positive, ZERO damage-output
+downside. Dodge (0.15 fire-reversal), energy-war taper, low-E clamps, enemyPassive
+mode ALL UNCHANGED. enemyPassive stays OFF (shreker deals real dmg -> damageTaken>=5).
+Compiles Java 8 (major version 52), rc=0.
+
+## For next teammate — VERIFY
+- Want NEW /logs: losses BELOW 17 (ideally <10), meanOFE UP from 48.7, enemy score
+  DOWN from 12283, share UP from 73%, engagement dist UP from 319 toward ~370px.
+  Kill speed should be similar (power unchanged at 3.0/<400) — if games run to the
+  turn limit WITHOUT kills (enemy survives with energy), the orbit is too wide ->
+  pull back to ~340px (thresholds 540/420/360/<320). If it REGRESSED (new losses),
+  revert to git prior (R1 config = 320px orbit, 17 losses, 73% share WIN).
+- shreker is a MODERATE near-straight mover with a HEAD-ON gun -> KEEP W=1.0 head-on
+  + steady low-reversal orbit. The gain from orbit-wider is modest; the remaining
+  big lever vs its head-on gun + energy-war variance is WAVE SURFING (high-risk,
+  local harness broken, trust /logs only). Always re-check
+  `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING first.
+- Keep MyTank class name + Java-8 bytecode (only hard requirement).
