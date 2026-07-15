@@ -40,9 +40,10 @@ public class MyTank extends AdvancedRobot {
     private static final int GUN_LINEAR = 1;
     private static final int GUN_CIRCULAR = 2;
     private static final int GUN_AVERAGED = 3;
-    private static final int GUN_COUNT = 4;
+    private static final int GUN_GUESS_FACTOR = 4;
+    private static final int GUN_COUNT = 5;
     private static final int VIRTUAL_WAVES = 96;
-    private final double[] virtualGunError = {55.0, 60.0, 60.0, 58.0};
+    private final double[] virtualGunError = {55.0, 60.0, 60.0, 58.0, 54.0};
     private final boolean[] virtualActive = new boolean[VIRTUAL_WAVES];
     private final long[] virtualTime = new long[VIRTUAL_WAVES];
     private final double[] virtualSourceX = new double[VIRTUAL_WAVES];
@@ -52,6 +53,12 @@ public class MyTank extends AdvancedRobot {
     private final double[][] virtualY = new double[GUN_COUNT][VIRTUAL_WAVES];
     private int virtualIndex = 0;
     private int virtualSamples = 0;
+    private static final int GF_BINS = 31;
+    private final double[] guessFactors = new double[GF_BINS];
+    private final double[] virtualBearing = new double[VIRTUAL_WAVES];
+    private final double[] virtualMaxEscape = new double[VIRTUAL_WAVES];
+    private final double[] virtualLateralDirection = new double[VIRTUAL_WAVES];
+    private double lastLateralDirection = 1.0;
 
     public void run() {
         setBodyColor(new Color(18, 24, 34));
@@ -107,6 +114,11 @@ public class MyTank extends AdvancedRobot {
         }
 
         updateVirtualGuns(enemyX, enemyY);
+
+        double lateralVelocity = e.getVelocity() * Math.sin(e.getHeadingRadians() - absBearing);
+        if (Math.abs(lateralVelocity) > 0.12) {
+            lastLateralDirection = lateralVelocity >= 0 ? 1.0 : -1.0;
+        }
 
         doMovement(e, absBearing);
         doGun(e, absBearing, enemyX, enemyY);
@@ -207,11 +219,20 @@ public class MyTank extends AdvancedRobot {
             // larger bullet bonus.  Fast/unknown movers keep the safer ladder.
             power = 3.0;
         }
+        // If all virtual guns are missing badly (as with wave-surfing GF-style
+        // enemies), do not gamble the whole energy stack on repeated heavy
+        // bullets.  Survival is already very strong; conserving energy avoids
+        // the rare loss/draw where we empty ourselves before a kill.
+        if (virtualSamples > 28 && bestGunError() > 72.0 && stationaryScans <= 5 && slowEnemyScans <= 12) {
+            if (getEnergy() < 35 || distance > 360) {
+                power = Math.min(power, getEnergy() > 18 ? 1.15 : 0.55);
+            }
+        }
         if (getEnergy() < 22 && distance > 260 && stationaryScans <= 5 && slowEnemyScans <= 12) {
-            power = Math.min(power, 1.35);
+            power = Math.min(power, 1.25);
         }
         if (getEnergy() < 9) {
-            power = Math.min(power, 0.9);
+            power = Math.min(power, 0.55);
         }
         power = Math.min(power, Math.max(0.1, getEnergy() - 0.15));
 
@@ -223,7 +244,8 @@ public class MyTank extends AdvancedRobot {
         candidates[GUN_LINEAR] = predictEnemy(enemyX, enemyY, e.getHeadingRadians(), e.getVelocity(), 0.0, bulletSpeed, GUN_LINEAR);
         candidates[GUN_CIRCULAR] = predictEnemy(enemyX, enemyY, e.getHeadingRadians(), e.getVelocity(), turnRate, bulletSpeed, GUN_CIRCULAR);
         candidates[GUN_AVERAGED] = predictEnemy(enemyX, enemyY, e.getHeadingRadians(), e.getVelocity(), turnRate, bulletSpeed, GUN_AVERAGED);
-        addVirtualWave(candidates, bulletSpeed);
+        candidates[GUN_GUESS_FACTOR] = predictGuessFactor(absBearing, distance, bulletSpeed);
+        addVirtualWave(candidates, bulletSpeed, absBearing);
 
         int gun = chooseGun();
         if (stationaryScans > 5) {
@@ -261,6 +283,14 @@ public class MyTank extends AdvancedRobot {
         return best;
     }
 
+    private double bestGunError() {
+        double best = virtualGunError[0];
+        for (int i = 1; i < GUN_COUNT; i++) {
+            best = Math.min(best, virtualGunError[i]);
+        }
+        return best;
+    }
+
     private boolean headOnGunIsBest() {
         if (stationaryScans > 5) {
             return true;
@@ -268,17 +298,20 @@ public class MyTank extends AdvancedRobot {
         if (virtualSamples < 16) {
             return false;
         }
-        double bestOther = Math.min(Math.min(virtualGunError[GUN_LINEAR], virtualGunError[GUN_CIRCULAR]), virtualGunError[GUN_AVERAGED]);
+        double bestOther = Math.min(Math.min(Math.min(virtualGunError[GUN_LINEAR], virtualGunError[GUN_CIRCULAR]), virtualGunError[GUN_AVERAGED]), virtualGunError[GUN_GUESS_FACTOR]);
         return virtualGunError[GUN_HEAD_ON] <= bestOther + 3.0;
     }
 
-    private void addVirtualWave(double[][] candidates, double bulletSpeed) {
+    private void addVirtualWave(double[][] candidates, double bulletSpeed, double absBearing) {
         int slot = virtualIndex++ % VIRTUAL_WAVES;
         virtualActive[slot] = true;
         virtualTime[slot] = getTime();
         virtualSourceX[slot] = getX();
         virtualSourceY[slot] = getY();
         virtualSpeed[slot] = bulletSpeed;
+        virtualBearing[slot] = absBearing;
+        virtualMaxEscape[slot] = Math.asin(8.0 / bulletSpeed);
+        virtualLateralDirection[slot] = lastLateralDirection;
         for (int i = 0; i < GUN_COUNT; i++) {
             virtualX[i][slot] = candidates[i][0];
             virtualY[i][slot] = candidates[i][1];
@@ -299,10 +332,33 @@ public class MyTank extends AdvancedRobot {
                     double error = distance(virtualX[gun][slot], virtualY[gun][slot], enemyX, enemyY);
                     virtualGunError[gun] = 0.88 * virtualGunError[gun] + 0.12 * error;
                 }
+                double actualBearing = Math.atan2(enemyX - virtualSourceX[slot], enemyY - virtualSourceY[slot]);
+                double offset = Utils.normalRelativeAngle(actualBearing - virtualBearing[slot]);
+                double gf = limit(-1.0, offset / virtualMaxEscape[slot] * virtualLateralDirection[slot], 1.0);
+                int bin = (int) Math.round((GF_BINS - 1) / 2.0 * (gf + 1.0));
+                for (int i = 0; i < GF_BINS; i++) {
+                    guessFactors[i] *= 0.997;
+                }
+                guessFactors[bin] += 1.0;
                 virtualActive[slot] = false;
                 virtualSamples++;
             }
         }
+    }
+
+    private double[] predictGuessFactor(double absBearing, double distance, double bulletSpeed) {
+        int bestBin = GF_BINS / 2;
+        double bestScore = guessFactors[bestBin];
+        for (int i = 0; i < GF_BINS; i++) {
+            double centerBias = 0.018 * (GF_BINS / 2 - Math.abs(i - GF_BINS / 2));
+            if (guessFactors[i] + centerBias > bestScore) {
+                bestScore = guessFactors[i] + centerBias;
+                bestBin = i;
+            }
+        }
+        double gf = (bestBin - (GF_BINS - 1) / 2.0) / ((GF_BINS - 1) / 2.0);
+        double aim = absBearing + lastLateralDirection * gf * Math.asin(8.0 / bulletSpeed);
+        return new double[] {getX() + Math.sin(aim) * distance, getY() + Math.cos(aim) * distance};
     }
 
     private double[] predictEnemy(double enemyX, double enemyY, double heading, double velocity,

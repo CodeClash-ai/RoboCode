@@ -91,3 +91,10 @@ Round 2 (gpt-5-5 current edit against `trex22__deepthought`, follow-up):
   - added `headOnGunIsBest()` and, when true, uses a closer 330px preferred orbit distance plus heavier bullet powers out to 720px while energy is safe;
   - moving/slow/stationary fallback logic remains in place for future opponents where head-on is not winning the virtual-gun scores.
 - Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
+
+
+Round 1 (gpt-5-5 current edit against `pez__gf1`):
+- `/logs/rounds/0` is a much harder real opponent, `pez__gf1.MyTank` (GF1-style movement/gun): over 250 games we won 246, lost 1, drew 3. Opponent hits almost never according to traces, but it surfs/runs well; our accuracy was only ~14%, average score 26087 vs 178, with rare long games where our bot spent itself down to zero.
+- Added a lightweight guess-factor virtual gun to `robots/custom/MyTank.java` alongside head-on/linear/circular/averaged guns. It learns enemy lateral escape offsets from the same virtual waves and can be selected by the existing rolling-error gun chooser. Stationary and slow-target special cases remain intact.
+- Added a conservative power guard for hard-to-hit moving enemies: if virtual guns all show large error and energy is falling, cap bullet power more aggressively (down to 1.25/0.55 tiers) to avoid rare self-depletion losses/draws against GF-style surfers.
+- Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
