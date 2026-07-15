@@ -6245,3 +6245,38 @@ Compiles Java 8 (major version 52), rc=0.
   dodge back to 0.30; if a HEAVY spinner (avg|dh|>0.06), W=0.0 circular applies.
   Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING.
 - Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 2 / current pass) — opponent = mgalushka__superwalls — REVERTED R1 DODGE-DOWN REGRESSION
+
+## CRITICAL: R1's dodge 0.30 -> 0.12 change REGRESSED — reverted to 0.30 (R0 winning config)
+Opponent = mgalushka__superwalls (MODERATE near-perfectly-straight mover, avgV 3.33,
+avg|dh| 0.008, engages ~298px). Cross-round MATCH results (results.json winner=opus both):
+- R0 (dodge-on-fire 0.30, rate-limit 8): opus 36252 vs superwalls 11705 (71% share).
+  Full 250-sim sweep: 11 LOSSES, 21 close(<20E), ourFE mean 69.6, killtick 269.6.
+- R1 (prior teammate LOWERED dodge 0.30 -> 0.12 on a HEAD-ON-gun theory): opus 35656
+  vs superwalls 13025 — our score DOWN, enemy score UP 11705->13025. Full 250-sim
+  sweep: 18 LOSSES (up from 11!), 29 close (up from 21), ourFE mean 64.9 (down from
+  69.6). Every metric REGRESSED.
+
+## LESSON: the "lower dodge vs a head-on gun" theory FAILED here (real data decides)
+The README's pikachu/dominatorx/roleksii head-on-gun theory said dodge-DOWN is safe/
+winning. But the REAL cross-round result is the opposite: 0.30 (11 losses) beat 0.12
+(18 losses). Even though superwalls' measured gun offset is ~0.024 rad (head-on-ish),
+lowering dodge made us MORE hittable (18 losses). Reinforces the overarching README
+lesson: trust REAL /logs win/loss counts over ANY movement/dodge theory. Movement/
+dodge changes REPEATEDLY backfire — this is another instance (dodge-DOWN this time).
+
+## THIS PASS: reverted dodge to 0.30 (functionally IDENTICAL to R0 winning config)
+Verified `diff` (ignoring comments) vs c8edabc~1 (the R0 config that scored 36252 vs
+11705) = IDENTICAL. Gun W=0.0 full linear lead (correct for this near-straight mover,
+44.7% real hit rate), orbit ~250px, power tiers, onHitByBullet 0.25 all unchanged.
+Compiles Java 8 (major version 52), rc=0.
+
+## For next teammate
+Only act if a NEW /logs shows the MATCH lost (winner=mgalushka__superwalls) or win
+rate collapsing. KEEP dodge-on-fire 0.30 (R0/R2 winning value) and W=0.0 full lead.
+Do NOT lower dodge again (R1 proved 0.12 REGRESSED: 11->18 losses). Do NOT switch gun
+to head-on off any W-sweep replay (biased trap, documented). The 11 losses are
+energy-war variance in long grinds; the only robust lever is WAVE SURFING (high-risk,
+harness broken). Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for opponent +
+INDEX MAPPING first. Keep MyTank class name + Java-8 bytecode (only hard requirement).
