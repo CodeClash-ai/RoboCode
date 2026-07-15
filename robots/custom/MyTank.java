@@ -740,18 +740,22 @@ public class MyTank extends AdvancedRobot {
         // bullets.  Use tiny bullets at low energy: a hit gives more energy back
         // than it costs, while misses cannot self-kill us quickly.
         if (waveSurfingEnemy()) {
-            // Current admiralrasmussen__wavesurfing traces: the opponent scores almost
-            // no bullet damage, but wins individual rounds when our max/boosted shots
-            // drain us to zero.  Head-on/wall-damped aim is only moderately accurate,
-            // so preserve survival first and use faster cheap bullets after the opening.
+            // Round-1 follow-up: the first surfer branch was too timid for too long,
+            // then still self-depleted with endless 0.1-0.6 bullets.  The opponent's
+            // Robocode results show essentially no bullet damage; the real losing mode
+            // is spending ourselves to zero.  Use more decisive fast/medium pressure
+            // while we have a large reserve, then switch to true reserve mode (and the
+            // final fireAllowed guard below) instead of dribbling all the way to zero.
             if (getEnergy() > 72.0) {
-                power = Math.min(power, distance < 330 ? 1.35 : 1.10);
+                power = Math.min(power, distance < 360 ? 1.95 : 1.60);
             } else if (getEnergy() > 48.0) {
-                power = Math.min(power, distance < 320 ? 0.85 : 0.65);
-            } else if (getEnergy() > 26.0) {
-                power = Math.min(power, distance < 300 ? 0.42 : 0.30);
+                power = Math.min(power, distance < 340 ? 1.10 : 0.85);
+            } else if (getEnergy() > 28.0) {
+                power = Math.min(power, distance < 320 ? 0.45 : 0.30);
+            } else if (getEnergy() > 16.0) {
+                power = Math.min(power, 0.12);
             } else {
-                power = Math.min(power, getEnergy() < 9.0 ? 0.10 : 0.14);
+                power = Math.min(power, 0.10);
             }
         }
         if (straightEnemyScans > 16 && harmlessLowFireEnemy() && wallEnemyScans <= 4) {
@@ -1142,10 +1146,16 @@ public class MyTank extends AdvancedRobot {
         if (stationaryScans > 5) {
             gun = GUN_HEAD_ON;
         } else if (waveSurfingEnemy()) {
-            // Full linear/circular over-lead this surfer; offline traces put head-on a
-            // little ahead of wall-damped/averaged, and it avoids long slow lead shots.
-            gun = (virtualSamples > 24 && virtualGunError[GUN_AVERAGED] + 6.0 < virtualGunError[GUN_HEAD_ON])
-                    ? GUN_AVERAGED : GUN_HEAD_ON;
+            // Full linear/circular over-lead this surfer.  The rolling GF gun has a worse
+            // mean error, but replay of round-1 shots showed a much larger fraction of
+            // near-hits than pure head-on/wallavg; once enough virtual waves have landed,
+            // let it aim at the learned escape bin.  Cold-start with head-on/averaged.
+            if (virtualSamples > 45 && virtualGunError[GUN_GUESS_FACTOR] <= virtualGunError[GUN_HEAD_ON] + 28.0) {
+                gun = GUN_GUESS_FACTOR;
+            } else {
+                gun = (virtualSamples > 24 && virtualGunError[GUN_AVERAGED] + 6.0 < virtualGunError[GUN_HEAD_ON])
+                        ? GUN_AVERAGED : GUN_HEAD_ON;
+            }
         } else if (spinBotEnemy()) {
             // Pure circular is normally exact for sample.SpinBot, but near walls the
             // damped averaged predictor can occasionally score better.  Let virtual
@@ -1367,8 +1377,16 @@ public class MyTank extends AdvancedRobot {
             // without becoming stricter than the generic hard-to-hit tolerance.
             tolerance = Math.min(tolerance, Math.atan2(weakFixedAxisOscillator() ? 34.0 : 18.0, distance));
         }
+        boolean fireAllowed = true;
+        if (waveSurfingEnemy() && getEnergy() < 14.0 && e.getEnergy() > 5.0) {
+            // Do not repeat the observed surfer losses where we kept firing tiny bullets
+            // down to 0.2 energy, became disabled, and handed the opponent survival points
+            // despite it scoring no bullet damage.  If it is not nearly dead, bank the
+            // remaining energy and try to win/draw on survival instead of self-killing.
+            fireAllowed = false;
+        }
         if (getGunHeat() == 0
-                && Math.abs(getGunTurnRemainingRadians()) < tolerance && getEnergy() > 0.25) {
+                && Math.abs(getGunTurnRemainingRadians()) < tolerance && getEnergy() > 0.25 && fireAllowed) {
             setFire(power);
         }
     }
@@ -1403,14 +1421,15 @@ public class MyTank extends AdvancedRobot {
 
     private boolean waveSurfingSignatureRaw() {
         // Current opponent admiralrasmussen__wavesurfing: medium/fast evasive motion,
-        // little or no real firing, and very high virtual-gun error.  It wins only when
-        // our robot spends itself to zero.  Keep this signature narrow so Crazy/SpinBot
-        // and active medium/high-power shooters retain their specialized high-pressure
-        // branches.  The fire-count guard is deliberately loose because our own small
-        // bullet hits also look like enemy energy drops to this simple detector.
-        return virtualSamples > 18
-                && bestGunError() > 88.0
-                && enemyFireCount <= 12
+        // little or no real firing, and high virtual-gun error.  It wins only when
+        // our robot spends itself to zero.  Engage this branch fairly early so generic
+        // slow/head-on boosts do not spend power-3 bullets during the opening, but keep
+        // the motion/fire guards narrow so Crazy/SpinBot and active shooters retain their
+        // specialized high-pressure branches.  The fire-count guard is deliberately loose
+        // because our own small bullet hits also look like enemy energy drops here.
+        return virtualSamples > 10
+                && bestGunError() > 78.0
+                && enemyFireCount <= 16
                 && enemySpeedAvg > 3.2
                 && enemySpeedAvg < 6.2
                 && enemyAbsTurnRateAvg > 0.035

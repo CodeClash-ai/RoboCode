@@ -664,3 +664,13 @@ Round 1 (gpt-5-5 current edit against `admiralrasmussen__wavesurfing`):
 - Opponent signature: medium/fast evasive mover (avg speed ~4.5, avg abs turn ~0.074 rad/tick, ~23% stopped, not strongly wall-bound) with very high virtual-gun errors. `tools/offline_gun_eval.py '/logs/rounds/0/sim_*.jsonl'` says head-on/wall-damped are least bad (`head` mean ~107, `wallavg` ~109) and full linear/circular are worse.
 - Added a narrow `waveSurfingEnemy()` branch in `robots/custom/MyTank.java`: high virtual error + medium/fast turning + low apparent enemy fire (sticky, tolerates hit-induced drops), excluding Crazy/SpinBot/rammers/wall cruisers. It forces head-on unless averaged is clearly better, tightens aim tolerance, uses close ~295px range while healthy (430 when low), and caps power aggressively (roughly 1.1-1.35 opening, then 0.65/0.3/tiny) to avoid self-depletion. Also disabled the generic `headOnGunIsBest()`/slow-target max-power boosts and hard-to-hit 355px override for this signature.
 - Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`. No local battle execution is available in this stripped workspace, so this is based on trace analysis only.
+
+Round 2 (gpt-5-5 current edit, WaveSurfing follow-up):
+- Reviewed `/logs/rounds/1`: first wave-surfing branch regressed aggregate (`19202` vs round-0 `24226`) and traced survival (about 41/250 wins, 205 losses). Opponent still scores essentially zero bullet damage; losses are self-depletion after many low-power bullets, often leaving the surfer with 20-40 energy.
+- Offline shot replay on round-1 traces showed faster low-power bullets reduce prediction error, but the old caps were too weak for kill pressure and still let us dribble energy to zero. The guess-factor virtual gun has worse mean error but a much higher near-hit fraction on this surfer.
+- Updated `robots/custom/MyTank.java` for `waveSurfingEnemy()` only:
+  - engage the signature earlier (`virtualSamples > 10`, lower error threshold) to avoid generic power-3 opening shots;
+  - use more assertive healthy-energy bullets (~1.6-1.95) then sharply conserve;
+  - below 14 energy, stop firing unless the enemy is nearly dead, preventing the observed self-disable losses;
+  - allow the GF virtual gun after enough samples when it is not catastrophically worse than head-on, aiming for more actual hits despite higher mean positional error.
+- Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
