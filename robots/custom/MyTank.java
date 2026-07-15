@@ -647,11 +647,17 @@ public class MyTank extends AdvancedRobot {
         // where the fast enemy closed in and we got stuck in a mutual full-power
         // slugfest. FIX: escape the close kill zone HARDER -- strong outward bias at
         // <260px and a very strong push at <130px so we don't get pinned point-blank.
-        if (enemyDistance > 430)      rangeBias = -0.7;  // far: close in toward ~330px
-        else if (enemyDistance > 370) rangeBias = -0.4;
-        else if (enemyDistance > 320) rangeBias = -0.1;  // hold ~330px
+        // R2 (this pass): shifted orbit target ~330px -> ~290px. Measured per-bucket
+        // (R1 120 sims): our hit density 59/1k @200-300px vs 35/1k @300-400px while
+        // enemy hit density only 4.9 vs 2.0/1k -> shifting inward is an 8:1
+        // offense:defense trade (more bullet dmg + faster kills, tiny extra risk).
+        // Kept the strong point-blank escape (<130 bolt, <230 push) so we still
+        // never get pinned in the ~45px ramming grind that caused R0's 2 losses.
+        if (enemyDistance > 390)      rangeBias = -0.7;  // far: close in toward ~290px
+        else if (enemyDistance > 330) rangeBias = -0.4;
+        else if (enemyDistance > 280) rangeBias = -0.1;  // hold ~290px
         else if (enemyDistance < 130) rangeBias = 0.9;   // point-blank: bolt out of the kill zone
-        else if (enemyDistance < 260) rangeBias = 0.6;   // too close: push out of the kill zone
+        else if (enemyDistance < 230) rangeBias = 0.6;   // too close: push out of the kill zone
         else                          rangeBias = 0.2;
         double desiredDir = absBearing + (Math.PI / 2 + rangeBias) * moveDirection;
 

@@ -5073,3 +5073,49 @@ Current W=0.0 is correct. DO NOT change the gun. Tool: /tmp/wsweep.py (edit slic
 - Re-check `head -1 /logs/rounds/0/sim_0.jsonl` for opponent identity + index map
   (i=0=opus_4_8, i=1=opponent) BEFORE trusting any tuning.
 - Keep MyTank class name + Java-8 bytecode (javac --release 8 ...; want major 52).
+
+# Agent Notes (Round 2 / current pass) — opponent = sacdalance__robrrrat
+
+## STATUS: WINNING both rounds; R1's dodge+close-escape change ELIMINATED the 2 losses.
+Opponent = sacdalance__robrrrat (FAST near-straight mover avgV ~5.8, avg|dh| 0.035,
+LEAD gun offset ~0.14 rad, engages ~301px). INDEX both rounds i=0=opus, i=1=enemy.
+- R0 (before R1's changes): opus 39387 vs 8880. Full 250-sim sweep: 1 loss, 2 close,
+  ourFE mean 85.9, min 0.0, killtick 248.
+- R1 (prior teammate: dodge-on-fire 0.10->0.30, stronger close-escape <130/<260):
+  opus 39758 vs 9270. Full 250-sim sweep: 0 LOSSES, 0 close, ourFE mean 83.1,
+  min 22.3 (BIG robustness gain), killtick 258. The dodge/escape change fixed the
+  point-blank ramming-grind losses. results_0.txt: our bullet dmg 881->772 (down),
+  enemy bullet dmg 384->299 (down), enemy ram 17->40 (up). Net: robust, slightly
+  less offense.
+
+## KEY UNBIASED SIGNAL (R1 120 sims): enemy hit density drops sharply with range;
+## our hit density stays strong -> orbit slightly CLOSER is an 8:1 offense trade
+  0-100px   enemyHits/1k 39.5  ourHits/1k 121.9
+  100-200px enemyHits/1k 13.7  ourHits/1k  70.2
+  200-300px enemyHits/1k  4.9  ourHits/1k  59.1   (most ticks)
+  300-400px enemyHits/1k  2.0  ourHits/1k  35.5   (most ticks; we were here @~330px)
+  400-500px enemyHits/1k  1.2  ourHits/1k  28.1
+Shifting ticks from 300-400px to 200-300px: +our hits 0.0236/tick, +enemy hits
+0.0029/tick -> 8.1:1 offense:defense ratio. More bullet dmg + faster kills, tiny
+extra risk.
+
+## CHANGE THIS PASS (movement only): orbit target ~330px -> ~290px
+rangeBias thresholds shifted down: >390 -0.7, >330 -0.4, >280 -0.1 (hold ~290),
+<130 0.9 (bolt), <230 0.6 (push), else 0.2. KEPT the strong point-blank escape
+(<130 bolt-out, <230 push-out) that eliminated R0's 2 close-range ramming losses.
+Gun W=0.0 (full linear lead, data-confirmed optimal per R1 W-sweep 2 slices:
+0.67 hit vs 0.43 head-on), dodge (0.30 fire-reversal — kept, it fixed the losses),
+power tiers UNCHANGED. Only ONE functional block changed. Backup: /tmp/MyTank.bak.java.
+Compiles Java 8 (major version 52).
+
+## For next teammate — VERIFY
+- Want NEW /logs: enemy score DOWN from 9270, our bullet dmg UP from 772, killtick
+  DOWN from 258, share UP, STILL 0 losses (min ourFE stays >0). If it REGRESSED
+  (new losses / min ourFE drops to 0), the closer orbit re-exposed us to point-blank
+  ramming -> REVERT to /tmp/MyTank.bak.java (git prior = ~330px orbit, 0 losses,
+  min 22.3). Do NOT lower dodge (0.30 fixed the losses; lowering risks their return).
+- robrrrat is a FAST near-straight LEAD-gun mover -> KEEP W=0.0 full lead + dodge
+  0.30 (anti-lead-gun). If it becomes a HEAVY spinner (avg|dh|>0.06), set circular
+  (W=0.0 with the circular predictor already uses it). Always re-check
+  `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING first.
+- Keep MyTank class name + Java-8 bytecode (only hard requirement).
