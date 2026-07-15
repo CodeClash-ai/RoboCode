@@ -2864,3 +2864,58 @@ fire gate: allow power ~0.1 far shots when behind (tiny per-miss cost, contests 
 free-damage concession) — but validate vs the ladder, NOT just chilibot. Always
 re-check `head -1 /logs/rounds/0/sim_0.jsonl` for the current opponent name first.
 Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 1 / current pass) — opponent = robo_code__spinbot (COMPETITIVE FOE, 30 losses)
+
+## KEY FINDING: opponent is the "SpinBot" sample bot — FAST, HEAVILY-CURVING (it spins in a circle)
+Round 0 result (BEFORE my change): opus-4-8 40475 vs robo_code__spinbot 10217.
+results_0.txt: opus 1745 (86%), 10/10 firsts BUT trace.md WIN RATE 88% (220/250)
+-- we LOST 30 games! Our accuracy only 28%, enemy 29%. Games LONG (avg 563).
+This is a genuinely competitive opponent (enemy score 10217 = 20% share, our
+highest-scoring foe in a while).
+
+## Opponent profile (120 sims; header maps idx->name, enemy=non-'opus')
+- movefrac 0.95, avg |v| 4.68 (FAST), avg |dh| 0.087 rad/tick (STRONG curve --
+  it drives in a continuous circle), engages CLOSE (dist mean 218 / median 197).
+  Fires ~2.5x less than us (7.8 vs 25 shots/game) but its gun is decent.
+
+## WHY WE LOST 30 GAMES: head-on gun was net-energy-NEGATIVE vs the spinner
+Gun was left at W=1.0 (head-on) from the SLOW avsthiago__sadbot match. That is
+WRONG for a fast heavily-curving mover. Replay damage/net-energy sim (100 games):
+  OLD head-on: dmg 16766, NET ENERGY -24 (we were BLEEDING -> the 30 losses).
+  NEW circular: dmg 28670 (+71%), NET +6681 (we GAIN energy). Huge flip.
+
+## CHANGE 1 (gun aim): W = 1.0 (head-on) -> 0.0 (full CIRCULAR lead)
+The circular predictor already existed in code (steps enemy forward applying
+smoothed EMA turn rate). Just set W=0.0 to use it. W-sweep (per-tick interception
+over recorded paths, TWO independent 80-game slices), CLEAN + robust:
+  slice A: headon 33.3% | W0.25circ 45.5 | W0.0circ 55.9 | W0.0linear 21.0
+  slice B: headon 34.3% | W0.25circ 45.7 | W0.0circ 56.5 | W0.0linear 20.7
+Circular targeting nearly DOUBLES hit rate vs head-on. (Same fix that beat
+team488__meow -- another fast curving dodger -- 93%->100%.)
+
+## CHANGE 2 (movement): orbit ~150px -> ~250px
+With circular targeting our hit rate by distance (100 games):
+  0-100px 69% | 100-200px 58% | 200-300px 61%(!) | 300-400px 41% | 400+ ~33%.
+Our hit at 200-300px (61%) is even HIGHER than 100-200px (58%). AND SpinBot's gun
+is DANGEROUS up close (enemy hit density 17.5/1k @0-100, 6.3/1k @100-200) but
+NEARLY HARMLESS at 200-300px (0.9/1k). So orbiting WIDER to ~250px is strictly
+better: same/better hit rate AND ~7x fewer enemy hits. rangeBias retuned:
+  >450 -> -1.0, >320 -> -0.6, >250 -> -0.3, <220 -> +0.5 (push out of kill zone).
+Power tiers UNCHANGED (3.0/<300 covers the 250px orbit at 61% hit = strongly
+net-positive), fire gates + energy-war taper UNCHANGED. Backup: /tmp/MyTank.bak.java.
+Compiles Java 8 (major version 52), rc=0.
+
+## For next teammate — VERIFY
+- Want NEW /logs win rate ABOVE 88% (ideally 97%+), our accuracy UP from 28%,
+  enemy score DOWN from 10217, fewer/no losses. If it DROPPED, first suspect the
+  wider orbit (if SpinBot's gun is actually good at 250px, pull back to ~180px:
+  thresholds 350/250/200/<160) OR the circular gun (unlikely -- W-sweep is very
+  clean + matches the team488__meow success). Revert to /tmp/MyTank.bak.java
+  (W=1.0, ~150px) which won 88% if a clear regression.
+- spinbot is a FAST heavily-curving mover -> KEEP W=0.0 (circular). Do NOT switch
+  to head-on off a biased replay-sim (that trap regressed us elsewhere; the
+  cross-round REAL win rate is decisive). If it becomes SLOW/straight, raise W.
+- The remaining lever if grinds return is WAVE SURFING (high-risk, harness broken).
+- Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for the opponent name first.
+- Keep MyTank class name + Java-8 bytecode (only hard requirement).

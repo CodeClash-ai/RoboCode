@@ -280,7 +280,7 @@ public class MyTank extends AdvancedRobot {
         // (distance-based, kept net-positive) still guard the crazy-bot regression.
         // Chose W=0.85: strongly toward head-on (physics: slow target -> head-on best),
         // hedged just short of pure 1.0 since replay is biased by the reactive enemy path.
-        double W = 1.0;  // vs avsthiago__sadbot (SLOW lightly-curving mover, avgV 2.0, movefrac 0.36, avgDH 0.031, engages ~229px). W-sweep 2 slices MONOTONIC to head-on: W=1.0 hits ~64pct vs W=0.25 ~53pct, W=0.0 ~52pct. Head-on best for slow mover; was 0.25 for FAST velocirobot.
+        double W = 0.0;  // vs robo_code__spinbot (FAST heavily-curving SpinBot: movefrac 0.95, avgV 4.68, avgDH 0.087, engages ~218px). W-sweep 2 slices (80 games each): W=0.0 CIRCULAR hits ~56pct vs W=0.25 ~45pct, head-on(W=1.0) ~34pct, linear(W=0.0 no-turn) ~21pct. Circular targeting nearly DOUBLES hit rate vs head-on. Was 1.0 for SLOW sadbot.
         // [old] double W = 1.0; // HEAD-ON best vs alpian__ianstank (stop-and-reverse oscillator, ~50% stationary). Replay-sim 80 games: W=1.0 hits 40.3% vs W=0.0 21.4%.
         double predX = W * enemyX + (1 - W) * leadX;
         double predY = W * enemyY + (1 - W) * leadY;
@@ -370,11 +370,18 @@ public class MyTank extends AdvancedRobot {
         // steer inward (up to nearly head-on toward the enemy), so we actually
         // close the gap in grind games and reach the 48%-hit net-positive <200px
         // zone instead of bleeding at range. Symmetric mild push-out when too close.
+        // ROUND-1 vs robo_code__spinbot (FAST heavily-curving SpinBot with a
+        // decent gun): target orbit ~250px. With circular targeting our hit rate
+        // is 61% at 200-300px (even HIGHER than 58% at 100-200px), while SpinBot's
+        // gun is nearly HARMLESS at 200-300px (enemy hit density 0.9/1k) vs
+        // DANGEROUS up close (6.3/1k at 100-200, 17.5/1k at 0-100). So orbiting
+        // WIDER to ~250px is strictly better here: same/better hit rate AND far
+        // fewer enemy hits. (Prior ~150px orbit was for weak-gun slow movers.)
         double rangeBias = 0.0;
-        if (enemyDistance > 400)      rangeBias = -1.1;  // far: steer strongly inward to close fast
-        else if (enemyDistance > 260) rangeBias = -0.85; // mid: firm inward pull
-        else if (enemyDistance > 180) rangeBias = -0.55; // near target: gentle inward
-        else if (enemyDistance < 120) rangeBias = 0.6;   // too close: push out
+        if (enemyDistance > 450)      rangeBias = -1.0;  // far: steer strongly inward to close
+        else if (enemyDistance > 320) rangeBias = -0.6;  // mid: firm inward pull
+        else if (enemyDistance > 250) rangeBias = -0.3;  // near target: gentle inward
+        else if (enemyDistance < 220) rangeBias = 0.5;   // too close (enemy kill zone): push out
 
         double desiredDir = absBearing + (Math.PI / 2 + rangeBias) * moveDirection;
 
