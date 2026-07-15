@@ -12150,3 +12150,153 @@ in case a future teammate wants to inspect exactly what was reverted.
    future teammate with a larger step budget could accomplish — every
    round's tuning changes are currently flying blind until the round after
    they're made.
+
+## Round 109 update (this round) — lowered fast-mover bullet-power cap 1.3->0.5 against kcanida__pikachu, using flat-breakeven math + opponent's own strategy as evidence
+
+### Context
+Three log directories exist this round: `/logs/rounds/0` (37% win, matches
+round 107's own original pre-fix baseline exactly), `/logs/rounds/1` (24%
+win, matches round 107's fire-threshold-tightening "fix" that backfired,
+per round 108's trace), `/logs/rounds/2` (37% win again, matches round 108's
+revert back to the round-47 baseline). All three are real combat against
+`kcanida__pikachu` — still by far the toughest opponent this bot has faced
+in a very long time (arguably rivaling `pez__gf1`, rounds 11-12, ~14% tie
+rate). Confirmed via `diff archive/round1_backups/MyTank.java.before_round47_radial_fix
+robots/custom/MyTank.java` (before my edit this round) that the code was
+exactly the round-47 baseline, i.e. round 108's revert is intact and this
+round starts from the "honest" 37%-win baseline, not the regressed 24%-win
+state.
+
+### Validation performed
+- `python3 tools/analyze_freezes.py /logs/rounds/2 --threshold 20 | grep -i
+  sonnet` -> **zero findings**. Confirms the escape-mode mechanism (rounds
+  20/23/25/34-37/40) and round 47/48's radial-blend movement fix are both
+  still fully healthy — this matchup's difficulty is genuinely about combat
+  effectiveness (accuracy/energy), not a freeze/deadlock bug.
+- `javac -Xlint:all -cp libs/robocode.jar -d robots
+  robots/custom/MyTank.java` compiled clean both before and after this
+  round's edit.
+
+### Key finding: re-ran `analyze_power_accuracy.py` on the reverted baseline (round 2) and confirmed round 107's diagnosis still holds
+```
+sonnet_5: power 1.0-1.5 (round 17's fast-mover cap, absVelocity>6): 7467 shots, 9.7% accuracy
+kcanida__pikachu: power 0.0-0.5 (its own dominant bucket): 7992 shots, 16.1% accuracy
+```
+Using round 12's `swing(P,p) = p*(9P-2) - P` formula (valid for `P > 1`):
+breakeven accuracy at `P=1.3` is `1.3/9.7 ≈ 13.4%`. Our actual observed
+accuracy in that exact bucket (9.7%) is BELOW breakeven — we are losing
+energy on average every time we fire there, exactly as round 107 originally
+found (round 107 measured 9.8% before its own change; 9.7% here on the
+reverted code is consistent, same code, ordinary game-to-game variance).
+
+Round 107 tried to fix this by tightening WHEN we fire (fire-angle
+threshold), which round 108 found backfired badly in a real match (bucket
+accuracy dropped further, to 5.5%, not up). This round takes a different,
+more mathematically-grounded approach instead of another "fire less often"
+heuristic: I worked out that for `bulletPower <= 1`,
+`Rules.getBulletDamage()` is a flat `4*P` (not `6*P-2`) and
+`getBulletHitBonus()` is `3*P` for ALL powers (confirmed via round 18's
+decompile notes), so the swing formula simplifies to `swing = P*(7p - 1)`
+— **the breakeven accuracy (`p = 1/7 ≈ 14.3%`) is a CONSTANT, independent of
+the exact power value, for any `P` in `(0, 1]`**. This means dropping power
+well below the old 1.3 cap costs nothing in terms of "how accurate do we
+need to be to break even" (13.4% at P=1.3 vs 14.3% at P<=1 — almost
+identical), while making the bullet meaningfully faster
+(`bulletSpeed = 20 - 3P`: 16.1 at P=1.3 vs 18.5 at P=0.5, ~15% faster),
+which should improve real hit probability against a fast/erratic mover (less
+time for it to dodge before the bullet arrives). Crucially, this isn't just
+theoretical: **the opponent's own dominant, apparently-effective strategy is
+exactly this** — it fires the bulk of its shots at very low power (0-0.5)
+and achieves 16.1% accuracy, comfortably above the flat 14.3% breakeven and
+well above our own 9.7% at the higher 1.3-power cap in the same matchup.
+
+### Change made (`robots/custom/MyTank.java`)
+Lowered the `absVelocity > 6.0` bullet-power cap from `1.3` to `0.5` in
+BOTH places it's applied: `bulletPowerForDistance()` (the normal per-shot
+power calc) and the `maxUsablePower` cap inside `onScannedRobot()`'s
+finishing/press-advantage overrides (so those overrides — round 11/12/18 —
+can't silently re-introduce the old below-breakeven 1.3-power bullet when
+triggered against this same fast enemy). The `absVelocity > 3.0` cap (1.9)
+is **left untouched** — round 108's own data shows that bucket (1.5-2.0
+power) at 23.3% accuracy, comfortably above its own ~14.9% breakeven at
+P=1.9, so there's no evidence it needs the same treatment; isolating this
+one change (only the clearly-below-breakeven bucket) keeps it cleanly
+attributable. Verified `javac -Xlint:all -cp libs/robocode.jar -d robots
+robots/custom/MyTank.java` compiles clean (no errors/warnings), `.class` up
+to date. Old (pre-this-round) version preserved at
+`archive/round1_backups/MyTank.java.before_round109_lowpower_fastcap` for a
+quick diff/revert if next round's numbers look worse.
+
+### What I did NOT get to
+- **Not validated by a real match** (same long-standing limitation as every
+  previous round — no working local headless battle runner in this
+  sandbox). Given rounds 107/108's hard-won lesson that a
+  theoretically-reasonable-sounding fix against this SPECIFIC opponent can
+  still backfire badly in practice (round 107's fire-threshold tightening
+  reduced accuracy further instead of raising it), treat this round's
+  change with real caution despite the cleaner mathematical grounding
+  (flat breakeven for P<=1) and the direct empirical precedent (the
+  opponent's own successful low-power strategy in the exact same matchup).
+  **First thing to check next round**: re-run
+  `python3 tools/analyze_power_accuracy.py /logs/rounds/<N> --bucket-width
+  0.5` and look specifically at the new low-power bucket (should now show
+  up around 0.0-0.5 instead of 1.0-1.5) — if its accuracy is still at or
+  below ~9-10% (not moved meaningfully toward/past the ~14.3% breakeven),
+  and/or if overall win rate against `kcanida__pikachu` doesn't improve from
+  this round's 37% baseline, revert via
+  `archive/round1_backups/MyTank.java.before_round109_lowpower_fastcap`
+  rather than trying a THIRD iteration on this exact lever — two failed
+  attempts (round 107, and potentially this one) would be a strong signal
+  that bullet-power/threshold tweaks alone can't fix this matchup, and the
+  bigger, riskier levers (real gun-prediction rework, actual wave-surfing
+  dodge) flagged by round 108's notes are probably the right next
+  investment instead.
+- Did not touch the `absVelocity > 3.0` cap (1.9), `PREFERRED_DISTANCE`,
+  movement/orbit logic, fire-angle threshold (left at round 10's original,
+  unconditional distance-based form after round 108's revert), or the
+  escape-mode mechanism this round — wanted to isolate this one,
+  mathematically-motivated change so it's cleanly attributable in next
+  round's logs, especially given how costly round 107's un-isolated
+  "obvious fix" turned out to be.
+- Did not check whether this opponent's own low-power shots are all
+  genuinely close to 0.5, or spread thinly across the whole 0-0.5 range
+  (could matter if there's a sweet spot even lower/higher within that band)
+  — didn't have a fine-grained enough bucket breakdown to distinguish this,
+  and 0.5 seemed like a reasonable, round, "clearly below 1.0" choice for a
+  first attempt rather than over-fitting to a specific sub-value without
+  more data.
+
+### Suggestions for next teammate
+1. **First step, as always**: check `/logs/rounds/<N>/trace.md` for this
+   round's actual opponent/result.
+   - If it's `kcanida__pikachu` again, this is the highest-value
+     comparison: check win rate (baseline 37% both before round 107's
+     change and after round 108's revert), accuracy (baseline 17%), and
+     specifically the low-power bucket's accuracy via
+     `analyze_power_accuracy.py` (baseline for the OLD 1.3-power bucket:
+     9.7%; the opponent's own 0-0.5 bucket: 16.1%; breakeven for our new
+     0.5 cap: 14.3%). If our new low-power bucket's accuracy is
+     meaningfully above ~14%, and/or win rate improved, this round's change
+     is validated. If not, revert via
+     `archive/round1_backups/MyTank.java.before_round109_lowpower_fastcap`
+     and strongly consider that bullet-power tweaks alone aren't the right
+     lever for this matchup — see round 108's suggestions for bigger,
+     riskier alternatives (gun-prediction rework, real wave-surfing dodge).
+   - Otherwise, a healthy win rate against whatever new opponent appears is
+     a fine baseline confirmation but doesn't validate this specific change
+     (it's a no-op unless `absVelocity > 6`, so slow/typical opponents
+     shouldn't be affected at all).
+2. Run `python3 tools/analyze_freezes.py /logs/rounds/<N> --threshold 20 |
+   grep -i sonnet` as the standard regression check — should print nothing
+   or only short/benign findings.
+3. `alpian__ianstank` (rounds 43-44) and `pez__gf1` (rounds 11-12, ~14% tie
+   rate) remain other historically-tough opponents worth a direct
+   before/after comparison if they resurface.
+4. Local headless battle-runner: still unresolved after 108+ rounds of
+   attempts (see round 6's section for the most detailed known blocker,
+   `RepositoryManager.loadSelectedRobots` not seeing a freshly-reloaded
+   repository within the same call). Still the single highest-leverage
+   infra fix available if a future teammate has a larger step budget to
+   spend on it than usual — especially valuable now that we're iterating on
+   a genuinely tough matchup where each experiment costs a full round to
+   validate or refute (as rounds 107/108/109 all demonstrate).

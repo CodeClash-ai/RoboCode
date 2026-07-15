@@ -585,17 +585,10 @@ public class MyTank extends AdvancedRobot {
         // Round 30: default (slow-enemy) cap lowered 3.0 -> 2.9, see the
         // matching comment in bulletPowerForDistance() above for the
         // analyze_power_accuracy.py evidence behind this change.
-        // Round 109: keep this override's cap consistent with
-        // bulletPowerForDistance()'s new 0.5 fast-mover cap (see that function's
-        // comment for the full reasoning) -- otherwise the finishing/press-
-        // advantage overrides would silently re-introduce the exact
-        // below-breakeven 1.3-power bullet this round is trying to move away from
-        // whenever the enemy is low on energy or we're ahead, which is precisely
-        // when this override actually fires.
         double maxUsablePower = 2.9;
         double absEnemyVelocityForCap = Math.abs(e.getVelocity());
         if (absEnemyVelocityForCap > 6.0) {
-            maxUsablePower = 0.5;
+            maxUsablePower = 1.3;
         } else if (absEnemyVelocityForCap > 3.0) {
             maxUsablePower = 1.9;
         }
@@ -1002,43 +995,9 @@ public class MyTank extends AdvancedRobot {
         // real hit chance) and cheaper misses, without touching the bands above
         // at all for slow/stationary opponents (absVelocity ~= 0 keeps the exact
         // round 7/8 behavior).
-        // Round 109 addition: rounds 107/108 found that kcanida__pikachu (by far
-        // the toughest opponent in this file's history alongside pez__gf1, rounds
-        // 11-12/107-108) exposed our own round-17 fast-mover cap (1.3) as running
-        // BELOW its own breakeven accuracy: analyze_power_accuracy.py on round
-        // 108's revert baseline showed our absVelocity>6 bucket (power 1.3) at
-        // only 9.7% accuracy, while round-12's swing(P,p)=p*(9P-2)-P breakeven at
-        // P=1.3 is ~13.4% -- i.e. we were LOSING energy on average every time we
-        // fired in this bucket. Round 107 tried fixing this by tightening the
-        // fire-angle threshold (fire less often, hoping for higher-quality shots)
-        // -- this BACKFIRED badly in a real match (accuracy dropped further to
-        // 5.5% in that bucket, win rate 37%->24%, see round 108's trace) and was
-        // reverted. This round tries a different, mathematically safer lever
-        // instead: for bulletPower <= 1, Rules.getBulletDamage() is a flat 4*P
-        // (not 6*P-2) and getBulletHitBonus() is 3*P, so swing = P*(7p-1) -- the
-        // breakeven accuracy (p=1/7=14.3%) is CONSTANT regardless of P in (0,1].
-        // This means dropping power well below 1.3 costs us nothing in terms of
-        // "how accurate do we need to be to break even" while making the bullet
-        // meaningfully faster (bulletSpeed=20-3*P: 16.1 at P=1.3 vs 18.5 at
-        // P=0.5), which should make it more likely to actually land against a
-        // fast/erratic mover -- exactly mirroring kcanida__pikachu's OWN observed
-        // strategy (it fires the bulk of its own shots at very low power, 0-0.5,
-        // and lands 16.1% accuracy there, well above our 9.7% at 1.3 power,
-        // against the same matchup). Lowered the >6.0 cap from 1.3 to 0.5; left
-        // the >3.0 cap (1.9) untouched since that bucket is NOT currently running
-        // below breakeven (round 108's data: 1.5-2.0 bucket at 23.3% accuracy,
-        // comfortably above its own ~14.9% breakeven at P=1.9) -- isolating this
-        // one, mathematically-justified change so it's cleanly attributable if it
-        // doesn't help. NOT yet validated by a real match (see README_agent.md
-        // round 109 notes) -- given rounds 107/108's hard lesson that
-        // theoretically-sound-looking fixes against this specific opponent can
-        // still backfire, watch this bucket's real accuracy VERY closely next
-        // round and revert via
-        // archive/round1_backups/MyTank.java.before_round109_lowpower_fastcap if
-        // it doesn't clearly improve (or if it gets worse).
         double absVelocity = Math.abs(enemyVelocity);
         if (absVelocity > 6.0) {
-            power = Math.min(power, 0.5);
+            power = Math.min(power, 1.3);
         } else if (absVelocity > 3.0) {
             power = Math.min(power, 1.9);
         }
