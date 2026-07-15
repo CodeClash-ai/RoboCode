@@ -6191,3 +6191,57 @@ orbit ~250px + dodge 0.30. Do NOT switch to head-on off any W-sweep replay (bias
 documented trap; W=0.0 wins in REAL play). Always re-check
 `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING first.
 Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 1 / current pass) — opponent = mgalushka__superwalls
+
+## STATUS: WINNING (opus 36252 vs superwalls 11705, 71% share, 9/10 firsts) — LOWERED DODGE 0.30 -> 0.12 (HEAD-ON gun)
+Opponent CHANGED to mgalushka__superwalls. Verified /logs/rounds/0 (INDEX i=0=superwalls, i=1=opus):
+- results.json: winner=opus-4-8, 36252 vs 11705. results_0.txt: opus 1384 (71%), 9/10 firsts (enemy got 1 first).
+- Full 250-sim sweep: 11 LOSSES, 10 close(<20E). ourFE mean 69.6, min 0.0, killtick 269.6.
+
+## Opponent = MODERATE near-PERFECTLY-STRAIGHT mover with a HEAD-ON gun
+- movefrac 0.82, avgV 3.33 (moderate), avg|dh| 0.008 (NEAR-PERFECTLY STRAIGHT — a
+  walls/perimeter mover), engages ~298px. Enemy gun offset when firing: median
+  0.024 rad = HEAD-ON gun (aims at our CURRENT position, like dominatorx 0.018 /
+  pikachu 0.081). Deals us ~24 dmg/game.
+
+## Gun aim W=0.0 CONFIRMED optimal (REAL in-game hit rate 44.7%, UNBIASED)
+Full linear lead (W=0.0) is exact on the straight sections of this near-perfectly-
+straight mover -> 44.7% real energy-event hit rate. Matches proven wins vs
+megaborsten/haikuwalls/wallspoethaiku/robrrrat/bt7274. KEEP W=0.0. Do NOT switch
+to head-on off any W-sweep replay (documented reactivity-bias trap).
+
+## Hit density by distance (150 sims, UNBIASED) — we WIN the exchange everywhere
+  0-100px ratio 1.57 | 100-200 1.85 | 200-300 2.57 (most ticks, 28245) |
+  300-400 2.82 (14575 ticks) | 400-500 1.92 | 500-600 4.20.
+We spend most time at 200-400px (ratio 2.57-2.82, both strong). The ~250px orbit is
+well-placed. Left movement/orbit UNCHANGED. The 11 losses are energy-war VARIANCE
+in longer grinds (LOSS behind-on-energy 70% of ticks vs 9% in wins; LOSS dist 315px
+vs WIN 296px), NOT a positional bug — we win the hit exchange at every distance.
+
+## CHANGE THIS PASS (dodge only): dodge-on-fire 0.30 -> 0.12 (rate-limit 8 -> 10)
+The 0.30 was a LEAD-gun value (pez__poet leftover). This opponent has a HEAD-ON gun
+(offset 0.024 rad). Per the documented pikachu/dominatorx/roleksii head-on-gun WINS,
+reversing on a head-on gun's fire is COUNTERPRODUCTIVE (walks back toward the
+bullet's landing spot + kills lateral speed = the thing that beats a head-on gun).
+Lowered dodge-on-fire to 0.12 (the WINNING direction vs head-on guns). This is a
+dodge-DOWN change (safe direction — the dodge-UP changes are what REGRESSED, e.g.
+wallspoet/juggernaut). Our bot already holds steady lateral direction (saw v=-8 for
+long stretches) so the practical effect is small + strictly toward less
+self-inflicted exposure. Gun W=0.0, orbit ~250px, power tiers, onHitByBullet (0.25)
+ALL UNCHANGED. Only ONE functional line changed (line 746). Backup: /tmp/MyTank.bak.java.
+Compiles Java 8 (major version 52), rc=0.
+
+## For next teammate — VERIFY
+- Want NEW /logs: the 11 losses REDUCED, ourFE mean UP from 69.6, enemy score DOWN
+  from 11705, share UP from 71%, enemy hit density on us DOWN. If it REGRESSED (new
+  losses / share drop — possible: movement/dodge changes have historically been
+  risky), REVERT to /tmp/MyTank.bak.java (git prior = dodge 0.30, 11 losses / 71%
+  WIN). NOTE: this is a dodge-DOWN change (the WINNING direction vs head-on guns per
+  pikachu/dominatorx/roleksii), unlike the dodge-UP changes that regressed, so it
+  should be safe.
+- superwalls is a MODERATE near-perfectly-straight HEAD-ON-gun mover -> KEEP W=0.0
+  full lead + LOW dodge (0.12). If it becomes a LEAD gun (offset >0.3 rad), raise
+  dodge back to 0.30; if a HEAVY spinner (avg|dh|>0.06), W=0.0 circular applies.
+  Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING.
+- Keep MyTank class name + Java-8 bytecode (only hard requirement).

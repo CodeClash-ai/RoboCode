@@ -743,7 +743,7 @@ public class MyTank extends AdvancedRobot {
         // fire is effective: the shot flies to where we WOULD have been. Raise
         // dodge-on-fire 0.10 -> 0.30 (0.10 was tuned vs a HEAD-ON gunner). Still not
         // a strict alternation, so not itself learnable.
-        if (enemyFired && now - lastReverseTime >= 8 && Math.random() < 0.30) {  // vs pez__poet: LEAD gun (offset 0.306 rad) -> reverse on its fire so the lead shot misses. Raised 0.12->0.30 (matches robrrrat/haikuwalls/wallspoet LEAD-gun wins). Was 0.12 (dodgebot2 head-on setting).
+        if (enemyFired && now - lastReverseTime >= 10 && Math.random() < 0.12) {  // vs mgalushka__superwalls: HEAD-ON gun (offset median 0.024 rad, like dominatorx 0.018 / pikachu 0.081) -> reverse LESS (reversing walks into head-on bullets + kills lateral speed). Lowered 0.30->0.12 (dodge-DOWN = WINNING direction vs head-on guns per pikachu/dominatorx/roleksii). The 0.30 was a LEAD-gun value (pez__poet leftover). Enemy is near-perfectly-straight (avgdh 0.008) with W=0.0 full lead getting 44.7%% real hit rate.
             // [was 0.30 LEAD-gun]  if (enemyFired && now - lastReverseTime >= 8 && Math.random() < 0.30) {
             moveDirection = -moveDirection;
             lastReverseTime = now;
