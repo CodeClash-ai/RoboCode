@@ -342,7 +342,7 @@ public class MyTank extends AdvancedRobot {
         // (distance-based, kept net-positive) still guard the crazy-bot regression.
         // Chose W=0.85: strongly toward head-on (physics: slow target -> head-on best),
         // hedged just short of pure 1.0 since replay is biased by the reactive enemy path.
-        double W = 0.5;  // vs pez__wallspoetas: MODERATE near-straight LEAD-gun mover (movefrac 0.57, avgV 3.46, avgdh 0.009). W-sweep 2 slices CLEAN PEAK at W=0.5 (~36pct) vs W=0.0 (~25pct, walls leftover), W=1.0 (~31pct). Half-lead optimal.
+        double W = 0.9;  // R2 vs pez__wallspoetas: full 250-game damage model PEAK at W=0.9 (hit .344, dmg 34010, net +1855) > W=1.0 (.334/32670/1085) > W=0.5 (.285/28059/-1716). Near head-on w/ tiny hedge for the slow straight drift. movefrac 0.56 (44pct STATIONARY), avgV 3.36, avgdh 0.0086 near-straight. Anti-bias: we fired W=0.5, replay still peaks near head-on -> trustworthy. Was 0.5.
         // [maximbot] double W = 1.0;  // vs mgalushka__maximbot: MODERATE near-straight mover (movefrac 0.68, avgV 4.51, avg|dh| 0.022, engages ~240px). W-sweep (2 slices, 80 games each) robustly peaks at HEAD-ON: W=1.0 ~0.55 vs W=0.5 ~0.35 vs W=0.0 ~0.39. Damage model W=1.0 dmg +47pct AND net energy far higher. Near-straight moderate mover -> head-on optimal (matches florian2/gruffalo/ultron/hugbot). Was 0.5 (leftover from kcanida pikachu heavy-spinner avgdh 0.149 -- wrong profile here).
         // [prev] double W = 1.0; // vs iagomonteiro13579__npcsniper
         // [old] double W = 1.0; // HEAD-ON best vs alpian__ianstank (stop-and-reverse oscillator, ~50% stationary). Replay-sim 80 games: W=1.0 hits 40.3% vs W=0.0 21.4%.

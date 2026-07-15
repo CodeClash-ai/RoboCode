@@ -4791,3 +4791,53 @@ Compiles Java 8 (major version 52). Backup of prior source: /tmp/MyTank.bak.java
 - The remaining lever if grind losses persist is WAVE SURFING (high-risk, harness
   broken). Do NOT conserve energy / lower power (documented loss vs wallspoet).
 - Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 2 / current pass) — opponent = pez__wallspoetas
+
+## STATUS: WINNING both rounds; R1's W=0.5 gun tune improved us (R0 35414 vs 13163
+## -> R1 39191 vs 10740). THIS pass: gun aim W 0.5 -> 0.9 (near head-on).
+Opponent = pez__wallspoetas (MODERATE near-STRAIGHT LEAD-gun mover; INDEX both
+rounds i=0=opus, i=1=wallspoetas). Verified /logs/rounds/{0,1}:
+- R0 (W=0.0 walls leftover): opus 35414 vs 13163 (76% share).
+- R1 (prior teammate W=0.5): opus 39191 vs 10740 (84% share), results_0.txt 1627
+  (84%), 10/10 firsts. Full 250-sim sweep: 11 LOSSES (down from R0's 33),
+  close(<20E) 17, ourFE mean 71.0, killtick 431.5, turns mean 591 (max 882).
+
+## Opponent profile (R1, 60 sims): movefrac 0.56 (44pct STATIONARY), avgV 3.36,
+## avgdh 0.0086 (near-STRAIGHT). Enemy gun = LEAD (offset ~0.47 rad, prior note).
+## The 11 losses are at FARTHER dist (343px vs wins 292px) + behind-on-energy 67pct
+## of ticks (vs 10pct in wins) = energy-war variance when pushed out, NOT clearly
+## positional (enemy hit density fairly FLAT 4-6/1k across 100-500px, drops >600px).
+
+## CHANGE THIS PASS: gun aim W 0.5 -> 0.9 (near head-on)
+Ran the DAMAGE MODEL (distance-tiered power + gunheat, per-tick interception) over
+ALL 250 round-1 games — clean PEAK at W=0.9:
+  W=0.5: hit .285, dmg 28059, net -1716 (BLEEDING)
+  W=0.75: hit .311, dmg 31043, net +40
+  W=0.9: hit .344, dmg 34010, net +1855  <-- PEAK
+  W=1.0: hit .334, dmg 32670, net +1085
+W=0.9 raises hit ~6pts over W=0.5 AND flips net energy positive. Physics: a mover
+that's STATIONARY 44pct + near-STRAIGHT is best hit near head-on (any big lead
+overshoots the stationary ticks). Matches the maximbot precedent (near-straight
+moderate mover -> head-on won 250/250). ANTI-BIAS: we FIRED W=0.5 in R1, so the
+reactivity bias would favor W=0.5 in the replay — yet it peaks near head-on ->
+trustworthy signal (opposite of the usual bias trap). Hedged at 0.9 (not full 1.0)
+since 0.9 is the actual data peak (tiny lead for the slow drift).
+Movement (~170px orbit target, achieves ~292px vs the mover), power tiers (3.0/<160
+2.4/<250 1.6/<400 1.0/<560 0.5), dodge, enemyPassive mode ALL UNCHANGED. Only ONE
+functional line changed (line 345). enemyPassive stays OFF (wallspoetas fires/deals
+real dmg). Compiles Java 8 (major version 52). Backup: /tmp/MyTank.bak.java (=R1 W=0.5).
+
+## For next teammate — VERIFY
+- Want NEW /logs: the 11 losses REDUCED, killtick DOWN from 431, share UP from 84pct,
+  enemy score DOWN from 10740, ourFE mean UP from 71. If it REGRESSED (unlikely —
+  clean 250-game peak + anti-bias + maximbot precedent), revert W to 0.5
+  (/tmp/MyTank.bak.java or git prior). wallspoetas is MODERATE near-straight LEAD-gun
+  -> KEEP W~0.9 head-on. If it becomes a FAST curving dodger (avgdh>0.06), set W=0.0
+  (circular); if pure constant-velocity straight, lower W toward 0.0.
+- NOTE: pez__wallspoetas (near-straight, avgdh 0.009) is a DIFFERENT bot from
+  pez__wallspoet (heavy-curve active wave surfer we barely won ~55pct aggressively).
+- The remaining lever if grind losses persist is WAVE SURFING (high-risk, harness
+  broken). Do NOT conserve energy/lower power (documented loss vs wallspoet).
+- Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING.
+- Keep MyTank class name + Java-8 bytecode (only hard requirement).
