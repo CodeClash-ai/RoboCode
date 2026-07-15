@@ -2820,3 +2820,47 @@ head-on. If it becomes a FAST mover (avg|v|>4), lower W toward 0.25; if HEAVILY-
 curving (avg|dh|>0.06), set W=0.0 (circular) + orbit out ~260px. Always re-check
 `head -1 /logs/rounds/0/sim_0.jsonl` for the current opponent name first.
 Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 2 verification pass, this pass) — opponent = looklazy__chilibot
+
+## STATUS: 249/250 win — NO CODE CHANGE (deliberate)
+Verified /logs/rounds/{0,1} (opponent looklazy__chilibot, SLOW near-straight-line
+mover: movefrac 0.34, avgV 1.56, avg|dh| 0.0006 = NEVER turns body, engages ~228px):
+- Round 0: opus 44194 vs chilibot 3645 (94% share), 10/10 firsts.
+- Round 1: opus 44249 vs chilibot 4036 (results_0.txt 87% in that 10-round sample),
+  10/10 firsts. Full 250-sim sweep: LOSSES = 1/250 (sim_154), close(<20E)=1.
+  Our final E mean 108.9, mean killtick 210, turns mean 362 (max 771).
+
+## The 1 loss (sim_154) = a 771-turn DISTANT-ENGAGEMENT grind (variance)
+Analyzed: mean dist 294px (vs typical ~228), behind on energy 85% of ticks.
+We + enemy each landed ~10 hits, but enemy fired 26 vs our 38 at higher efficiency
+in the far zone. Distance histogram: LOSS spent only 59% of ticks <200px + 25% at
+300-600px, vs typical wins ~73% <200px. Crucially, 16% of the loss game we were in
+the "dist>400 AND behind on energy" NO-FIRE gate (lines 310-313) — conceding free
+enemy damage while dealing none. The enemy's straight-line gun out-traded us in
+that distant grind we couldn't escape.
+
+## Why NO change (followed the README's proven discipline)
+Considered: (a) allow low-power far shots when behind (contest instead of conceding)
+— but README documents net-negative far firing vs an energy-conserving mover is
+what CAUSES these grind losses (the gate is deliberate; chilibot ~20% hit at 400px+).
+(b) close harder in grinds — but movement is GLOBAL across the ladder and the README
+warns closer orbit was DEADLY vs the fast-curving team488__meow (14.8 enemy hits/1k
+@ 100-200px). A change to shave 1 variance loss vs chilibot risks regressing strong
+close-range gunners elsewhere. We win 10/10 firsts in EVERY 10-round battle, so the
+1 sim loss is not a match-level loss. Not worth the regression risk.
+Gun W=1.0 head-on CONFIRMED optimal (prior W-sweep monotonic to head-on 72.1%;
+chilibot is slow near-straight -> any lead overshoots).
+
+## Compile: git diff on MyTank.java = empty. Re-verified:
+  javac --release 8 -cp libs/robocode.jar -d robots robots/custom/MyTank.java  # OK
+  javap -v robots/custom/MyTank.class | grep "major version"  # -> 52 (Java 8)
+
+## For next teammate
+Only act if a NEW /logs shows a MATCH loss (enemy wins a 10-round battle) or win
+rate collapsing. chilibot is SLOW/near-straight -> KEEP W=1.0 head-on. If the
+grind losses ever RISE to a match-level threat, the targeted lever is the far-range
+fire gate: allow power ~0.1 far shots when behind (tiny per-miss cost, contests the
+free-damage concession) — but validate vs the ladder, NOT just chilibot. Always
+re-check `head -1 /logs/rounds/0/sim_0.jsonl` for the current opponent name first.
+Keep MyTank class name + Java-8 bytecode (only hard requirement).
