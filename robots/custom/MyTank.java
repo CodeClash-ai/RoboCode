@@ -412,11 +412,17 @@ public class MyTank extends AdvancedRobot {
         // ~43-44% while the enemy's lead gun accuracy collapses (9.7 -> ~2-5/1k
         // enemy hits). Same insight that beat the lead-gun/curving foes spinbot
         // (~250px) and team488__meow (~260px). Attacks the 30 losses directly.
+        // R2 TUNE: measured round-1 engagement was ~314px (drifted wide of the
+        // ~280px target) -> we spent 28k ticks at 300-400px where OUR real hit
+        // rate is only 0.26 (net-negative firing) vs 0.35 at 200-300px. Enemy hit
+        // density is nearly the SAME at 200-300px (5.0/1k) and 300-400px (4.6/1k),
+        // so closing to ~245px loses ~nothing on defense but RAISES our offense.
+        // Stronger inward pull so we actually reach the 200-300px best-HR zone.
         double rangeBias = 0.0;
-        if (enemyDistance > 480)      rangeBias = -1.0;  // far: strong inward pull to close
-        else if (enemyDistance > 350) rangeBias = -0.6;  // mid-far: firm inward
-        else if (enemyDistance > 290) rangeBias = -0.3;  // approaching target ~280px
-        else if (enemyDistance < 240) rangeBias = 0.5;   // too close (lead-gun kill zone): push out
+        if (enemyDistance > 450)      rangeBias = -1.1;  // far: strong inward pull to close
+        else if (enemyDistance > 330) rangeBias = -0.7;  // mid-far: firm inward
+        else if (enemyDistance > 260) rangeBias = -0.35; // approaching target ~245px
+        else if (enemyDistance < 210) rangeBias = 0.5;   // too close (lead-gun kill zone): push out
 
         double desiredDir = absBearing + (Math.PI / 2 + rangeBias) * moveDirection;
 

@@ -3494,3 +3494,46 @@ distance (enemy's ACTUAL recorded hits on us, not reactive to our aim): 100-200p
   high-risk; local harness broken, trust /logs only).
 - Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING.
 - Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 2 / current pass) — opponent = joaomcarvalho__jeujdapeu
+
+## STATUS: R1's orbit-wider change WORKED (losses 29->14). THIS pass: orbit CLOSER (~245px).
+Verified /logs/rounds/{0,1} (opponent joaomcarvalho__jeujdapeu, MODERATE curving
+mover with a STRONG LEAD gun; INDEX FLIPS per round — R0 opus=i1, R1 opus=i0):
+- R0 (orbit ~160px): opus 38946 vs 14625 (70% share, 8/10 firsts). 29 losses/250.
+- R1 (prior teammate orbit ~280px): opus 36368 vs 9208. results_0.txt 1326 (71%),
+  8/10 firsts. Full 250-sim sweep: LOSSES=14/250 (down from 29!), close(<20E)=29,
+  ourFE mean 59.7, killtick 377. The orbit-wider change HALVED the losses. GOOD.
+
+## ROOT CAUSE of remaining 14 losses: net-negative firing at 300-400px
+Measured hit rate + enemy density by distance (150 R1 games, DECISIVE unbiased):
+  100-200px: ourHR 0.40, enemy 3.4/1k
+  200-300px: ourHR 0.35, enemy 5.0/1k  (37538 ticks — most time, best HR zone)
+  300-400px: ourHR 0.26, enemy 4.6/1k  (28111 ticks — net-NEGATIVE firing here!)
+  400-500px: ourHR 0.21, enemy 2.1/1k
+We actually engaged at ~314px avg (drifted WIDE of the ~280px target due to enemy
+motion + wall smoothing), spending 28k ticks at 300-400px bleeding energy. Enemy
+hit density is NEARLY THE SAME at 200-300 (5.0) vs 300-400 (4.6), so closing to
+~245px loses ~nothing on defense but RAISES our HR 0.26->0.35.
+
+## CHANGE THIS PASS (movement only): orbit ~280px -> ~245px (stronger inward pull)
+rangeBias thresholds: was >480/-1.0, >350/-0.6, >290/-0.3, <240/+0.5 (target ~280).
+NOW >450/-1.1, >330/-0.7, >260/-0.35, <210/+0.5 (target ~245px). Net-energy model
+(measured per-bucket HR + density): OLD -71.7/1k -> NEW ~-22/1k (70% less bleed).
+Gun aim W=1.0 head-on CONFIRMED optimal (fresh W-sweep round-1, monotonic to
+head-on 0.369 vs 0.201 full-lead — jeujdapeu is a moderate curver, head-on beats
+any lead). Power tiers (3.0/<300, 1.6/<400, 1.0/<500, 0.6/else), dodge, energy-war
+taper, fire gates UNCHANGED. Compiles Java 8 (major version 52). Backup: /tmp/MyTank.bak.java.
+
+## For next teammate — VERIFY
+- Want NEW /logs losses BELOW 14 (ideally <8), enemy share DOWN from 29%, ourFE
+  mean UP from 59.7, engagement dist DOWN from ~314 toward ~245px. If it REGRESSED
+  (new losses / share drop), the closer orbit may have exposed us to the enemy's
+  lead gun at close range -> push orbit back toward ~270px (thresholds 470/350/280/
+  <230) or revert to /tmp/MyTank.bak.java (git prior, 14 losses). If it worked but
+  losses persist, the remaining lever is WAVE SURFING (enemy lead gun ~35% in
+  losses -> dodging its waves is the biggest untapped win, high-risk; harness broken).
+- jeujdapeu is MODERATE lead-gun curver -> KEEP W=1.0 head-on. If it becomes a
+  HEAVY spinner (avg|dh|>0.07), set W=0.0 (circular). Always re-check
+  `head -1 /logs/rounds/0/sim_0.jsonl` for opponent name + INDEX MAPPING first.
+- Keep MyTank class name + Java-8 bytecode (only hard requirement).
