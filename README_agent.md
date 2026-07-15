@@ -1362,3 +1362,100 @@ Worked out the actual Robocode economics from `Rules.class` (decompiled via
    repository within the same call). Still the single highest-leverage infra
    fix available if a future teammate has a larger step budget to spend on
    it than usual.
+
+## Round 13 update (this round) — new weak opponent, round 12 changes validated strongly
+
+### Context
+Only `/logs/rounds/0/` exists in this environment for me. Per `results.json` /
+`trace.md`, this round's opponent is a **new** one, `linuxuser0__genetic`
+(different from `pez__gf1` seen in rounds 11-12's notes above — this is
+presumably a fresh ladder rung). Confirmed real combat via
+`python3 tools/analyze_freezes.py /logs/rounds/0 --threshold 100` (0 findings,
+clean — no wall-standoff/radar-freeze regressions). Result: **100% win rate
+(250/250)**, team score **46827 vs opponent's 968** (huge margin, ~48x),
+48% accuracy, avg speed 6.1, avg rams/game 2.1, avg min energy 80. Zero ties,
+zero losses. The opponent (`linuxuser0__genetic`) is weak (0% win rate, 22%
+accuracy, avg speed 2.4, dies on average by turn 265) but does move and fire
+a bit, unlike the purely-stationary sentries from earlier rungs
+(`robo_code__sittingduck`).
+
+Since the current `robots/custom/MyTank.java` already contains round 12's
+"corrected energy math + opportunistic ramming" changes (verified: the file
+already has the `swing(P,p) = p*(9P-2) - P` reasoning, the "press the
+advantage" max-power rule, and the close-range ramming logic in both
+`onScannedRobot()` and `onHitRobot()` described in round 12's notes above), and
+this round's real match shows **zero ties** (down from round 11/12's ~14%
+tie rate against the tougher `pez__gf1` opponent) with healthy 2.1 rams/game,
+I consider round 12's changes **validated as a real improvement** — at least
+not harmful, and the ramming logic is clearly firing in real games (2.1
+rams/game is meaningfully nonzero, consistent with the opportunistic-ramming
+code path actually engaging). Since `pez__gf1` isn't the current opponent
+this round, this doesn't fully resolve whether round 12 fixed the *tie*
+problem specifically (that requires re-facing `pez__gf1` for a clean
+comparison), but it's a good sign combined with no downside seen here.
+
+### What I did this round
+Given:
+1. 100% win rate with a huge score margin against this rung's opponent,
+2. zero freeze regressions,
+3. zero ties/losses (the best "tie rate" result across the whole file's
+   history — previous rounds against the *other* opponents ranged from 0%
+   ties against very weak/passive bots to 14% against `pez__gf1`),
+
+...I judged there's no urgent bug or clear underperformance pattern to chase
+this round. I reviewed the full current `MyTank.java` (524 lines) end-to-end
+for correctness/sanity (radar lock, gun prediction, movement/orbit, wall
+avoidance, stuck watchdog, energy-management, ramming) and did **not find any
+new issues** worth changing. Rather than make a speculative, unvalidated
+tweak purely for the sake of changing something (which is exactly the kind of
+thing that's bitten previous rounds — e.g. round 11's energy-throttle change
+turned out to be counter-productive per round 12's math correction), I chose
+to leave combat logic untouched this round and instead spent the round on
+validation/documentation:
+- Verified `javac -cp libs/robocode.jar -d robots robots/custom/MyTank.java`
+  still compiles clean (no errors/warnings), `.class` up to date.
+- Re-ran `tools/analyze_freezes.py` on this round's fresh logs (see above) —
+  confirms rounds 3/4's wall-standoff/radar-freeze fixes are still holding
+  many rounds later, no regression.
+- Did NOT touch bullet power bands, `PREFERRED_DISTANCE`, fire-angle
+  threshold, ramming trigger distance (60px), or the "press the advantage"
+  threshold (15 energy) this round — no evidence any of them are
+  underperforming against this opponent, and changing them now (with no
+  competitive pressure from this weak opponent to justify it) would just add
+  unvalidated risk for the *next* time we face a tougher opponent like
+  `pez__gf1` again.
+
+### Suggestions for next teammate
+1. **First step, as always**: check the newest `/logs/rounds/<N>/trace.md`
+   for the actual opponent this round.
+   - If it's `pez__gf1` again (the toughest opponent seen in this file's
+     history, rounds 11-12), that's the highest-value comparison point: check
+     specifically whether the **tie rate** has dropped from the ~14% seen in
+     rounds 11-12 now that round 12's energy-math fix + ramming logic has had
+     a full round to play out for real against a genuinely competitive
+     opponent (this round's `linuxuser0__genetic` was too weak to stress-test
+     the tie-avoidance angle specifically, even though the ramming logic did
+     get real reps in).
+   - If it's a new/different opponent yet again, treat this round's 100%
+     win / 0% tie result as a healthy baseline validation (no regressions)
+     but not strong evidence either way on the round-11/12 tie-focused
+     changes specifically, same caveat as above.
+2. Run `python3 tools/analyze_freezes.py /logs/rounds/<N> --threshold 100 |
+   grep -i sonnet` as the standard regression check for the wall/radar freeze
+   bug classes (rounds 3/4) — should print nothing if healthy. (Note: the
+   round-11 fix to this script already excludes end-of-life/DEAD-robot
+   freezes as false positives, so a clean "nothing" result here is a
+   meaningful signal, not just an artifact of the death exclusion.)
+3. If ties are still a live problem next time we face a tough/accurate
+   opponent, the still-unimplemented "proper wave-surfing dodge" idea
+   (tracking incoming-bullet-implied danger zones instead of a fixed
+   perpendicular orbit, first suggested in round 1's notes and repeated in
+   round 12's notes) remains the most promising *defense*-side lever nobody
+   has attempted yet — every round's tuning so far (5, 7-12) has focused on
+   offense (targeting/bullet power/ramming), not reducing damage taken.
+4. Local headless battle-runner: still unresolved after 12+ rounds of
+   attempts (see round 6's section above for the most detailed known
+   blocker, `RepositoryManager.loadSelectedRobots` not seeing a
+   freshly-reloaded repository within the same call). Still the single
+   highest-leverage infra fix available if a future teammate has a larger
+   step budget to spend on it than usual.
