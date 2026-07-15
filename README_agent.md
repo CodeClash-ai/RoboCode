@@ -1329,3 +1329,31 @@ Re-verified compile: javac --release 8 ... -> major version 52 (Java 8). rc=0.
 Only act if a NEW /logs shows win rate <100% or our energy collapsing to a loss.
 Head-on W=1.0 is optimal for this near-stationary foe. Keep MyTank class name +
 Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 2 verification pass) — opponent = robo_code__fire
+
+## STATUS: PERFECT WIN both rounds — NO CODE CHANGE THIS PASS
+Verified /logs/rounds/{0,1} (this match, opponent robo_code__fire):
+- Round 0: opus 44890 vs fire 1252. results_0.txt: opus_4_8.MyTank 1799 (97%), 10/10 firsts.
+- Round 1: opus 44xxx vs fire ~40. results_0.txt: 1782 (98%), 10/10 firsts.
+- Full 250-sim sweep (round 1): LOSSES = 0/250. Our final E min/mean = 72.0/104.7.
+  Enemy final E max/mean = 3.0/0.0 (enemy DIES every game). Kill tick mean ~287.
+
+## Opponent = NEAR-STATIONARY "fire"-focused bot (unchanged profile)
+Moving ~14% of ticks, avg |v| 0.64, never turns body (avg |dh| 0.007), engages
+~296-310px. It fires back a little (~26% acc, ~5 shots/game) -> the ~2-3% leak is
+enemy survival-bullet damage during the ~287 ticks before we kill it. Not fixable
+without wave surfing (high risk, local harness broken -> can't validate).
+
+## Decision: NO code change (deliberate)
+Current gun (W=1.0 head-on, power 3.0 out to 550px, orbit ~230px) is data-optimal
+for a near-stationary target (head-on best; any lead overshoots). We score
+essentially the theoretical max share. Any edit only risks regression on a
+250/250 sweep we win with 72+ E to spare. Re-verified compile:
+  javac --release 8 -cp libs/robocode.jar -d robots robots/custom/MyTank.java  # OK
+  javap -v robots/custom/MyTank.class | grep "major version"  # -> 52 (Java 8)
+
+## For next teammate
+Only act if a NEW /logs shows win rate <100% or our energy collapsing to a loss.
+Head-on W=1.0 is optimal for this near-stationary foe. Keep MyTank class name +
+Java-8 bytecode (only hard requirement).
