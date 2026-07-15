@@ -5495,3 +5495,54 @@ source: /tmp/MyTank.bak.java. Compiles Java 8 (major version 52), rc=0.
   to 0.30; if a HEAVY spinner (avg|dh|>0.06), set W=0.0 (circular). Always re-check
   `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING first.
 - Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 1 / current pass) — opponent = logancsc__dodgebot2 (WE WERE LOSING THE MATCH)
+
+## CRITICAL: we LOST round 0 — opus 14327 vs dodgebot2 23384 (winner=dodgebot2)
+Full 250-sim sweep (first 120): 39 WINS / 81 LOSSES. ourFE mean only 12.9 (min 0.0),
+enemyFE mean 33.3, killtick mean 576 (long grinds). results_0.txt this battle was
+766 vs 755 (50/50, 5 firsts each) but the MATCH is lost. We die first in the grind.
+
+## Opponent = MODERATE curving DODGER with a HEAD-ON gun (index i=1; read header)
+movefrac 0.79, avgV 3.51, avg|dh| 0.056 (moderate curve), engages ~270px. Gun
+offset when firing: median 0.10 rad = HEAD-ON gun (aims ~current pos). Fires ~same
+as us (4528 vs 4679 in 120 sims). Its NAME + behavior = it DODGES our shots at range.
+
+## ROOT CAUSE: we camped in the 200-300px LOSING zone; our shots get dodged at range
+MEASURED hit density by distance (120 sims, our hits/1k vs enemy hits/1k on us):
+  0-100px:   our 54.9  enemy 14.2  (3.9:1 — we CRUSH)
+  100-200px: our 16.0  enemy 12.4  (1.3:1 — we WIN)
+  200-300px: our  4.3  enemy  9.8  (0.44:1 — we LOSE badly; 47152 ticks HERE!)
+  300-400px: our  2.0  enemy  8.0  (LOSE)
+Our hit rate COLLAPSES at range (4.3/1k) but is huge up close (54.9) — classic
+signature of a bot that DODGES bullets it has time to react to. Closing removes its
+reaction window. We were orbiting ~270px (the losing zone) -> bled out -> 81 losses.
+Net-energy model (measured density x dmg/hit): OLD 270px net -39/1k (bleeding) ->
+NEW 150px net +120/1k (winning).
+
+## CHANGES THIS PASS (gun aim + orbit; both compile Java 8, major 52)
+1. GUN aim W: 0.5 -> 0.9 (near head-on). W-sweep 2 independent slices (per-tick
+   interception) both peak at W=0.9 (~0.33) vs current W=0.5 (~0.26) vs W=0.0
+   (~0.18). Moderate curving mover -> near-head-on best (any big lead overshoots
+   at close range where we now fight). Line 349.
+2. MOVEMENT orbit ~270px -> ~150px. rangeBias (line ~656): >300 -1.0 (close HARD),
+   >220 -0.7, >170 -0.35, <90 +0.7 (don't ram), <130 +0.3 (hold ~150), else 0.0.
+   Targets the 100-200px WIN zone (and dips toward 0-100px where we crush).
+Power tiers (3.0/<160, 2.6/<250 ...) already give full power at ~150px = fast kills.
+Dodge-on-fire 0.12 (correct for a HEAD-ON gun — reversing walks into head-on
+bullets). enemyPassive stays OFF (dodgebot2 deals real damage -> damageTaken>=5).
+Backup of prior (losing) source: /tmp/MyTank.bak.java.
+
+## For next teammate — VERIFY (this is a MATCH-LOSS we're trying to flip)
+- Want NEW /logs: winner=opus-4-8, the 81 losses REDUCED, ourFE mean UP from 12.9,
+  enemy score DOWN from 23384, engagement dist DOWN from 270 toward ~150px, our
+  hit rate at close UP. If it REGRESSED (new losses / share drop):
+  (a) the close orbit may have exposed us to ram/close-gun damage the density
+      analysis understated -> pull orbit back to ~200px (thresholds 330/260/210,
+      <150 +0.5, <180 +0.3) — a compromise still better than the 270px losing zone;
+  (b) if W=0.9 overshoots (unlikely — both slices peak there), try W=1.0 head-on;
+  (c) full revert = /tmp/MyTank.bak.java (git prior = the 81-loss config that LOST).
+- dodgebot2 is a MODERATE curving DODGER with a HEAD-ON gun -> KEEP W=0.9 + CLOSE
+  orbit + LOW dodge (0.12). The dodging-at-range is the key: closing beats it.
+- Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING.
+- Keep MyTank class name + Java-8 bytecode (only hard requirement).

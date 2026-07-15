@@ -346,7 +346,8 @@ public class MyTank extends AdvancedRobot {
         // (distance-based, kept net-positive) still guard the crazy-bot regression.
         // Chose W=0.85: strongly toward head-on (physics: slow target -> head-on best),
         // hedged just short of pure 1.0 since replay is biased by the reactive enemy path.
-        double W = 0.5;  // vs miradoconsulting__roleksii: MODERATE near-straight mover, HEAD-ON gun. W-sweep 2 slices peaks W=0.5 vs W=0.0(current); damage model W=0.5 net +3377 vs W=0.0 net -13629 (bleeding = 52 losses). Was 0.0 (smallpoet leftover).
+        double W = 0.9;  // vs logancsc__dodgebot2: MODERATE curving mover (movefrac 0.79, avgV 3.51, avg|dh| 0.056), HEAD-ON gun (offset 0.10). W-sweep 2 slices peak W=0.9 (~0.33) vs W=0.5(~0.26) vs W=0.0(~0.18). Was 0.5 (roleksii leftover).
+        // [roleksii] double W = 0.5;
         // [wallspoetas] double W = 0.9;
         // [maximbot] double W = 1.0;  // vs mgalushka__maximbot: MODERATE near-straight mover (movefrac 0.68, avgV 4.51, avg|dh| 0.022, engages ~240px). W-sweep (2 slices, 80 games each) robustly peaks at HEAD-ON: W=1.0 ~0.55 vs W=0.5 ~0.35 vs W=0.0 ~0.39. Damage model W=1.0 dmg +47pct AND net energy far higher. Near-straight moderate mover -> head-on optimal (matches florian2/gruffalo/ultron/hugbot). Was 0.5 (leftover from kcanida pikachu heavy-spinner avgdh 0.149 -- wrong profile here).
         // [prev] double W = 1.0; // vs iagomonteiro13579__npcsniper
@@ -652,13 +653,12 @@ public class MyTank extends AdvancedRobot {
         // enemy hit density only 4.9 vs 2.0/1k -> shifting inward is an 8:1
         // offense:defense trade (more bullet dmg + faster kills, tiny extra risk).
         // Kept the strong point-blank escape (<130 bolt, <230 push) so we still
-        // never get pinned in the ~45px ramming grind that caused R0's 2 losses.
-        if (enemyDistance > 390)      rangeBias = -0.95; // far: close HARDER toward ~270px (was -0.7; fast mover kept dist open at ~340px)
-        else if (enemyDistance > 330) rangeBias = -0.6;  // (was -0.4) reach the 200-300px zone (real hit ratio 1.69:1 vs 1.24:1 at 300-400px)
-        else if (enemyDistance > 280) rangeBias = -0.25; // (was -0.1) keep pulling to ~270px
-        else if (enemyDistance < 130) rangeBias = 0.9;   // point-blank: bolt out of the kill zone
-        else if (enemyDistance < 230) rangeBias = 0.6;   // too close: push out of the kill zone
-        else                          rangeBias = 0.2;
+        if (enemyDistance > 300)      rangeBias = -1.0; // vs dodgebot2: close HARD to ~150px. At 200-300px we LOSE exchange (our 4.3/1k vs enemy 9.8/1k). At 100-200px we WIN (16.0 vs 12.4); at 0-100 we crush (54.9 vs 14.2). Was ~270px target (losing zone).
+        else if (enemyDistance > 220) rangeBias = -0.7;  // keep pulling into the 100-200px win zone
+        else if (enemyDistance > 170) rangeBias = -0.35; // approach ~150px
+        else if (enemyDistance < 90)  rangeBias = 0.7;   // don't ram/get too close
+        else if (enemyDistance < 130) rangeBias = 0.3;   // hold ~150px
+        else                          rangeBias = 0.0;
         double desiredDir = absBearing + (Math.PI / 2 + rangeBias) * moveDirection;
 
         // Wall smoothing: steer away from walls
