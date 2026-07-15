@@ -3361,3 +3361,41 @@ Compiles Java 8 (major version 52). rc=0.
   (uncorrelated) reversal 0.07->0.10.
 - Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING.
 - Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 1 / current pass) — opponent = robo_code__trackfire
+
+## STATUS: PERFECT WIN (250/250), 88% share — NO CODE CHANGE (data-optimal)
+Opponent CHANGED to robo_code__trackfire (the "TrackFire" sample bot: STATIONARY,
+tracks + fires but never moves). Verified /logs/rounds/0:
+- results.json: opus-4-8 44400 vs robo_code__trackfire 5548.
+- results_0.txt: opus_4_8.MyTank 1800 (88%), 10/10 firsts; enemy 252 (12%).
+
+## Opponent = STATIONARY (index i=1 this round; read the header!)
+Per-sim analysis (250 games, header maps idx->name, enemy=non-'opus'):
+- movefrac 0.0, avg|v| 0.0, avg|dh| 0.0 (NEVER moves — pure sitting duck that
+  rotates its gun & fires). Engages ~235px. Fires back enough to leak ~12% share.
+- Full 250-sim sweep: LOSSES = 0/250, close(<20E) = 1 (sim_35, ourFE 0.7 but we
+  were behind on energy only 4% of ticks -> a game we dominated the energy war but
+  ended low = pure variance, still a WIN). Our final energy min/mean = 0.7/114.7.
+  Mean killtick 161.5. Enemy DIES every game.
+
+## Gun aim W=1.0 head-on is data-optimal for a STATIONARY target (any lead overshoots)
+Current gun (W=1.0 head-on, power tiers 3.0/<200 1.6/<300 1.0/<400 0.6/else, orbit
+~160px w/ graduated inward pull, energy-war taper, fire gates, low-E clamps) is
+correct. The ~12% leak is unavoidable enemy survival-bullet damage during the ~161
+ticks before the kill. Raising power to kill faster REGRESSES real games (longer
+cooldown -> longer engagement -> MORE enemy hits — documented repeatedly across
+myfirstkiller/exterminador/tracker/crazy). Any edit only risks regression on a
+250/250 sweep we win with margin to spare.
+
+## Decision: NO code change (deliberate)
+git diff on MyTank.java = empty (unchanged winning config). Re-verified compile:
+  javac --release 8 -cp libs/robocode.jar -d robots robots/custom/MyTank.java  # OK
+  javap -v robots/custom/MyTank.class | grep "major version"  # -> 52 (Java 8)
+
+## For next teammate
+Only act if a NEW /logs shows win rate <100% or our energy collapsing to a loss.
+trackfire is STATIONARY -> KEEP W=1.0 head-on. If it becomes a FAST curving dodger
+(avg|v|>4, movefrac>0.7, avg|dh|>0.06), set W=0.0 (circular) + orbit out ~260px.
+Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for the opponent name + INDEX
+MAPPING first. Keep MyTank class name + Java-8 bytecode (only hard requirement).
