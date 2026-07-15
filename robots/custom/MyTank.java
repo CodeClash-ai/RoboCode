@@ -31,6 +31,7 @@ public class MyTank extends AdvancedRobot {
     private int slowEnemyScans = 0;
     private int enemyFireCount = 0;
     private int wallEnemyScans = 0;
+    private int straightEnemyScans = 0;
     private double enemyVelocityAvg = 0.0;
     private double enemyTurnRateAvg = 0.0;
 
@@ -124,6 +125,16 @@ public class MyTank extends AdvancedRobot {
         } else {
             wallEnemyScans = Math.max(0, wallEnemyScans - 2);
         }
+        // The current antiwalls opponent spends many rounds on long straight
+        // cardinal runs (often away from the actual walls).  Full linear
+        // prediction is excellent there, but the virtual guns need several
+        // bullet flights to learn it.  Confirm straight motion for a few scans
+        // so we can cold-start the linear gun and close the orbit a bit.
+        if (Math.abs(e.getVelocity()) > 0.55 && Math.abs(scanTurnRate) < 0.012) {
+            straightEnemyScans++;
+        } else {
+            straightEnemyScans = Math.max(0, straightEnemyScans - 2);
+        }
 
         updateVirtualGuns(enemyX, enemyY);
 
@@ -176,7 +187,7 @@ public class MyTank extends AdvancedRobot {
         // Orbit perpendicular, with a distance-control offset.  Far away we cut
         // inward; too close we open out.  wallSmooth then bends the path away
         // from the battlefield edges before we commit to it.
-        double preferredDistance = wallEnemyScans > 4 ? 315.0 : (headOnGunIsBest() ? 330.0 : (slowEnemyScans > 12 ? 285.0 : PREFERRED_DISTANCE));
+        double preferredDistance = (straightEnemyScans > 4 && enemyFireCount == 0) ? 305.0 : (wallEnemyScans > 4 ? 315.0 : (headOnGunIsBest() ? 330.0 : (slowEnemyScans > 12 ? 285.0 : PREFERRED_DISTANCE)));
         // Against the current GF-style opponent our gun struggles mostly due
         // to long bullet flight, while its own gun almost never connects.  Once
         // virtual guns report a hard-to-hit mover, tighten the orbit a bit to
@@ -186,6 +197,12 @@ public class MyTank extends AdvancedRobot {
         }
         double distanceOffset = limit(-0.62, (e.getDistance() - preferredDistance) / 430.0, 0.55);
         double desired = absBearing + moveDirection * (Math.PI / 2.0 - distanceOffset);
+        if (e.getDistance() < 118 && enemyFireCount == 0) {
+            // Many simple bots only become dangerous at spawn/knife range.
+            // Open the gap immediately instead of trying to orbit through a
+            // point-blank power-3 shot or accidental ram.
+            desired = absBearing + Math.PI;
+        }
         desired = wallSmooth(desired, moveDirection);
         // If we are already in the danger band near an edge, prioritize getting
         // back into the field over maintaining a perfect orbit.
@@ -229,6 +246,11 @@ public class MyTank extends AdvancedRobot {
             // Wall-huggers have very limited escape room; use max-power
             // head-on/near-head-on shots to finish them before they can spend
             // energy on stray bullets (which lowers our available bullet score).
+            power = 3.0;
+        } else if (straightEnemyScans > 2 && enemyFireCount == 0 && getEnergy() > 14 && distance < 760) {
+            // Straight runners are easy for the linear gun, even when they are
+            // not close enough to the wall to trip wallEnemyScans.  Use max
+            // power to shorten antiwalls-style rounds once the line is clear.
             power = 3.0;
         } else if (headOnGunIsBest() && getEnergy() > 18 && distance < 720) {
             // The current DeepThought opponent dodges/reverses enough that a
@@ -277,7 +299,14 @@ public class MyTank extends AdvancedRobot {
         int gun = chooseGun();
         if (stationaryScans > 5) {
             gun = GUN_HEAD_ON;
-        } else if (wallEnemyScans > 4 && Math.abs(e.getVelocity()) > 3.0 && Math.abs(turnRate) < 0.025) {
+        } else if (straightEnemyScans > 2 && enemyFireCount == 0 && Math.abs(e.getVelocity()) > 0.55 && Math.abs(turnRate) < 0.025) {
+            // Anti-walls style movement can be straight and predictable even
+            // when it is not literally near a wall; do not wait for virtual-gun
+            // convergence before using linear prediction on a confirmed harmless
+            // line.  If an opponent has fired, leave selection to the virtual
+            // guns so GF/surfing movers are not over-fit to linear shots.
+            gun = GUN_LINEAR;
+        } else if (wallEnemyScans > 4 && Math.abs(e.getVelocity()) > 0.55 && Math.abs(turnRate) < 0.025) {
             // Antiwalls-style bots often sit still, then run in a straight line
             // along an edge.  During those fast/straight wall bursts, full
             // linear prediction is much better than the damped wall-stop gun.

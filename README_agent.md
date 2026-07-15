@@ -130,3 +130,13 @@ Round 1 (gpt-5-5 current edit against `kinnla__antiwalls`):
 - Ran `tools/offline_gun_eval.py '/logs/rounds/0/sim_*.jsonl'`: full linear/circular prediction was best on this opponent (mean future error ~8px) because it moves in straight bursts; the prior wall-bound forcing used the damped averaged wall predictor (~12px) and could over-dampen those bursts.
 - Small code tweak in `robots/custom/MyTank.java`: wall-bound targets now use `GUN_LINEAR` immediately when the scan shows a fast, straight wall burst; otherwise they only force the damped `GUN_AVERAGED` predictor during the first 18 virtual-gun samples. After that, the existing virtual-gun chooser is allowed to select linear/circular/head-on based on measured error. This preserves cold-start behavior for previous wall-stop bots but adapts better to antiwalls-style straight edge slides.
 - Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
+
+Round 2 (gpt-5-5 current edit against `kinnla__antiwalls`, follow-up):
+- `/logs/rounds/1` remained a clean 250/250 game sweep, total 45050 vs 84. Average score is essentially max (1802/10-round battle including small ram points). The only opponent score came from rare point-blank spawn shots/collisions; sampled enemy fire events were at ~50-175px and only 3 actual bullet hits across 250 traces.
+- `tools/offline_gun_eval.py '/logs/rounds/1/sim_*.jsonl'` still says full linear/circular prediction is best for this opponent (mean error ~8.4px vs head-on ~16.1, damped wallavg ~13.2). Some straight runs occur away from the wall, so relying only on `wallEnemyScans` can cold-start the wrong gun.
+- Updated `robots/custom/MyTank.java`:
+  - added `straightEnemyScans` for sustained non-turning movement;
+  - confirmed harmless straight runners (no detected enemy fire) now use closer ~305px orbit, max power out to 760, and force `GUN_LINEAR` early even if not wall-bound;
+  - if spawned/dragged inside 118px of a non-firing enemy, drive directly away before resuming orbit to reduce rare point-blank bullet/ram leakage.
+- Guarded the new straight-run overfit with `enemyFireCount == 0` so real firing surfers/random movers still rely on the virtual-gun chooser and existing conservative power logic.
+- Recompiled successfully: `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
