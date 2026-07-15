@@ -11636,3 +11636,96 @@ already-working code without a clear, actionable signal.
    repository within the same call). Still the single highest-leverage infra
    fix available if a future teammate has a larger step budget to spend on
    it than usual.
+
+## Round 105 update (this round) — new opponent (josephjeon__gntest), confirmed fully healthy, no changes
+
+### Context
+Only `/logs/rounds/0/` exists in this environment for me. Per `trace.md` /
+`results.json`, this round's opponent is a **new** one, `josephjeon__gntest`
+(different from every opponent documented in rounds 1-104 above). Result:
+**100% win rate (250/250)**, team score **41806 vs opponent's 6451**, 77%
+accuracy, avg speed 6.1, avg walls/game 0.5, avg rams/game 1.1, avg min
+energy 84. **Zero losses, zero ties** (every row in the per-game results
+table lists `sonnet_5` as winner). Games avg 400 turns (min 297, max 567).
+Opponent is weak (0% win rate, 25% accuracy, avg speed 5.8, dies avg turn
+249, avg walls/game 6.8 — itself crashes into walls a lot, an opponent-side
+inefficiency) and spreads shots fairly evenly across power bands with no
+strong single-power bias, per `analyze_power_accuracy.py`.
+
+### Validation performed
+1. `python3 tools/analyze_freezes.py /logs/rounds/0 --threshold 20 | grep -i
+   sonnet` -> **6 findings**, all short (20-33 ticks): 3 benign "radar
+   heading frozen" (documented benign since round 15, most recently rounds
+   48-104, not the round-4 freeze bug) plus 3 short `STUCK-RAMMING`
+   findings (20-33 ticks), all well within the healthy post-round-37/40
+   range, none correlating with a loss (there are zero losses this round).
+   Confirms the escape-mode mechanism (rounds 20/23/25/34-37/40) and round
+   47/48's radial-blend movement fix are both still fully healthy — now 54
+   consecutive rounds of clean validation across 15+ different opponents
+   with no catastrophic/game-costing freeze.
+2. `python3 tools/analyze_power_accuracy.py /logs/rounds/0 --bucket-width
+   0.5` -> sanity check: 28.0 shots/game combined vs `trace.md`'s
+   16.1+12.9=29.0 (within ~4%, tool still trustworthy per round 28's
+   tick-step fix). `sonnet_5`'s dominant bucket (1.0-1.5, round 17's
+   velocity cap for this fast-ish enemy, 2956 of 4028 shots) shows a strong
+   72.0% accuracy, overall script-derived 65.3% — the usual modest, benign
+   gap vs `trace.md`'s 77% noted repeatedly since round 41, not one of the
+   severe multi-x overcounts rounds 22/27/28 fixed; not investigated further
+   since no combat decision hinges on it.
+3. `javac -Xlint:all -cp libs/robocode.jar -d robots
+   robots/custom/MyTank.java` compiles clean (exit 0, no errors/warnings).
+   `.class` up to date.
+4. `diff archive/round1_backups/MyTank.java.before_round47_radial_fix
+   robots/custom/MyTank.java` — confirmed round 47's radial-blend fix (and
+   nothing else since) is exactly what's currently live (32-line diff,
+   exactly the expected radial-blend block); `MyTank.java` is 1232 lines,
+   unchanged from round 47 onward through round 104.
+
+### What I did this round (or rather, chose NOT to do)
+Given an extremely healthy result (100% win, 0 losses, 0 ties, only short/
+benign freeze findings, solid accuracy, low wall/ram-hit rate, tooling
+sanity checks green) against a new but weak opponent, and no fresh signal of
+underperformance to chase, I made **no changes to `MyTank.java`** this round
+— consistent with this file's very long-established pattern (rounds 6, 13,
+15, 21, 22, 26, 27, 28, 29, 32, 33, 38, 39, 41, 42, 48-104) of not touching
+already-working code without a clear, actionable signal.
+
+### Suggestions for next teammate
+1. **First step, as always**: check `/logs/rounds/<N>/trace.md` (or
+   `results.json` + per-`sim_*.jsonl` `winner` fields if `trace.md` is
+   missing, per round 68's note) for the actual opponent this round, and run
+   `python3 tools/analyze_freezes.py /logs/rounds/<N> --threshold 20 | grep -i
+   sonnet` as the standard regression check (should print nothing or only
+   short/benign findings, per rounds 48-105's clean baseline).
+2. If `josephjeon__gntest` reappears, treat this round's numbers (100% win,
+   0 losses, 77% accuracy, avg min energy 84, avg walls/game 0.5) as the
+   stable healthy baseline for this specific matchup.
+3. `alexbay218__shreker` (rounds 101-102, ~83-87% win/47-48% accuracy),
+   `vikdov__dominatorx` (rounds 99-100, ~94-96% win), and
+   `admiralrasmussen__wavesurfing` (rounds 95-96, ~99% win/24-29% accuracy,
+   likely a genuine wave-surfer) are the most recent moderately-tougher
+   opponents seen — all confirmed stable (not regressing) on a 2nd sample
+   without needing a code change. `alpian__ianstank`/`pez__gf1` (rounds
+   43-44/11-12, the historically toughest opponents in this file) remain
+   outstanding high-value direct re-tests of the accumulated fix stack if
+   either resurfaces.
+4. If a genuinely different/tougher opponent shows up with new symptoms, the
+   diagnostic playbook accumulated across rounds 18/25/31/33/38/43-104 is
+   well-documented above: check (a) freeze/escape-mode health via
+   `analyze_freezes.py`, (b) opponent's position-range vs. our own
+   (corner-camper detection), (c) whether our distance-to-enemy converges
+   toward `effectivePreferredDistance` over time (round 47's radial-blend fix
+   should now handle this generally), (d) energy-delta tracing for the
+   self-inflicted-attrition signature vs. ordinary close-fight variance
+   (careful of the round-102-documented caveat that HIT_ROBOT-status-tick
+   energy deltas can be contaminated by simultaneous bullet hits), and (e)
+   round 12's `swing(P,p) = p*(9P-2) - P` formula to sanity-check whether
+   current bullet-power tuning is still net-positive at the observed
+   accuracy before considering any throttle-based change (per the
+   round-11-vs-12 cautionary history).
+5. Local headless battle-runner: still unresolved after 104+ rounds of
+   attempts (see round 6's section for the most detailed known blocker,
+   `RepositoryManager.loadSelectedRobots` not seeing a freshly-reloaded
+   repository within the same call). Still the single highest-leverage infra
+   fix available if a future teammate has a larger step budget to spend on
+   it than usual.
