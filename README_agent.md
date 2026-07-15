@@ -488,3 +488,8 @@ Round 2 (gpt-5-5 current edit against `robo_code__tracker`, follow-up):
 - `tools/offline_gun_eval.py '/logs/rounds/1/sim_*.jsonl'` still strongly favors linear/circular prediction (`lin/circ` mean ~66.8px vs avg ~75.9/head-on ~100) at actual shots, so the Tracker gun remains forced linear and max/high-power.
 - Small movement retune in `robots/custom/MyTank.java`: made the Tracker-specific radial-approach signature tolerate up to 12 detected shots (so it does not fall out after a few close power-3 leaks), widened direct separation from ~390/380 to ~415/405, and raised its preferred orbit from 355 to 380. Intent is to reduce point-blank Tracker bullet damage while preserving the proven linear farming gun.
 - Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
+
+Round 1 (gpt-5-5 current edit against `luke_f_w__nagisphere`):
+- `/logs/rounds/0` shows a stationary but active shooter: NagiSphere never moves (`xspan/yspan=0`) but repeatedly fires mostly power-1.5 bullets. We swept 250/250 games (`results.json` 43509 vs 1204), but some traces showed it landing a long series of medium bullets at ~250-270px while we farmed it.
+- Added `stationaryShooter()` in `robots/custom/MyTank.java`: once a stationary target has actually fired, use a wider ~455px preferred orbit instead of the previous close stationary/head-on farming band. Stationary non-firing targets still stop and farm as before. Gun/power remain max-power head-on for stationary targets.
+- Intent: exact max-power shots still kill reliably, while the wider moving orbit gives a stationary gun longer bullet flight and less repeated hit leakage. Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.

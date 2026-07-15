@@ -323,6 +323,13 @@ public class MyTank extends AdvancedRobot {
             // range: logs show our hits are reliable here, and opening too far can
             // reduce damage before the opponent's parked power-3 trades arrive.
             preferredDistance = 300.0;
+        } else if (stationaryShooter()) {
+            // Nagisphere in the current logs is stationary but continuously fires
+            // medium-power bullets.  Farming it at the old ~330px head-on distance
+            // let its fixed gun land repeated hits.  Keep a wider orbit: our max-
+            // power head-on shots are still exact, while its bullets need much
+            // longer flight time and our fire-drop reversals have more room to work.
+            preferredDistance = 455.0;
         } else if (weakFixedAxisOscillator()) {
             // Current Tarektank-style target is a one-dimensional 100px
             // oscillator with a weak fixed-heading gun.  Move closer than the
@@ -908,6 +915,10 @@ public class MyTank extends AdvancedRobot {
             }
         }
         return best;
+    }
+
+    private boolean stationaryShooter() {
+        return stationaryScans > 5 && enemyFireCount > 0;
     }
 
     private boolean lowFireTracker() {
