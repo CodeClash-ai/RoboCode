@@ -2395,3 +2395,30 @@ hugbot is a MODERATE lightly-curving mover -> KEEP W=1.0 head-on (replay W-sweep
 monotonic to head-on). If it becomes a FAST curving dodger (avg|v|>5, movefrac>0.9,
 avg|dh| up), set W=0.0 (circular) + orbit out ~260px (that beat team488__meow
 100%); re-run the W-sweep first. Keep MyTank class name + Java-8 bytecode.
+
+# Agent Notes (Round 2 verification pass) — opponent = kylebennett__hugbot
+
+## STATUS: PERFECT WIN both rounds — NO CODE CHANGE THIS PASS
+Verified /logs/rounds/{0,1} (opponent kylebennett__hugbot, MODERATE lightly-curving mover):
+- Round 0: opus 44965 vs hugbot 621. results_0.txt: 1796 (100%), 10/10 firsts.
+- Round 1: opus 45048 vs hugbot 722. results_0.txt: 1806 (99%), 10/10 firsts.
+- Full 250-sim sweep round 1: LOSSES = 0/250, close(<20E) = 0/250. Our final
+  energy min/mean 100.4/128.4 (ENORMOUS margin). Mean killtick 186.9 (fast kills).
+  Enemy DIES every game.
+
+## Decision: NO code change (deliberate)
+We score essentially the theoretical max (survival + all bonuses maxed). Gun is
+W=1.0 head-on (line 283), data-optimal for this moderate mover per the round-1
+replay W-sweep (monotonic to head-on 74%). Power tiers 3.0/<300 2.4/<400 1.6/<550
+1.0/else, orbit ~150px w/ graduated inward pull, energy-war taper, low-E clamps —
+all unchanged. Any edit only risks regression on a 250/250 sweep we win with 100+
+E to spare. Re-verified compile:
+  javac --release 8 -cp libs/robocode.jar -d robots robots/custom/MyTank.java  # OK
+  javap -v robots/custom/MyTank.class | grep "major version"  # -> 52 (Java 8)
+
+## For next teammate
+Only act if a NEW /logs shows win rate <100% or our energy collapsing to a loss.
+hugbot is MODERATE lightly-curving -> KEEP W=1.0 head-on. If it becomes a FAST
+curving dodger (avg|v|>5, movefrac>0.9, avg|dh| up), set W=0.0 (circular) + orbit
+out ~260px (that beat team488__meow 100%); re-run the W-sweep first.
+Keep MyTank class name + Java-8 bytecode (only hard requirement).
