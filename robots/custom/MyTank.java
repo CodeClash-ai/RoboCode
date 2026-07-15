@@ -42,6 +42,7 @@ public class MyTank extends AdvancedRobot {
     private int closeRammerScans = 0;
     private int trackerApproachScans = 0;
     private int npcSniperScans = 0;
+    private int waveSurfScans = 0;
     private int juggernautScans = 0;
     private double enemyVelocityAvg = 0.0;
     private double enemySpeedAvg = 0.0;
@@ -239,6 +240,11 @@ public class MyTank extends AdvancedRobot {
         }
 
         updateVirtualGuns(enemyX, enemyY);
+        if (waveSurfingSignatureRaw()) {
+            waveSurfScans = Math.min(120, waveSurfScans + 5);
+        } else {
+            waveSurfScans = Math.max(0, waveSurfScans - 1);
+        }
 
         double lateralVelocity = e.getVelocity() * Math.sin(e.getHeadingRadians() - absBearing);
         if (Math.abs(lateralVelocity) > 0.12) {
@@ -454,7 +460,12 @@ public class MyTank extends AdvancedRobot {
         // inward; too close we open out.  wallSmooth then bends the path away
         // from the battlefield edges before we commit to it.
         double preferredDistance;
-        if (spinBotEnemy()) {
+        if (waveSurfingEnemy()) {
+            // Its gun is ineffective in the logs; closing the range shortens our cheap
+            // head-on bullets, but keep extra room once our reserve is low so we do not
+            // get trapped in late wall/corner scrambles while trying to finish.
+            preferredDistance = getEnergy() < 26.0 ? 430.0 : 295.0;
+        } else if (spinBotEnemy()) {
             // SpinBot follows a compact, very predictable circle.  Round 1 showed
             // the circular/max-power specialization is very safe (large end-energy
             // surplus), so after a few virtual waves confirm the exact circle, pull
@@ -622,7 +633,7 @@ public class MyTank extends AdvancedRobot {
         // to long bullet flight, while its own gun almost never connects.  Once
         // virtual guns report a hard-to-hit mover, tighten the orbit a bit to
         // shorten flight time and improve hit/kill speed without going to ram range.
-        if (!dangerousWallEnemy() && !activeStopGoShooter() && !heavyStopGoShooter()
+        if (!waveSurfingEnemy() && !dangerousWallEnemy() && !activeStopGoShooter() && !heavyStopGoShooter()
                 && virtualSamples > 28 && bestGunError() > 72.0 && stationaryScans <= 5 && slowEnemyScans <= 12) {
             preferredDistance = 355.0;
         }
@@ -709,13 +720,13 @@ public class MyTank extends AdvancedRobot {
             // not close enough to the wall to trip wallEnemyScans.  Use max
             // power to shorten antiwalls-style rounds once the line is clear.
             power = 3.0;
-        } else if (headOnGunIsBest() && getEnergy() > 18 && distance < 720) {
+        } else if (!waveSurfingEnemy() && headOnGunIsBest() && getEnergy() > 18 && distance < 720) {
             // The current DeepThought opponent dodges/reverses enough that a
             // head-on gun wins the virtual-gun race.  Once detected, spend more
             // energy on heavier bullets: its own hit rate is tiny, and the
             // shorter rounds are worth the slightly slower bullet speed.
             power = Math.max(power, distance < 360 ? 3.0 : (distance < 520 ? 2.8 : 2.35));
-        } else if ((slowEnemyScans > 8 || activeStopGoEnemy()) && !highPowerStopGoDodger() && getEnergy() > 12 && distance < 720) {
+        } else if (!waveSurfingEnemy() && (slowEnemyScans > 8 || activeStopGoEnemy()) && !highPowerStopGoDodger() && getEnergy() > 12 && distance < 720) {
             // Slow and stop/go opponents give up enough predictable time that
             // heavier bullets trade a little travel time for much faster damage and
             // a larger bullet bonus.  Fast/unknown movers keep the safer ladder.
@@ -728,6 +739,21 @@ public class MyTank extends AdvancedRobot {
         // enemies), do not gamble the whole energy stack on repeated heavy
         // bullets.  Use tiny bullets at low energy: a hit gives more energy back
         // than it costs, while misses cannot self-kill us quickly.
+        if (waveSurfingEnemy()) {
+            // Current admiralrasmussen__wavesurfing traces: the opponent scores almost
+            // no bullet damage, but wins individual rounds when our max/boosted shots
+            // drain us to zero.  Head-on/wall-damped aim is only moderately accurate,
+            // so preserve survival first and use faster cheap bullets after the opening.
+            if (getEnergy() > 72.0) {
+                power = Math.min(power, distance < 330 ? 1.35 : 1.10);
+            } else if (getEnergy() > 48.0) {
+                power = Math.min(power, distance < 320 ? 0.85 : 0.65);
+            } else if (getEnergy() > 26.0) {
+                power = Math.min(power, distance < 300 ? 0.42 : 0.30);
+            } else {
+                power = Math.min(power, getEnergy() < 9.0 ? 0.10 : 0.14);
+            }
+        }
         if (straightEnemyScans > 16 && harmlessLowFireEnemy() && wallEnemyScans <= 4) {
             // Sustained non-wall straight runners are harmless enough for heavy
             // bullets; the averaged gun still handles their stops/reverses.
@@ -1115,6 +1141,11 @@ public class MyTank extends AdvancedRobot {
         int gun = chooseGun();
         if (stationaryScans > 5) {
             gun = GUN_HEAD_ON;
+        } else if (waveSurfingEnemy()) {
+            // Full linear/circular over-lead this surfer; offline traces put head-on a
+            // little ahead of wall-damped/averaged, and it avoids long slow lead shots.
+            gun = (virtualSamples > 24 && virtualGunError[GUN_AVERAGED] + 6.0 < virtualGunError[GUN_HEAD_ON])
+                    ? GUN_AVERAGED : GUN_HEAD_ON;
         } else if (spinBotEnemy()) {
             // Pure circular is normally exact for sample.SpinBot, but near walls the
             // damped averaged predictor can occasionally score better.  Let virtual
@@ -1305,6 +1336,9 @@ public class MyTank extends AdvancedRobot {
             // a tick for a cleaner gun angle saves energy and raises hit rate.
             tolerance = Math.min(tolerance, Math.atan2(17.0, distance));
         }
+        if (waveSurfingEnemy()) {
+            tolerance = Math.min(tolerance, Math.atan2(13.0, distance));
+        }
         if (npcSniperEnemy()) {
             tolerance = Math.min(tolerance, Math.atan2(15.0, distance));
         }
@@ -1362,6 +1396,37 @@ public class MyTank extends AdvancedRobot {
         return best;
     }
 
+
+    private boolean waveSurfingEnemy() {
+        return waveSurfScans > 0 || waveSurfingSignatureRaw();
+    }
+
+    private boolean waveSurfingSignatureRaw() {
+        // Current opponent admiralrasmussen__wavesurfing: medium/fast evasive motion,
+        // little or no real firing, and very high virtual-gun error.  It wins only when
+        // our robot spends itself to zero.  Keep this signature narrow so Crazy/SpinBot
+        // and active medium/high-power shooters retain their specialized high-pressure
+        // branches.  The fire-count guard is deliberately loose because our own small
+        // bullet hits also look like enemy energy drops to this simple detector.
+        return virtualSamples > 18
+                && bestGunError() > 88.0
+                && enemyFireCount <= 12
+                && enemySpeedAvg > 3.2
+                && enemySpeedAvg < 6.2
+                && enemyAbsTurnRateAvg > 0.035
+                && stationaryScans <= 5
+                && slowEnemyScans <= 10
+                && wallEnemyScans <= 12
+                && !crazyEnemyScansActive()
+                && !spinBotEnemy()
+                && !fastWallCruiser()
+                && !lowFireTracker()
+                && !lowFireRammer();
+    }
+
+    private boolean crazyEnemyScansActive() {
+        return crazyEnemyScans > 3;
+    }
 
     private boolean npcSniperEnemy() {
         // Current opponent iagomonteiro13579__npcsniper: medium-fast low-turn
