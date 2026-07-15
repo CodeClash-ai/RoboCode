@@ -353,6 +353,12 @@ public class MyTank extends AdvancedRobot {
             // generic Ian/RegullarMonk conservation profile to shorten bullet
             // flight and make midpoint/axis shots land before it reverses.
             preferredDistance = 225.0;
+        } else if (fixedHeadingMediumShooter()) {
+            // Chilibot-like fixed-heading stop/go shooter: stronger than the
+            // old weak axis oscillators, but still easiest to hit head-on.
+            // Keep a moderate range to reduce its medium/high-power leakage
+            // without stretching our bullet flight as much as RegullarMonk mode.
+            preferredDistance = getEnergy() < 25.0 ? 430.0 : 360.0;
         } else if (fixedHeadingStopGoEnemy()) {
             // Current OppsWantMeDead-style bot keeps an almost perfectly fixed
             // body heading while alternating stops/straight bursts and weak shots.
@@ -531,6 +537,7 @@ public class MyTank extends AdvancedRobot {
             power = 3.0;
         }
         boolean finishingFixedHighPower = fixedHeadingHighPowerShooter() && e.getEnergy() < 17.0 && distance < 460.0 && getEnergy() > 6.0;
+        boolean finishingFixedMedium = fixedHeadingMediumShooter() && e.getEnergy() < 17.0 && distance < 540.0 && getEnergy() > 6.0;
         boolean hardToHitMover = virtualSamples > 28 && bestGunError() > 72.0 && stationaryScans <= 5 && slowEnemyScans <= 12;
         // If all virtual guns are missing badly (as with wave-surfing GF-style
         // enemies), do not gamble the whole energy stack on repeated heavy
@@ -626,6 +633,26 @@ public class MyTank extends AdvancedRobot {
                 power = Math.min(Math.max(power, 1.35), 2.0);
             } else {
                 power = Math.min(power, 0.45);
+            }
+        } else if (fixedHeadingMediumShooter()) {
+            // Current Chilibot traces: fixed body heading, many stops, and
+            // medium-to-high bullets.  Offline replay strongly favored pure
+            // head-on over the learned drift/axis gun.  Use decisive shots while
+            // healthy so it cannot survive long enough to win with repeated
+            // power-2/3 hits, but keep low-energy pinpricks for survival.
+            if (finishingFixedMedium) {
+                // Do not repeat the logged loss pattern where we had 10-15 energy,
+                // the enemy had one max-power hit of life left, and low-power
+                // conservation let its next medium/high bullet decide the round.
+                power = Math.max(power, Math.min(3.0, getEnergy() - 0.15));
+            } else if (getEnergy() > 36 && distance < 700) {
+                power = Math.max(power, distance < 540 ? 3.0 : 2.35);
+            } else if (getEnergy() > 18) {
+                power = Math.min(Math.max(power, distance < 430 ? 1.75 : 1.35), 2.05);
+            } else if (getEnergy() > 8) {
+                power = Math.min(power, 0.45);
+            } else {
+                power = Math.min(power, 0.15);
             }
         } else if (fixedHeadingStopGoEnemy()) {
             // Ian's Tank / OppsWantMeDead-style fixed-heading stop/go shooters fire
@@ -752,10 +779,10 @@ public class MyTank extends AdvancedRobot {
             }
         }
         if (getEnergy() < 22 && distance > 260 && stationaryScans <= 5 && slowEnemyScans <= 12
-                && !finishingFixedHighPower) {
+                && !finishingFixedHighPower && !finishingFixedMedium) {
             power = Math.min(power, 1.25);
         }
-        if (getEnergy() < 9 && !finishingFixedHighPower) {
+        if (getEnergy() < 9 && !finishingFixedHighPower && !finishingFixedMedium) {
             power = Math.min(power, hardToHitMover || activeHighPowerShooter() ? 0.15 : 0.55);
         }
         power = Math.min(power, Math.max(0.1, getEnergy() - 0.15));
@@ -789,6 +816,10 @@ public class MyTank extends AdvancedRobot {
             // head-on; avoid the weak-axis midpoint/opposite-endpoint gun that was
             // tuned for power-1 oscillators.
             gun = Math.abs(e.getVelocity()) < 1.5 ? GUN_HEAD_ON : GUN_LINEAR;
+        } else if (fixedHeadingMediumShooter()) {
+            // For Chilibot-like one-dimensional medium shooters, trace replay says
+            // pure head-on is the safest aim; the drift/axis guns over-lead stops.
+            gun = GUN_HEAD_ON;
         } else if (fixedHeadingStopGoEnemy()) {
             // Fixed-heading oscillators use the drift-head-on virtual gun slot for
             // learned-axis aiming: tight weak oscillators usually aim near the
@@ -1221,6 +1252,7 @@ public class MyTank extends AdvancedRobot {
                 && crazyEnemyScans <= 4
                 && Math.abs(enemyVelocityAvg) < 3.6
                 && Math.abs(enemyTurnRateAvg) < 0.070
+                && !fixedHeadingMediumShooter()
                 && !fixedHeadingStopGoEnemy()
                 && !fixedHeadingLineEnemy()
                 && !heavyStopGoShooter()
@@ -1236,6 +1268,7 @@ public class MyTank extends AdvancedRobot {
         // dangerous and can be pressured harder.
         return stopGoEnemyScans > 8
                 && enemyFireCount > 3
+                && !fixedHeadingMediumShooter()
                 && !fixedHeadingStopGoEnemy()
                 && !heavyStopGoShooter()
                 && !mediumStopGoShooter()
@@ -1244,6 +1277,29 @@ public class MyTank extends AdvancedRobot {
                 && crazyEnemyScans <= 4
                 && Math.abs(enemyVelocityAvg) < 3.8
                 && Math.abs(enemyTurnRateAvg) < 0.035;
+    }
+
+
+    private boolean fixedHeadingMediumShooter() {
+        // looklazy__chilibot in the current logs holds an almost constant body
+        // heading, alternates long stops with straight forward/back bursts, and
+        // fires repeated medium/high bullets (average around power 2).  The older
+        // fixedHeadingLineEnemy branch was tuned for weak power-1 line movers and
+        // used a tiny velocity drift plus conservative mid-energy caps; in Chilibot
+        // losses that left it alive on 10-15 energy.  Keep this narrow so Ian/
+        // Tarektank/MyFirstKiller weak oscillators and Exterminador power-3 cases
+        // stay in their specialized branches.
+        return stopGoEnemyScans > 8
+                && enemyFireCount > 2
+                && enemyFirePowerSamples > 1
+                && enemyFirePowerAvg > 1.45
+                && enemyFirePowerAvg <= 2.35
+                && crazyEnemyScans <= 4
+                && Math.abs(enemyVelocityAvg) < 4.2
+                && Math.abs(enemyTurnRateAvg) < 0.006
+                && !weakFixedAxisOscillator()
+                && !fixedHeadingHighPowerShooter()
+                && !fastWallCruiser();
     }
 
     private boolean fixedHeadingStopGoEnemy() {

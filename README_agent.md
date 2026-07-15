@@ -528,3 +528,10 @@ Round 2 (gpt-5-5 current edit against `avsthiago__sadbot`, follow-up):
   - keep max/high-power shots down to lower energy (`>24` instead of `>34`, max power to 600px);
   - choose head-on for currently stopped SadBot ticks more readily (early before virtual waves settle, or unless head-on is far behind averaged). Moving ticks still use the damped averaged gun.
 - Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
+
+Round 1 (gpt-5-5 current edit against `looklazy__chilibot`):
+- `/logs/rounds/0` shows a strong aggregate win (`results.json` 42338 vs 5469; first in all 25 ten-round battles), but traced per-game survival leaked 2 losses and 2 mutual-zero/draw-ish endings. Losses were long rounds where Chilibot kept a fixed body heading, stopped ~64% of ticks, moved in straight forward/back bursts, fired ~10 medium/high bullets/game (avg detected power ~2.06), and our weak fixed-line/medium-stopgo branches eventually spent down to zero while it survived on ~13-15 energy.
+- `tools/offline_gun_eval.py '/logs/rounds/0/sim_*.jsonl'` strongly favored head-on / damped wallavg prediction for this opponent (`head` mean ~33.8px, wallavg ~37.4, averaged ~45, linear/circular ~52.9); the old tiny drift/linear line guns over-led its stops.
+- Added `fixedHeadingMediumShooter()` in `robots/custom/MyTank.java`: repeated medium-power fire + near-zero turn-rate stop/go motion. It forces pure `GUN_HEAD_ON`, uses a moderate 360px orbit (widening to 430 when low energy), and applies high pressure while healthy (max/2.35) with low-energy pinprick safeguards. It is excluded from generic medium/active stop-go branches and guarded away from weak fixed-axis oscillators and Exterminador-style high-power cases.
+- Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
+- Final tiny addition after compile: `fixedHeadingMediumShooter()` also has a max-power finisher when the enemy is under ~17 energy and we have >6, and the generic low-energy caps skip that finisher. This directly targets the two Chilibot loss traces where low-power conservation left it alive on ~13-15 energy.
