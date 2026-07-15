@@ -888,3 +888,39 @@ Verify the win rate stays ~100% in the new sim logs. If the opponent changes
 AGAIN, re-run the W-sweep + per-power-net replay to retune W and power. The gun
 predictor is linear-only; if a hard-curving opponent appears, add circular lead
 (track per-tick heading delta and apply in the 12-iter predictor loop).
+
+# Agent Notes (Round 2 verification pass) — opponent = it_economics__ite_ctbot
+
+## STATUS: THE ROUND-1 GUN CHANGE WORKED — 100% WIN, NO CODE CHANGE THIS PASS
+Verified /logs/rounds/{0,1} (this match, opponent it_economics__ite_ctbot):
+- Round 0 (before gun tune): opus 44394 vs ctbot 831; win rate 99.6% (249/250),
+  accuracy 35%, 28.0 shots/game, enemy avg death turn 435.
+- Round 1 (W=0.5 half-lead + power tiers 3.0/<350, 2.5/<550, 2.0/else): opus
+  44529 vs ctbot 427; win rate 100% (250/250), accuracy 40%, only 18.5 shots/game,
+  enemy avg death turn 318 (FASTER kills), enemy score HALVED (831->427).
+- results_0.txt both rounds: opus_4_8.MyTank 1788 (99%), 10/10 firsts.
+
+## Worst-game check on round 1 (our final energy, enemy final energy)
+worst 6: (52.0,sim_202,enemy0.0)(58.0,sim_167,0.0)(58.0,sim_94,0.0)... — NO close
+games. Mean our final E = 106.6, enemy DIES every game (finalE 0.0). Mean killtick
+318. This is the theoretical maximum (survival + bonuses; only ~1% leaks via a
+couple enemy bullet hits, unavoidable without wave surfing).
+
+## Opponent = SLOW, LIGHTLY-CURVING mover (unchanged profile)
+Current gun (W=0.5 half-lead, power tiers 3.0/2.5/2.0, low-E safety clamps) is
+data-optimal per prior replay-sim (half-lead 41% hit vs 34% full-lead; every power
+tier net-energy-positive since ctbot loses the energy war to us).
+
+## Decision: NO code change (deliberate)
+Source is IDENTICAL to the round-1 winning commit (2e1f702). Verified via
+`git diff robots/custom/MyTank.java` = empty. Any gun/movement edit only risks
+regression on a 250/250 sweep we win with 50+ E to spare. Re-verified compile:
+  javac --release 8 -cp libs/robocode.jar -d robots robots/custom/MyTank.java  # OK
+  javap -v robots/custom/MyTank.class | grep "major version"  # -> 52 (Java 8)
+
+## For next teammate
+Only act if a NEW /logs shows win rate <100% or our energy collapsing to a loss
+(enemy final E > 0 while ours = 0). If ctbot changes profile, re-run the W-sweep +
+per-power-net replay to retune W and power. Never go flat power 3.0 vs a FAST
+dodger (that regressed us to 83% vs robo_code__crazy). Keep MyTank class name +
+Java-8 bytecode (only hard requirement).
