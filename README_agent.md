@@ -492,3 +492,149 @@ the enemy's estimated turn rate**:
    want to finally crack it, that would make all future rounds much easier to
    validate confidently instead of relying on post-hoc log analysis of
    real matches only.
+
+## Round 6 update (this round) — confirmed bot is healthy, made progress on the long-standing local-battle-testing issue
+
+### Context
+Only `/logs/rounds/0/` and `/logs/rounds/1/` exist in this environment for me. Both
+are real combat (not walkovers) against `robo_code__sittingduck` (per git log,
+this is "Rung 3/115"). Results: **100% win rate both rounds** (250/250 and
+250/250), ~94% bullet accuracy, avg min energy 96, no losses at all.
+Ran `python3 tools/analyze_freezes.py /logs/rounds/1 --threshold 100 | grep -i
+sonnet` -> **zero matches**, confirming the wall-freeze (round 3 fix) and
+radar-freeze (round 4 fix) bugs documented earlier in this file are NOT
+regressing — all 500 freeze findings in round 1's logs are on the opponent
+(`robo_code__sittingduck`), which is expected since it's a stationary sentry
+bot by design.
+
+Given the current opponent is a fully passive, non-moving, non-firing
+sentry, and we're already winning every single game with high accuracy and
+minimal damage taken, there isn't much combat-parameter tuning that would
+show up as a measurable improvement against *this specific* opponent — our
+bottleneck isn't targeting/movement quality, it's just closing out the kill.
+I chose NOT to make speculative combat-logic changes this round (e.g.
+hard-coding max bullet power always) since:
+1. It's unclear whether the *same* opponent will be faced in subsequent
+   rounds/rungs (git history shows opponents changing roughly every 2 rounds:
+   `technischeinformatica__tearsofsteel` -> `wouterjoosse__infinitylock` ->
+   `robo_code__sittingduck`), so over-fitting to a passive sentry bot (e.g.
+   removing distance-based bullet power conservation) could hurt us against
+   a real, energy-punishing opponent in a future rung.
+2. The existing distance-scaled bullet power logic
+   (`bulletPowerForDistance()`) is a generally sound, opponent-agnostic
+   default (more power close range where hit-chance is high, less far away
+   to conserve energy) and isn't broken — no evidence in the logs of it
+   costing us games.
+
+### Real progress: found the actual root cause of the long-standing "local headless battle won't run" issue (partially)
+Every previous round's notes (rounds 1-5 above) recorded failing to get
+`./robocode.sh -battle ... -nodisplay` working locally for pre-submission
+validation. I made concrete progress on this:
+
+1. **First blocker (found + fixed): missing JVM `--add-opens` flags.**
+   Calling `java -cp "libs/*" robocode.Robocode -battle ...` directly (as
+   suggested by earlier rounds' repro steps) throws
+   `java.lang.ExceptionInInitializerError` /
+   `InaccessibleObjectException: Unable to make field ... accessible` from
+   `net.sf.robocode.io.URLJarCollector`, because `robocode.sh` normally adds
+   several `--add-opens=...=ALL-UNNAMED` flags before invoking `java` (see
+   `robocode.sh`'s `java \ -cp "libs/*" ... "--add-opens=...`) that get lost
+   if you invoke `java` directly without them, and separately `robocode.sh`
+   itself has the `cd "${0%/*}"` quirk noted in round 1's writeup. Fix: pass
+   the same 4 `--add-opens` flags manually:
+   ```
+   java -cp "libs/*" -Xmx512M \
+     --add-opens=java.base/sun.net.www.protocol.jar=ALL-UNNAMED \
+     --add-opens=java.base/java.lang.reflect=ALL-UNNAMED \
+     --add-opens=java.desktop/javax.swing.text=ALL-UNNAMED \
+     --add-opens=java.desktop/sun.awt=ALL-UNNAMED \
+     robocode.Robocode -battle battles/<yourbattle>.battle -nodisplay -nosound -results /tmp/r.txt
+   ```
+   This gets you past the crash and into an actual (empty, see below) battle
+   run with clean log output.
+
+2. **Second blocker (found, NOT fixed): stale `robots/robot.database`.**
+   The checked-in `robots/robot.database` is a serialized Java object cache
+   built on the original developer's machine
+   (`/Users/johnbyang/Desktop/games/robocode/robots/...` — verified via
+   `strings robots/robot.database | head`), which doesn't exist in this
+   sandbox. I deleted it and reran; Robocode regenerated a fresh
+   `robot.database` referencing the *correct* sandbox paths (verified via
+   `strings robots/robot.database | grep MyTank` showing
+   `/workspace/robots/custom/MyTank.class` etc. correctly), so the repository
+   scanner CAN find and cache our robots when starting fresh.
+
+3. **Third blocker (found, NOT fixed — this is why local battles still don't
+   work): `loadSelectedRobots()` still logs `Can't find 'custom.MyTank'` even
+   with a freshly-regenerated, correct `robot.database`, and the resulting
+   battle silently runs with ZERO robots (empty `results.txt`, rounds
+   "initialize"/"clean up" with no scores).** Looking at the stack trace
+   ordering: `BattleManager.startNewBattle -> RepositoryManager
+   .loadSelectedRobots -> checkDbExists -> reload`. This means
+   `loadSelectedRobots` is called and fails to resolve `custom.MyTank`
+   *before* `checkDbExists`/`reload` has re-scanned the repository into
+   memory for this process — i.e. `loadSelectedRobots` appears to look up
+   robots in an in-memory list that's empty at that point in the same call,
+   not re-querying after the reload it itself triggers. This reproduces
+   identically on a second, subsequent run even after the database file is
+   confirmed correct on disk — so it's not a "run it twice" fix. I did NOT
+   find a fix for this within this round's remaining time. I tried:
+   creating a `custom/MyTank.properties` sidecar file (classname/name/author
+   fields) as earlier rounds speculated might be needed — did not help by
+   itself.
+   - **This confirms (again) that the real grading harness must be doing
+     something different from a plain `robocode.sh -battle` invocation**
+     (e.g. maybe it forces two full separate process invocations — one to
+     build the repo cache, one to battle — or calls
+     `RepositoryManager.reload()`/refresh explicitly before selecting
+     robots, or uses a totally different entry point/API rather than the
+     `-battle` CLI flag). Since real matches against real opponents (rounds
+     0 and 1, both against `robo_code__sittingduck`, and previous rounds
+     against other opponents) have consistently loaded and run our
+     `custom.MyTank` successfully for many rounds now, this is purely a
+     local-sandbox testing convenience issue, not something affecting actual
+     scored matches.
+   - I did NOT commit any test scaffolding for this (a throwaway
+     `robots/custom2/MyTank2.java` dummy opponent + `battles/test_self.battle`
+     I created to test with were deleted again before finishing this round,
+     specifically to avoid any risk of the extra files confusing the *real*
+     grading harness's robot discovery) — if you want to continue this
+     investigation, recreate a simple second robot under a new package (e.g.
+     `custom2`) plus a `.battle` file listing both `selectedRobots`, and try
+     digging into `net.sf.robocode.repository.RepositoryManager` (class
+     files are inside `libs/robocode.repository-1.10.0.jar` — extract/
+     decompile if needed) to understand why `loadSelectedRobots` doesn't see
+     the freshly reloaded repository contents in the same call.
+
+### What I did NOT get to
+- Did not make any changes to `MyTank.java`'s combat logic this round — logs
+  show it's healthy (100% win rate, no freeze regressions) and I didn't want
+  to risk a speculative, unvalidated change (local battle-testing still isn't
+  fully working, see above) against an opponent this passive where I can't
+  actually tell if a tweak like "always max bullet power" helps or hurts
+  without real match feedback anyway.
+- Did not finish resolving the local battle-runner (see blocker 3 above) —
+  this is the closest anyone has gotten in 5+ rounds of trying (JVM flags
+  fixed, stale-cache issue identified and fixed for that one file, only the
+  `loadSelectedRobots`-ordering issue remains), so a future teammate with a
+  bit more step budget has a much narrower, well-documented problem to dig
+  into now instead of starting from scratch.
+
+### Suggestions for next teammate
+1. Check `/logs/rounds/<N>/trace.md` for this round's actual opponent/result
+   first, as always. If it's still `robo_code__sittingduck` and still 100%,
+   this rung is probably about to change opponents (per git history, ~2
+   rounds per rung) — the *next* opponent may be much more aggressive, so
+   re-run `tools/analyze_freezes.py` and check accuracy/avg-min-energy
+   numbers closely for the first time against a real threat.
+2. If you want to finish the local-battle-runner fix: reproduce blocker 3
+   above (delete `robots/robot.database`, use the full `--add-opens` java
+   command documented above with a 2-robot `.battle` file) and dig into
+   `RepositoryManager.loadSelectedRobots`/`checkDbExists`/`reload` (decompile
+   from `libs/robocode.repository-1.10.0.jar` if source isn't already
+   available under e.g. a `src/` directory — I didn't check for that this
+   round, worth a quick `find / -iname RepositoryManager.java` first).
+3. Otherwise, focus stays the same as previous rounds: watch for a real
+   aggressive opponent to finally validate the circular-motion gun
+   prediction (round 5's change) and current bullet-power/movement tuning
+   against something that fights back.
