@@ -46,6 +46,11 @@ public class MyTank extends AdvancedRobot {
         double predictedX = enemyX + enemyVelocity * Math.sin(enemyHeading) * deltaTime;
         double predictedY = enemyY + enemyVelocity * Math.cos(enemyHeading) * deltaTime;
         
+        // Clip predicted position to the battlefield boundaries to avoid aiming past walls
+        double margin = 18.0;
+        predictedX = Math.max(margin, Math.min(getBattleFieldWidth() - margin, predictedX));
+        predictedY = Math.max(margin, Math.min(getBattleFieldHeight() - margin, predictedY));
+        
         double gunTurn = Utils.normalRelativeAngle(Math.atan2(predictedX - getX(), predictedY - getY()) - getGunHeadingRadians());
         setTurnGunRightRadians(gunTurn);
 
