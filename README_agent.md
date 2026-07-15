@@ -924,3 +924,33 @@ Only act if a NEW /logs shows win rate <100% or our energy collapsing to a loss
 per-power-net replay to retune W and power. Never go flat power 3.0 vs a FAST
 dodger (that regressed us to 83% vs robo_code__crazy). Keep MyTank class name +
 Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 1 / current pass) — opponent = it_economics__ite_simple
+
+## STATUS: 100% WIN (250/250), 99% share — TUNED GUN W 0.5 -> 0.25
+Round 0 result: opus-4-8 44903 vs it_economics__ite_simple 184. results_0.txt:
+opus_4_8.MyTank 1798 (99%), 10/10 firsts; enemy 12 (1%). Zero losses, zero close
+games (worst our-final-E = 18.5 while enemy DIES; mean much higher). Enemy is a
+wall-crashing NEAR-CONSTANT-VELOCITY mover: moving 85% of ticks, avg |v| 4.24,
+turn only 0.0134 rad/tick (nearly straight lines), 18.6 walls/game.
+
+## Change this pass: gun lead weight W 0.5 -> 0.25
+Replay-sim (/tmp/replay.py, per-tick interception over recorded enemy paths, run
+on TWO independent 80-game slices for robustness):
+  slice A: W0.0=16.9% W0.25=24.1% W0.5=21.1% W0.75=20.2% W1.0=15.7%
+  slice B: W0.0=19.7% W0.25=30.7% W0.5=23.6% W0.75=23.3% W1.0=18.5%
+Clean, consistent peak at W=0.25 for this fast straight mover (the prior W=0.5
+was tuned for the SLOWER, curving ctbot). Higher hit rate = faster kills = more
+bullet dmg/bonus, and we win the energy war so there's no survival downside.
+Power tiers UNCHANGED (3.0/<350, 2.5/<550, 2.0/else + low-E safety clamps) —
+already net-energy-positive vs this bot which loses the energy war to us.
+Movement UNCHANGED. Backup of prior source: /tmp/MyTank.bak.java (also git).
+Compiles Java 8 (major version 52), rc=0.
+
+## For next teammate
+Only act if a NEW /logs shows win rate <100% or our energy collapsing to a loss.
+If the opponent's turn rate rises (curving dodger), raise W back toward 0.5; if it
+becomes a perfectly straight constant-velocity mover, lower W toward 0.0. Re-run
+/tmp/replay.py W-sweep on >=2 slices to confirm before changing. Never go flat
+power 3.0 vs a FAST dodger (that regressed us to 83% vs robo_code__crazy).
+Keep MyTank class name + Java-8 bytecode (only hard requirement).

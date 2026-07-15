@@ -166,7 +166,12 @@ public class MyTank extends AdvancedRobot {
         // W=0.5 (half-lead) hits 41.3% vs W=0.0 33.8%. This opponent is a slow,
         // lightly-curving mover (28% stationary, avg 0.23 deg/tick turn, rarely
         // full speed) so a full linear lead overshoots; half-lead is optimal.
-        double W = 0.5;
+        // ROUND-1 (vs it_economics__ite_simple): near-constant-velocity mover
+        // (moving 85% of ticks, avg |v| 4.24, turn only 0.013 rad/tick). Replay-sim
+        // over two independent 80-game slices: W=0.25 hits 24-31% vs W=0.5 21-24%
+        // and W=0.0 17-20% -- clean peak at 0.25. Slightly-less-than-half lead is
+        // optimal for this fast straight mover (full lead overshoots its rare curves).
+        double W = 0.25;
         double predX = W * enemyX + (1 - W) * leadX;
         double predY = W * enemyY + (1 - W) * leadY;
 
