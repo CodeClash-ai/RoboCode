@@ -3689,3 +3689,46 @@ Compiles Java 8 (major version 52). Backup of prior source: /tmp/MyTank.bak.java
   ever fires, dodging is key). High-risk, local harness broken -> trust /logs.
 - Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING.
 - Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 2 / current pass) — opponent = admiralrasmussen__wavesurfing — REWROTE CONSERVATION (was LOSING 0/10 both rounds)
+
+## CRITICAL: Round-1 conservation mode NEVER TRIGGERED -> we still lost 0/10 firsts.
+Both rounds: wavesurfing 600/602 (10/10 firsts) vs opus 37/80 (0 firsts). We die
+(finalE 0.0) while enemy keeps 37-99 E. Enemy fires ZERO bullets, never rams ->
+does 0 damage to us (verified: 0 big energy drops on us across games). ALL our
+energy loss is SELF-INFLICTED firing at a ~2% dodger.
+
+## WHY R1's conservation never activated (the bug)
+Detection used enemyFireCount (enemy energy drops 0.09..3.05). BUT our OWN low-power
+hits drop the enemy's energy into that same band -> 18 false "fires" counted in
+sim_0 >> the <=4 threshold. So enemyPassive was ALWAYS false and we fired 78 shots
+to death.
+
+## THE FIX (this pass): DAMAGE-TAKEN based detection + energy-differential firing
+1. New fields damageTaken (accumulated in onHitByBullet: 4p+2(p-1); onHitRobot:+0.6)
+   and myFireCount. Detection: enemyPassive = (t>40) && (damageTaken < 5.0). This
+   is immune to our own hits confounding it. If the enemy EVER starts dealing real
+   damage, damageTaken>=5 -> we exit conservation and the normal gun/movement
+   (W=0.75, orbit ~245px) takes over -> SAFE vs a firing opponent.
+2. Endgame is decided by ENERGY DIFFERENTIAL (both idle -> inactivity drain; whoever
+   has MORE energy survives). Verified: in losses the enemy idles at 37-88 E while
+   we bled to 0. So the winning play is to STAY ABOVE the enemy's energy.
+   In conservation: cheap close dead-on shots (power<=0.5/0.3, dist<240, align 0.04)
+   fired ONLY when banking (ourE>75, to break the 100-100 parity by knocking the
+   enemy down) OR ahead (ourE>enemyE+15). Stop when below 75 AND not ahead -> we
+   can NEVER be dragged below the enemy -> we outlast it in the idle drain -> WIN.
+
+## Compile: javac --release 8 ... -> major version 52 (Java 8). rc=0.
+
+## For next teammate — VERIFY (this is the matchup we're flipping from 0/10)
+- Want NEW /logs: our finalE stays HIGH (>enemy's), we STOP dying, we get FIRSTS.
+- RISK: if we bank down to 75 but land ~0 hits (enemy dodges all), we could be at
+  75 vs enemy ~100 and lose that game. If losses persist, the enemy's energy is
+  staying too high -> either (a) lower the banking floor (75->85) so we spend less
+  and stay nearer 100, accepting fewer enemy hits, OR (b) if enemy stays at 100 no
+  matter what, the ONLY win is to end with MORE energy than it -> just DON'T FIRE at
+  all in conservation (allowFire=false always) and rely on staying at ~100 vs the
+  enemy's ~100 (coin-flip/draw, still better than 0/10). Check the enemy's actual
+  final-E in the new logs to decide.
+- Check `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING first.
+- Keep MyTank class name + Java-8 bytecode (only hard requirement).

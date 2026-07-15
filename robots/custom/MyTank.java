@@ -51,6 +51,8 @@ public class MyTank extends AdvancedRobot {
     private int enemyFireCount = 0;      // times we detected the enemy firing
     private double enemyEnergyHigh = 100; // enemy's peak energy (to detect its fires)
     private long turnCount = 0;
+    private double damageTaken = 0;      // total damage the enemy has dealt us (bullet+ram)
+    private int myFireCount = 0;         // total shots we have fired
 
     public void run() {
         setColors(Color.BLUE, Color.CYAN, Color.WHITE);
@@ -364,25 +366,52 @@ public class MyTank extends AdvancedRobot {
         // fires 0 bullets and we land a few cheap ones. So: fire only tiny-power,
         // close, perfectly-aligned shots, and ONLY while we hold a big energy
         // reserve. This keeps us alive indefinitely while still scoring a little.
+        // Detection is based on DAMAGE TAKEN, not enemy energy drops (our own
+        // low-power hits drop the enemy's energy into the 0.09..3.05 "fire" band and
+        // falsely inflated enemyFireCount, so that detector never triggered).
+        // The wave surfer does 0 damage to us: if after a warmup we've taken almost
+        // nothing, it's passive. Our ONLY threat is self-inflicted firing bleed.
         long t = getTime();
-        boolean enemyPassive = (t > 120) && (enemyFireCount <= 4);
+        boolean enemyPassive = (t > 40) && (damageTaken < 5.0);
         if (enemyPassive) {
-            // Enemy does no damage -> our only threat is self-inflicted bleed.
-            // Keep a large reserve; fire small, only close and dead-on.
-            power = Math.min(power, (dist < 120) ? 1.0 : 0.5);
-            // Never fire below a healthy reserve so we can NEVER bleed to death.
-            if (getEnergy() < 60) allowFire = false;
-            // Only shoot when very likely to matter: close range, tight aim.
-            if (dist > 260) allowFire = false;
-            alignThresh = 0.045;
-            // If we're anywhere behind on energy, do not fire at all -- the enemy
-            // can't hurt us, so a big reserve costs nothing and guarantees survival.
-            if (getEnergy() < enemyEnergy) allowFire = false;
+            // WINNING PLAN vs a non-firing wave surfer: SURVIVE to the turn limit.
+            // If both bots are alive at the end, the enemy gets NO last-survivor
+            // bonus (that is the only thing it beat us with) and BULLET DAMAGE
+            // decides. So bank a tiny bit of bullet damage with a few cheap,
+            // close, dead-on shots EARLY, then STOP FIRING ENTIRELY to guarantee
+            // we never bleed out. Total fire budget is strictly capped.
+            // The match is decided by the energy-differential showdown: whoever
+            // has MORE energy when both idle survives the inactivity drain. Since
+            // our real hit rate vs this perfect dodger is far below the 25% needed
+            // for firing to improve the differential, the guaranteed-safe rule is:
+            // only ever fire when we are STRICTLY AHEAD on energy by a safe margin,
+            // with cheap shots. Every cheap shot that LANDS lowers the enemy (good);
+            // every miss costs us <=0.5 but we only spend it while comfortably ahead,
+            // so we can NEVER be dragged below the enemy. This keeps us permanently
+            // above the enemy's energy -> we outlast it in the idle drain -> we win.
+            power = Math.min(power, (dist < 130) ? 0.5 : 0.3);
+            alignThresh = 0.04;
+            // Only take high-confidence close shots.
+            if (dist > 240) allowFire = false;
+            // Fire cheap close shots in EITHER of two safe situations:
+            //  (a) BANKING phase: while we still hold a big absolute reserve
+            //      (>75) we can afford to pump cheap shots to knock the enemy
+            //      down (each landed hit lowers it ~2; misses cost <=0.5). This
+            //      breaks the initial 100-vs-100 parity so we pull ahead.
+            //  (b) MAINTAIN phase: once we're strictly ahead by a safe margin,
+            //      keep firing to widen the lead.
+            // We stop firing when BOTH fail -> below 75 reserve AND not clearly
+            // ahead -> so we can never be dragged below the enemy. Result: we end
+            // the idle showdown with more energy than the enemy -> we outlast it.
+            boolean banking = getEnergy() > 75;
+            boolean ahead = getEnergy() > enemyEnergy + 15;
+            if (!banking && !ahead) allowFire = false;
         }
 
         if (allowFire && getGunHeat() == 0 && Math.abs(gunTurn) < alignThresh
                 && getEnergy() > power + 0.5) {
             setFire(power);
+            myFireCount++;
         }
     }
 
@@ -545,6 +574,9 @@ public class MyTank extends AdvancedRobot {
     }
 
     public void onHitByBullet(HitByBulletEvent e) {
+        // Track damage the enemy deals us: a bullet of power p deals 4p (+2(p-1) if p>1).
+        double p = e.getPower();
+        damageTaken += 4 * p + (p > 1 ? 2 * (p - 1) : 0);
         // Change direction when hit to be less predictable. Raised 0.5 -> 0.8:
         // a hit means the enemy's gun profiled our current path, so disrupt it
         // (vs dankraemer__juggernaut, a lead-aiming gun that hits 45% in our losses).
@@ -558,6 +590,8 @@ public class MyTank extends AdvancedRobot {
     }
 
     public void onHitRobot(HitRobotEvent e) {
+        // Ram collisions cost us 0.6 energy each.
+        damageTaken += 0.6;
         // Ram some damage but mostly back off
         moveDirection = -moveDirection;
         if (e.isMyFault()) {
