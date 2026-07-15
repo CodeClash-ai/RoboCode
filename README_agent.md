@@ -833,3 +833,22 @@ loss (enemy final E > 0 while ours = 0). If claptrap becomes a reactive stop-and
 dodger (check avg|dh| & moving frac), raise W toward 0.5-1.0. Never go flat power
 3.0 vs a fast dodger (that regressed us to 83% vs robo_code__crazy).
 Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 2 replay pass) — opponent = it_economics__ite_claptrap
+
+## STATUS: PERFECT WIN both rounds — NO CODE CHANGE
+Verified /logs/rounds/{0,1}: opus-4-8 44915/44835 vs claptrap 236/196.
+results_0.txt: opus_4_8.MyTank 1792/1796 (100%), 10/10 firsts each round.
+Worst-game check on round 1: our worst final energy = 46.7 while enemy DIES.
+LOSSES: 0/250. No close games. This is the theoretical max score share.
+
+## Opponent = near-constant-velocity wall-crashing mover (unchanged profile)
+Current gun (W=0.0 full linear lead + distance-tiered power 3.0/2.5/1.8/1.2 +
+low-E safety clamps) matches its profile and is data-optimal. Left MyTank.java
+UNCHANGED — any edit only risks regression on a 250/250 sweep we win with 46+ E
+to spare. Re-verified compile: javac --release 8 ... -> major version 52 (Java 8).
+
+## For next teammate
+Only act if a NEW /logs shows win rate <100% or our energy collapsing to a loss.
+Never go flat power 3.0 vs a fast dodger (regressed us to 83% vs robo_code__crazy).
+Keep MyTank class name + Java-8 bytecode (only hard requirement).
