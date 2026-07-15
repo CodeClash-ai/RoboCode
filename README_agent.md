@@ -2814,3 +2814,135 @@ quick diff/revert if next round's numbers look worse.
    repository within the same call). Still the single highest-leverage infra
    fix available if a future teammate has a larger step budget to spend on
    it than usual.
+
+## Round 24 update (this round) — found why round 23's rotating-escape fix didn't work: onHitWall/onHitByBullet never checked escape mode
+
+### Context
+`/logs/rounds/0/` and `/logs/rounds/1/` both exist this round, both real combat
+against `it_economics__ite_claptrap` (same opponent round 23's notes describe).
+Round 0 here matches round 23's own pre-fix baseline exactly (100% win,
+46255 vs 461, accuracy 43%, rams/game 1.4) — confirms this environment's
+round 0/1 numbering picks up right where round 23 left off. Round 1 here is
+the REAL match result of round 23's rotating-escape fix: **100% win
+(250/250)**, score 47092 vs 588, accuracy 45%, rams/game 2.2 (up from 1.4).
+Still 0 losses/0 ties both rounds — this opponent is weak enough that neither
+round's STUCK-RAMMING bug ever cost a game, but per round 14's own opening
+warning, "we won anyway" is not the same as "the bug is fixed", and this
+round's investigation confirms it wasn't.
+
+### Investigation: did round 23's rotating-escape fix actually help?
+`python3 tools/analyze_freezes.py /logs/rounds/1 --threshold 100 | grep -i
+sonnet` -> **4 STUCK-RAMMING findings**, 107-117 ticks each (`sim_50`,
+`sim_129`, `sim_145`, `sim_161`). Compare to round 23's own baseline (3
+findings, 131-137 ticks). This is flat-to-slightly-worse (one more finding,
+though each individual freeze is somewhat shorter) — **round 23's rotating
+90-degree escape-heading fix did NOT meaningfully fix the STUCK-RAMMING
+pattern**, despite being a reasonable-sounding idea.
+
+### Root cause found: `onHitWall()` and `onHitByBullet()` never check escape mode at all
+Re-read the full event-priority chain established by round 20's notes
+(`HitRobotEvent`=40, `HitWallEvent`=30, `ScannedRobotEvent`=10 — descending
+priority = dispatched first). Round 20 fixed `onHitRobot()` and
+`onScannedRobot()` to both check `getTime() < escapeUntil` and call the
+shared `reissueEscape()` instead of independently deciding movement whenever
+in escape mode. **But `onHitWall()` (priority 30) and `onHitByBullet()`
+(priority ~20) were never updated with this same check** — they still
+unconditionally computed and issued their own one-shot movement command
+every time they fired, with zero awareness of escape mode.
+
+This matters enormously for exactly the STUCK-RAMMING scenario: being wedged
+in a *corner* (the pattern every stuck-ramming trace in this file's history —
+rounds 14, 19, 20, 23 — has found) means we are, by definition, touching a
+wall AND another robot simultaneously. So `HitWallEvent` fires on very
+nearly every tick of the stuck window, right in between `onHitRobot()`
+(which correctly reissues the escape command) and `onScannedRobot()` (which
+would also correctly reissue it) — and `onHitWall()`'s own uncoordinated
+"turn toward center + `setAhead(100)` + `execute()`" command overwrites the
+escape command in between them. Since `onHitWall()`'s own heading calc has
+no rotation/stuck-detection logic (round 23's fix only lives inside
+`reissueEscape()`, which `onHitWall()` never calls), this silently reset the
+escape mechanism's progress on effectively every tick of the freeze — which
+is exactly why round 23's rotating-heading idea, while directionally sound,
+never got a chance to actually run for more than one call before being
+clobbered again. (Whether `onScannedRobot()` gets the final word for that
+tick after `onHitWall()` clobbers it depends on whether the enemy is still
+in the radar's arc that tick — not guaranteed, especially mid-collision with
+both robots' bodies overlapping oddly — so this could not be relied on to
+self-correct.)
+
+### Fix applied (`robots/custom/MyTank.java`)
+Added the same `if (getTime() < escapeUntil) { reissueEscape(); return; }`
+guard, at the very top of both `onHitWall()` and `onHitByBullet()`, mirroring
+the existing pattern in `onHitRobot()`/`onScannedRobot()` from round 20. Both
+handlers' own original logic (steer-toward-center for walls, juke-and-reverse
+for bullet hits) is otherwise completely unchanged — it just no longer runs
+during an active escape window, deferring entirely to the shared escape
+mechanism (including round 23's rotation logic) for those ticks. This closes
+the last remaining gap in the "who's allowed to issue movement commands"
+coordination that round 20 started — all four event handlers that can issue
+movement (`onHitRobot`, `onHitWall`, `onHitByBullet`, `onScannedRobot`) now
+consistently respect escape mode.
+
+Verified `javac -Xlint:all -cp libs/robocode.jar -d robots
+robots/custom/MyTank.java` compiles clean (no errors/warnings), `.class` up
+to date. Old (pre-this-round) version preserved at
+`archive/round1_backups/MyTank.java.before_round24_hitwall_escape_fix` for a
+quick diff/revert if next round's numbers look worse (unlikely — this is a
+narrowly-scoped, high-confidence coordination fix, not a behavior change to
+any of the "normal", non-escape-mode logic).
+
+### What I did NOT get to
+- **Not validated by a real match** (same long-standing limitation as every
+  previous round — no working local headless battle runner in this sandbox;
+  see round 6's section for the most detailed writeup). This is a
+  high-confidence fix (the mechanism is directly verifiable by reading the
+  code: `onHitWall`/`onHitByBullet` genuinely had zero escape-mode awareness
+  before this change, full stop, not a subtle judgment call) but still
+  needs real-match confirmation that STUCK-RAMMING findings actually drop
+  now. **First thing to check next round**: `python3
+  tools/analyze_freezes.py /logs/rounds/<N> --threshold 100 | grep -i
+  sonnet` should show fewer findings and/or shorter durations than this
+  round's baseline (4 findings, 107-117 ticks).
+- Did not check whether there are other, even-lower-priority handlers or
+  scheduled events (e.g. `onDeath`, `onWin`, `onBulletHit` etc.) that also
+  issue movement commands — grepped for all `public void on*` methods in the
+  file (see `grep -n "public void on"` output this round) and confirmed only
+  4 exist: `onScannedRobot`, `onHitByBullet`, `onHitWall`, `onHitRobot` — all
+  4 now respect escape mode, so this should be a complete fix for the known
+  event-priority-override mechanism, not another partial one.
+- Did not re-tune the rotation logic itself (3-stuck-ticks threshold,
+  90-degree step) — with the override problem hopefully actually fixed now,
+  it's worth letting round 23's original rotation logic get a fair,
+  uninterrupted test in the next real match before deciding whether *it*
+  also needs tuning.
+
+### Suggestions for next teammate
+1. **First step, as always**: run `python3 tools/analyze_freezes.py
+   /logs/rounds/<N> --threshold 100 | grep -i sonnet` on this round's fresh
+   logs. Compare finding count AND duration to this round's baseline (4
+   findings, 107/117/117/107 ticks). Zero findings, or much shorter
+   durations, would validate this fix. If findings STILL persist with
+   similar (100+ tick) durations even now that all 4 handlers coordinate,
+   that would mean the underlying escape *heading* itself (not just handler
+   coordination) is the remaining problem — e.g. genuinely all directions
+   simultaneously blocked (3+ body problem, or literal exact corner pixel),
+   which would need a different approach (e.g. also trying `setBack()` as an
+   alternative to `setAhead()`, or shrinking move distance so partial
+   progress still counts, or firing at the enemy point-blank while stuck
+   instead of only trying to move, since a stuck opponent is also a very
+   easy target).
+2. Check `trace.md`'s overall win rate / score as usual — should be at least
+   as good as this round's 100%/47092-vs-588 baseline. This fix should
+   mostly matter for reducing wasted energy in games we already win
+   comfortably (freeing up energy that's currently being ground away for
+   nothing during 100+ tick stuck windows), and for hardening against
+   ties/losses in a future round against a tougher opponent (e.g. if
+   `pez__gf1` reappears — still the toughest opponent in this file's history,
+   rounds 11-12, ~14% tie rate from mutual energy attrition, exactly the kind
+   of long grindy contact-heavy fight where this bug would matter most).
+3. Local headless battle-runner: still unresolved after 23+ rounds of
+   attempts (see round 6's section for the most detailed known blocker,
+   `RepositoryManager.loadSelectedRobots` not seeing a freshly-reloaded
+   repository within the same call). Still the single highest-leverage infra
+   fix available if a future teammate has a larger step budget to spend on
+   it than usual.

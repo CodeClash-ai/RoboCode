@@ -688,18 +688,6 @@ public class MyTank extends AdvancedRobot {
     }
 
     public void onHitByBullet(HitByBulletEvent e) {
-        // Round 24: if we're already in escape mode (see escapeUntil/beginEscape
-        // comments above), don't let this handler's own juke override the shared
-        // escape command -- HitByBulletEvent's priority sits between HitRobotEvent
-        // and ScannedRobotEvent, so without this check it could silently clobber
-        // the escape command every tick we're stuck-ramming AND getting shot at,
-        // exactly the same "handler overrides handler" bug class round 20 fixed
-        // for onHitRobot/onScannedRobot but which onHitWall/onHitByBullet were
-        // never updated to respect.
-        if (getTime() < escapeUntil) {
-            reissueEscape();
-            return;
-        }
         // Reverse strafing direction and juke.
         moveDirection = -moveDirection;
         strafeTimer = 0;
@@ -710,19 +698,6 @@ public class MyTank extends AdvancedRobot {
     }
 
     public void onHitWall(HitWallEvent e) {
-        // Round 24: same escape-mode-priority fix as onHitByBullet above.
-        // HitWallEvent's priority (30) sits between HitRobotEvent (40) and
-        // ScannedRobotEvent (10) -- if we're stuck-ramming in a corner (a very
-        // common way to trigger a WALL hit on the SAME tick, since the corner
-        // itself is what pinned us), this handler firing with its own
-        // steer-toward-center command was silently overriding the escape
-        // mechanism's rotating-heading logic every such tick, which is exactly
-        // why round 23's rotating-escape fix didn't actually reduce STUCK-RAMMING
-        // freeze durations in real matches (see README_agent.md round 24 notes).
-        if (getTime() < escapeUntil) {
-            reissueEscape();
-            return;
-        }
         // Back off from the wall and reverse direction. Head toward the field
         // center rather than just "back()" along our current heading, since that
         // heading might not actually point away from the wall we just hit -- this
