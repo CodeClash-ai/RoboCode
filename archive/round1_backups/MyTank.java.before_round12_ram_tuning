@@ -165,45 +165,31 @@ public class MyTank extends AdvancedRobot {
 
         // --- Gun: linear prediction targeting ---
         double bulletPower = bulletPowerForDistance(e.getDistance());
-        // Round 12 tuning: corrected energy-management math. Round 11's version of
-        // this block throttled bullet power down to a cheap 1.0 whenever OUR OWN
-        // energy was low, reasoning (incorrectly) that low accuracy (~17% against
-        // this opponent, pez__gf1) made firing a bad bet in isolation. That
-        // reasoning only looked at our own energy in a vacuum. The actual Robocode
-        // economics (Rules.getBulletHitBonus == 3x bulletPower energy refunded to
-        // the shooter on a hit, on top of Rules.getBulletDamage == 6*power-2 dealt
-        // to the target for power>1) mean the metric that actually matters is the
-        // *relative* energy swing between us and the enemy per shot, which works
-        // out to:
-        //     swing(P, p) = p*(9P - 2) - P   [p = hit probability, P = bullet power]
-        // At our actual measured accuracy (p ~= 0.17), swing(P) is INCREASING in P
-        // for every power level we use (3.0/2.9/2.2/1.5) -- i.e. higher power is
-        // *better* for relative energy swing at this accuracy, not worse. Round
-        // 11's throttle-to-1.0-when-low change was therefore net counter-productive
-        // (it lowered our relative swing precisely when we could least afford to
-        // fall further behind), and matches the observed result: round 11's real
-        // match (see README_agent.md round 12 notes) showed the tie rate and score
-        // were flat-to-slightly-worse after that change, not improved.
-        // Kept/changed this round:
-        //  1. Finishing triage (kept, this part is fine): if the enemy's remaining
-        //     energy is <= 16 (a single power-3 hit could kill them outright),
-        //     always use max power -- worth it for the potential kill.
-        //  2. Own-energy-low throttle-down (REMOVED): no longer reduce power when
-        //     our own energy is low; keep using the normal distance-based power,
-        //     since the math above shows that's better for relative swing, not
-        //     worse, even (especially) when we're behind.
-        //  3. NEW "press the advantage" rule: if we have a big energy lead over the
-        //     enemy (getEnergy() - e.getEnergy() > 15), use max power to try to
-        //     close out the fight decisively rather than let a long, grindy
-        //     long-range battle continue -- round-0/1 logs show a persistent ~14%
-        //     tie rate from long games (700-1500+ turns) where both sides slowly
-        //     bleed to 0 together; pressing a clear advantage harder should convert
-        //     more of those into decisive wins before mutual attrition/inactivity
-        //     decay has a chance to catch up to us too.
+        // Round 11 tuning: energy management. Analysis of round-0 logs (opponent
+        // pez__gf1 -- see README_agent.md round 11 notes) showed a much higher
+        // tie rate (13.6%) than any previous rung, with many of those games
+        // showing BOTH robots' energy bleeding down to ~0 without either landing
+        // a final kill -- i.e. we were spending bullet energy on low-probability
+        // shots (accuracy dropped to 17% against this more mobile/dodgy
+        // opponent) at a rate that risked mutual bankruptcy rather than a clean
+        // win. Two cheap, targeted adjustments:
+        //  1. If the enemy is already low enough that a solid hit could finish
+        //     them (their remaining energy <= max hit damage at power 3, i.e.
+        //     16), always use max power regardless of distance -- worth the
+        //     extra spend for a potential kill, and denies them a chance to
+        //     recover/keep fighting.
+        //  2. If OUR OWN energy is getting low (<= 15) and the enemy is NOT in
+        //     immediate kill range (>16 energy), throttle bullet power down to
+        //     a cheap 1.0 rather than continuing to fire full-price shots at a
+        //     ~17%-ish hit rate -- preserves our own energy for survival /
+        //     ramming opportunities instead of racing the enemy to 0 on a bet
+        //     we're not favored to win. Both thresholds are deliberately simple
+        //     (no distance dependence) since the goal here is coarse survival
+        //     triage, not fine targeting.
         if (e.getEnergy() <= 16) {
             bulletPower = 3.0;
-        } else if (getEnergy() - e.getEnergy() > 15) {
-            bulletPower = 3.0;
+        } else if (getEnergy() <= 15) {
+            bulletPower = 1.0;
         }
         double bulletSpeed = 20 - 3 * bulletPower;
 
@@ -338,34 +324,6 @@ public class MyTank extends AdvancedRobot {
             return;
         }
 
-        // --- Round 12 addition: opportunistic ramming. ---
-        // Per Rules.html: ROBOT_HIT_DAMAGE = 0.6 energy taken by BOTH robots on any
-        // robot-robot collision, plus ROBOT_HIT_BONUS = 1.2 *extra* damage dealt to
-        // the target by whichever robot was moving forward into the collision. That
-        // means initiating contact nets the initiator a relative energy swing of
-        // +1.2 (they lose 0.6+1.2=1.8, we lose 0.6) -- a better swing-per-action than
-        // almost any bullet at our current ~17% accuracy (see the bulletPower
-        // comment above for the full swing(P,p) math), and it costs zero gun
-        // energy/heat. Previously our movement logic only ever tried to hold
-        // PREFERRED_DISTANCE or flee (onHitRobot always backed away), so we were
-        // leaving this essentially free damage source completely unused, despite
-        // round-0/1 logs showing plenty of long, grindy games decided by mutual
-        // attrition -- exactly the situation where a free, bullet-independent
-        // damage source should help convert ties into wins.
-        // Trigger only when already very close (well inside our normal orbit
-        // radius, so this never fights the wall-avoidance/stuck-watchdog logic
-        // above, which always takes precedence via the early return) and we're not
-        // critically low on energy ourselves (a collision still costs us 0.6, so
-        // don't risk it if we're down to fumes).
-        if (enemyDistance < 60 && getEnergy() > 3) {
-            double turnToEnemy = robocode.util.Utils.normalRelativeAngle(
-                    absBearing - getHeadingRadians());
-            setTurnRightRadians(turnToEnemy);
-            setAhead(enemyDistance + 20);
-            execute();
-            return;
-        }
-
         // --- Movement: orbit / strafe around the enemy at preferred distance ---
         strafeTimer++;
         if (strafeTimer > 40 + (int) (Math.random() * 30)) {
@@ -488,28 +446,12 @@ public class MyTank extends AdvancedRobot {
     }
 
     public void onHitRobot(HitRobotEvent e) {
-        // Round 12 change: collision handling now depends on our health, to work
-        // with (not against) the new opportunistic-ramming logic added in
-        // onScannedRobot() this round. Contact damage (see the ramming comment
-        // above) already happened the instant this event fired regardless of what
-        // we do next -- backing away doesn't undo it. Since initiating/continuing
-        // contact is a favorable relative-energy trade (+1.2 swing per exchange,
-        // no gun energy cost) as long as we're not critically low ourselves, keep
-        // pressing forward into the opponent when healthy so we can rack up repeat
-        // ram hits instead of immediately retreating and giving up the position.
-        // Only fall back to the old "retreat toward field center" behavior when our
-        // own energy is critically low (a further 0.6 hit could matter) -- mirrors
-        // the same field-center-aware steering fix from earlier rounds so we don't
-        // blindly setBack() into whatever wall/robot corner we happened to be
-        // facing.
-        if (getEnergy() > 8) {
-            double turnToEnemy = robocode.util.Utils.normalRelativeAngle(
-                    e.getBearingRadians());
-            setTurnRightRadians(turnToEnemy);
-            setAhead(40);
-            execute();
-            return;
-        }
+        // Rammed something (or got rammed) - back away toward the field center rather
+        // than blindly setBack() along our current heading, which could just as easily
+        // re-drive us into the same robot/wall corner repeatedly (same class of bug as
+        // the old onHitWall() handler, fixed in an earlier round -- applying the same
+        // fix here since round-0 logs show avg 1.1 rams/game, a plausible source of
+        // repeated unnecessary contact damage).
         double myX = getX();
         double myY = getY();
         double cx = getBattleFieldWidth() / 2.0;

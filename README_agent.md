@@ -1210,3 +1210,155 @@ or loss rate goes UP, or accuracy/score drops).
    repository within the same call). Still the single highest-leverage infra
    fix available if a future teammate has a larger step budget to spend on
    it than usual.
+
+## Round 12 update (this round) — corrected energy-swing math + opportunistic ramming
+
+### Context
+Only `/logs/rounds/0/` and `/logs/rounds/1/` exist in this environment for me.
+Both real combat (confirmed via `tools/analyze_sim_logs.py`) against `pez__gf1`
+— same tougher opponent round 11's notes describe. Round 1's logs are the real
+match result of round 11's "energy management" change (throttle bullet power
+to 1.0 when our own energy is low). Result: **62% win rate** (155/250), 24%
+`pez__gf1`, **35 ties (14%)** — essentially flat vs round 0's 64%/22%/14%
+baseline (pre-round-11-change), team score barely changed (22951 vs 22998).
+So round 11's change was net neutral-to-slightly-negative, not the
+improvement it was hoping for. `analyze_freezes.py` confirms no wall/radar
+freeze regressions (zero findings on `sonnet_5` in round 1's logs) — the tie
+problem is a real tactical issue (mutual energy grinding to 0 in very long
+700-1500+ turn games), not a latent bug.
+
+### Key finding: round 11's energy-throttle reasoning was mathematically backwards
+Worked out the actual Robocode economics from `Rules.class` (decompiled via
+`javap`, see below) rather than guessing:
+- `Rules.getBulletHitBonus(power) == 3 * power` — the SHOOTER gets 3x the
+  bullet's power refunded as energy on a hit (on top of the damage dealt to
+  the target), a mechanic none of rounds 1-11's notes had accounted for.
+- `Rules.getBulletDamage(power) == 6*power - 2` for power > 1 (`4*power` for
+  power <= 1).
+- Combining these, the **relative energy swing per shot** (our energy minus
+  their energy, positive = good for us) at hit probability `p` and power `P`
+  works out to:
+  ```
+  swing(P, p) = p*(9P - 2) - P
+  ```
+  At our actual measured accuracy against this opponent (`p ~= 0.17`),
+  `swing(P)` is **increasing** in `P` for every power level we actually use
+  (1.5/2.2/2.9/3.0) — i.e. **higher bullet power is better for us at this
+  accuracy, not worse**. Round 11's "throttle down to power 1.0 when our own
+  energy is low" heuristic had exactly the wrong sign: it reduced our
+  relative-swing efficiency precisely in the situation (already behind) where
+  we could least afford to fall further behind. This matches the observed
+  flat/slightly-worse real result above.
+- Decompile command used, if a future teammate wants to double check other
+  constants: `jar xf libs/robocode.jar robocode/Rules.class && javap -p -c
+  robocode/Rules.class` (from a scratch dir). Also useful:
+  `robocode/Rules.ROBOT_HIT_DAMAGE = 0.6`, `ROBOT_HIT_BONUS = 1.2`
+  (documented directly in `javadoc/robocode/Rules.html`, no decompiling
+  needed for those two).
+
+### Changes made this round (`robots/custom/MyTank.java`)
+1. **Removed** the round-11 "own energy low -> throttle bullet power to 1.0"
+   rule (shown above to be counter-productive). Kept the "enemy energy <= 16
+   -> always max power" finishing rule (that one was always directionally
+   correct per the same math — higher power is better at our accuracy
+   regardless of whose energy triggered the check).
+2. **Added** a new "press the advantage" rule: if `getEnergy() - e.getEnergy()
+   > 15` (we have a clear energy lead), use max power (3.0) rather than the
+   normal distance-scaled power, to close out fights faster instead of
+   letting a long-range grind continue into a potential tie. This is the
+   mirror-image, better-reasoned version of what round 11 was trying to do.
+3. **New: opportunistic ramming.** Per the `ROBOT_HIT_DAMAGE`/`ROBOT_HIT_BONUS`
+   constants above, initiating robot-robot contact nets the initiator a
+   relative swing of **+1.2 per collision** (they lose 0.6+1.2=1.8, we lose
+   0.6) — a better swing-per-action than almost any bullet at our current
+   ~17% accuracy, and it costs zero gun energy/heat. Previously the bot's
+   movement logic only ever tried to hold `PREFERRED_DISTANCE` or flee
+   (`onHitRobot` always backed away), leaving this essentially free damage
+   source completely unused. Added:
+   - In `onScannedRobot()`: if `enemyDistance < 60 && getEnergy() > 3`, skip
+     normal orbit movement for that tick and instead turn toward + charge the
+     enemy (`setAhead(enemyDistance + 20)`) to force/continue contact. This
+     check sits *after* the existing stuck-watchdog/wall-avoidance early
+     returns, so it never fights those (they still take precedence).
+   - `onHitRobot()`: now presses forward into the opponent (`setAhead(40)`
+     toward their bearing) when `getEnergy() > 8`, instead of always backing
+     away — the collision damage already happened by the time this event
+     fires regardless of what we do next, so retreating was pure lost
+     opportunity for repeat contact damage. Falls back to the old
+     retreat-toward-field-center behavior only when critically low on energy
+     (`<= 8`), for safety.
+4. Verified `javac -cp libs/robocode.jar -d robots robots/custom/MyTank.java`
+   compiles clean (no errors/warnings), `.class` up to date. Old
+   (pre-this-round) version preserved at
+   `archive/round1_backups/MyTank.java.before_round12_ram_tuning` for a quick
+   diff/revert if next round's numbers look worse.
+
+### What I did NOT get to
+- **Not validated by a real match** (same long-standing limitation as every
+  previous round — no working local headless battle runner in this sandbox).
+  This round's changes are real behavioral changes (not pure bugfixes), so
+  treat with normal caution: check next round's tie rate, win rate, and
+  avg-rams/game closely.
+  - **Specific risk to watch for with the ramming change**: charging directly
+    at the enemy when within 60px necessarily means closing distance, which
+    could expose us to more return fire at point-blank range if this
+    opponent's accuracy is *also* better up close (symmetric risk — but our
+    own fire-angle threshold logic, round 10, is also more generous up close,
+    so we should out-shoot them at range too). If avg-min-energy or loss rate
+    gets *worse* next round, this is the first thing to check/revert.
+  - **Risk to watch for with "press the advantage" (max power when
+    getEnergy() - e.getEnergy() > 15)**: slower bullets (higher power = lower
+    bulletSpeed) could reduce hit rate specifically in these already-winning
+    situations. If accuracy drops noticeably in games we're clearly ahead in,
+    consider tuning the threshold or reverting this one piece.
+- Did not touch `PREFERRED_DISTANCE`, the fire-angle threshold (round 10), or
+  the circular-motion gun prediction/turn-rate smoothing (rounds 5/9) at all
+  this round — wanted to isolate the energy-math correction + ramming as one
+  coherent, well-reasoned change this round rather than stacking multiple
+  unrelated tweaks.
+- Did NOT do a rigorous per-shot accuracy-vs-power correlation analysis on the
+  real logs (would require correlating each bullet's `p` field in `sim_*.jsonl`
+  with whether it eventually hit, which isn't trivially available per-bullet
+  in the current log format without tracking bullet trajectories tick-by-tick
+  to their disappearance) — the `swing(P,p)` formula above is a sound
+  first-principles argument from the documented game rules, but a future
+  teammate with more steps could build a script to empirically verify it
+  against real per-shot outcomes if the numbers don't move as expected.
+
+### Suggestions for next teammate
+1. **First step, as always**: check `/logs/rounds/<N>/trace.md` for this
+   round's real result.
+   - If tie rate drops below ~14% and/or win rate/score improves vs this
+     round's baseline (62% win / 24% opp / 14% tie, score 22951 vs 13591),
+     both the energy-math fix and ramming change are validated — consider
+     tuning the ramming trigger distance (currently 60px) up a bit, or
+     lowering the "press advantage" threshold (currently 15 energy) to
+     trigger the max-power finishing push more often.
+   - If avg-rams/game goes up a lot but win rate/score doesn't improve (or
+     gets worse), the ramming change may be exposing us to more return fire
+     than it's worth — consider reverting via
+     `archive/round1_backups/MyTank.java.before_round12_ram_tuning` or
+     tightening the trigger (e.g. only ram when we also have an energy edge,
+     not unconditionally within 60px).
+   - If accuracy drops specifically in high-energy-lead games, revisit the
+     "press the advantage" max-power override.
+2. Run `python3 tools/analyze_freezes.py /logs/rounds/<N> --threshold 100 |
+   grep -i sonnet` as the standard regression check for the wall/radar freeze
+   bug classes (rounds 3/4) — should print nothing if healthy.
+3. If ties are still common after this round's changes, the next lever to
+   pull is probably actual defense/dodging improvement (this bot's movement
+   has never been validated against an opponent with real (13-15%+) accuracy
+   before this rung — see round 11's notes for the original observation that
+   `pez__gf1` is the first opponent across 11 rounds of history to land hits
+   on us at a comparable rate to our own accuracy). A proper wave-surfing
+   dodge (tracking incoming-bullet-implied danger zones rather than a fixed
+   perpendicular orbit) has been suggested since round 1 and still hasn't
+   been attempted — this would reduce damage *taken* rather than trying to
+   increase damage *dealt* further, which is the side of the ledger every
+   round so far (5, 7-12) has focused on instead.
+4. Local headless battle-runner: still unresolved after 11+ rounds of
+   attempts (see round 6's section for the most detailed known blocker,
+   `RepositoryManager.loadSelectedRobots` not seeing a freshly-reloaded
+   repository within the same call). Still the single highest-leverage infra
+   fix available if a future teammate has a larger step budget to spend on
+   it than usual.
