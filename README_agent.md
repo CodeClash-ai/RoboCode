@@ -4976,3 +4976,188 @@ before touching that code path again.
    repository within the same call). Still the single highest-leverage infra
    fix available if a future teammate has a larger step budget to spend on it
    than usual.
+
+## Round 40 update (this round) — found & fixed a likely ROOT CAUSE of the multi-round escape-freeze saga: manual execute() calls inside event handlers eating lower-priority events
+
+### Context
+Both `/logs/rounds/0/` and `/logs/rounds/1/` exist this round, both real combat
+against a **new** opponent, `robo_code__fire` (different from
+`andrekorol__oppswantmedead`, the opponent behind rounds 34-38's escape-mode
+saga). Round 0: **100% win (250/250)**, matches round 39's exact baseline
+(13.7 shots, 54% accuracy, avg min energy 88, walls 1.8, rams 1.0) — no code
+change had been made between round 39 and this round's round 0. Round 1 (a
+second independent 250-game sample, still no code change yet): **99% win
+(248/250)**, **2 losses** (`sim_26.jsonl`, `sim_160.jsonl`), avg min energy
+dropped to 87.
+
+### Investigation: traced both losses, found gun heading frozen for 30+ ticks
+`python3 tools/analyze_freezes.py /logs/rounds/1 --threshold 20 | grep -i
+sonnet` showed only short (30-48 tick) STUCK-RAMMING findings — nothing as
+severe as rounds 35-36's catastrophic multi-hundred-tick freezes. But
+per-tick energy tracing of both losses showed a clear, consistent, costly
+pattern: after entering a wall/ram lock, we take ~50-80 ticks of continuous
+`HIT_ROBOT`/`HIT_WALL` contact damage (-0.6/tick, expected) while landing
+**zero bullet hits on the opponent** for the entire lock duration, while the
+opponent (not itself locked, since it's not "at fault" for the collision)
+keeps landing full power-3 hits on us every ~16 ticks (their gun cooldown) —
+in `sim_26.jsonl`, four separate -16.6 hits during one ~80-tick lock alone.
+This directly caused both losses (a purely offense-side self-inflicted
+starvation, not the position-freeze itself, which is short/mostly benign per
+round 26's finding).
+
+Dumped per-tick `x`/`y`/`bh`(body heading)/`gh`(gun heading)/`rh`(radar
+heading) for `sim_26.jsonl` around the lock: **gun heading (`gh`) froze
+byte-identical at 1.591 starting from the exact tick `onHitWall()` first
+fired (t=167)**, and stayed frozen through the entire subsequent
+`onHitRobot()` lock (t=171-249+, 30+ ticks and counting past when I stopped
+checking) — while radar heading (`rh`) kept cycling through a full sweep
+every ~8 ticks the whole time (confirmed the enemy's actual absolute bearing,
+computed from both robots' logged positions, DOES fall within one of the
+radar's swept arcs during this window — so the radar mechanically passes
+over the enemy regularly, yet no new gun-turn command ever got issued).
+Since gun-turn commands are only ever set inside `onScannedRobot()`, and
+`onHitWall()`/`onHitRobot()` never touch gun heading themselves, a frozen
+`gh` starting exactly when `onHitWall()` first fires means **`onScannedRobot()`
+stopped being invoked at all** the moment the wall/ram lock began — not just
+skipped its own movement decision (which was already known/expected inside
+escape mode), but never ran its unconditional gun-turn-and-fire logic either
+(which sits BEFORE the escape-mode check in the function, so it should run
+every single time `onScannedRobot()` is invoked, escape mode or not).
+
+### Root cause found: manual `execute()` calls inside higher-priority event handlers can eat a same-turn lower-priority event
+Robocode dispatches same-turn events in descending priority order:
+`HitRobotEvent`=40, `HitWallEvent`=30, `HitByBulletEvent`~20,
+`ScannedRobotEvent`=10 (lowest, dispatched last) — this exact fact was
+already documented in round 20's notes for a DIFFERENT purpose (command-
+overwrite coordination). What nobody had previously considered: `execute()`
+is normally called exactly ONCE per turn, at the bottom of `run()`'s main
+loop, AFTER all of that turn's event handlers have already been dispatched
+(that's the standard, documented-safe `AdvancedRobot` pattern). But this
+codebase's `reissueEscape()` — called from `onHitWall()`, `onHitRobot()`,
+AND `onScannedRobot()` whenever escape mode is active — plus several OTHER
+event-handler code paths added across many earlier rounds (the round-12
+opportunistic-ramming trigger inside `onScannedRobot()`, the round-16
+dodge-on-fire juke inside `onHitByBullet()`, the normal per-tick orbit-
+movement tail of `onScannedRobot()`, and the round-12/25 "press forward"
+branch of `onHitRobot()`) **all called `execute()` manually, a second time,
+from directly inside an event handler**. Since `HitWallEvent`/`HitRobotEvent`
+are HIGHER priority and dispatch BEFORE `ScannedRobotEvent` within the same
+turn, an explicit `execute()` call from inside `onHitWall()`/`onHitRobot()`
+can cause the engine to treat that turn as "done" before the still-pending,
+lower-priority `ScannedRobotEvent` for that SAME turn ever gets dispatched —
+silently dropping that turn's scan, and with it, that turn's gun-aim update
+and firing decision. In NORMAL play (no wall/robot contact), only
+`onScannedRobot()` fires per turn, so this never causes an observable problem
+(the single execute() call inside it just double-flushes the SAME commands
+it already set, harmlessly). But during ANY tick where a `HitWallEvent` or
+`HitRobotEvent` ALSO fires — i.e. every single tick of a wall-stuck or
+ramming-lock episode, exactly the scenario every one of rounds 14/19/20/23/
+24/25/26/34/35/36/37 iterated on — the higher-priority handler's own
+`execute()` call can starve `onScannedRobot()` for that turn, repeatedly, for
+the entire duration of the lock. This is a strong candidate for the deeper,
+previously-unidentified mechanism UNDERLYING the entire rounds 34-38 saga
+(each of those rounds found and fixed a real, narrower symptom — turn-vs-
+translation strategy, dedupe, turn-rate-vs-alignment timing — but none of
+them questioned whether `execute()` should be being called manually inside
+event handlers AT ALL).
+
+### Fix applied (`robots/custom/MyTank.java`)
+Removed **all six** manual `execute();` calls that were living inside event-
+handler code (both branches of `reissueEscape()`; the ramming-trigger and
+orbit-movement tail inside `onScannedRobot()`; the dodge/juke tail of
+`onHitByBullet()`; the "press forward" branch of `onHitRobot()`) — kept
+**only** the single `execute();` at the bottom of `run()`'s main
+`while(true)` loop, which is the standard, safe location: it flushes
+whatever commands got queued by THIS turn's event handlers (all of them, run
+in full priority order, completely undisturbed by any handler prematurely
+advancing the turn) exactly once, after they've all had a chance to run.
+This does not change WHAT commands are computed/queued anywhere — every
+`setTurnRightRadians`/`setAhead`/`setBack`/`setFire`/etc. call is completely
+unchanged — it only removes the redundant, risky manual flush-and-implicitly-
+advance-the-turn calls that were scattered through handler code across many
+earlier rounds. Verified `javac -Xlint:all -cp libs/robocode.jar -d robots
+robots/custom/MyTank.java` compiles clean (no errors/warnings), `.class`
+up to date. Old (pre-this-round) version preserved at
+`archive/round1_backups/MyTank.java.before_round40_execute_fix`.
+
+### What I did NOT get to
+- **Not validated by a real match** (same long-standing limitation as every
+  previous round — no working local headless battle runner in this sandbox).
+  This is a plausible, mechanism-consistent explanation for the *specific*
+  gun-freeze-during-lock pattern traced this round (and, if correct, likely
+  the deeper cause behind several of rounds 34-38's escape-mode symptoms
+  too), but I could NOT confirm the exact internal Robocode engine semantics
+  of manually-called `execute()` from official docs within this round's
+  remaining time (searched `javadoc/robocode/AdvancedRobot.html` but didn't
+  find an explicit statement either confirming or ruling out this
+  turn-skipping behavior) — treat this as a well-reasoned, evidence-backed
+  hypothesis with a low-risk fix (removing redundant execute() calls can, at
+  worst, do nothing; every command is still queued and will still flush via
+  run()'s own execute()), not a 100%-confirmed root cause. **First thing to
+  check next round**: does `gh` (gun heading) EVER freeze during a
+  `HIT_WALL`/`HIT_ROBOT` streak in fresh logs? If this fix worked, it
+  shouldn't. Also check whether losses correlating with "long HIT_ROBOT/
+  HIT_WALL streaks with zero landed hits on the opponent during them" (this
+  round's exact pattern in both losses) disappear.
+- Did NOT re-verify each removed `execute()` call site individually against
+  its own original rationale (e.g. round 16's dodge-on-fire juke, round 12's
+  ramming trigger) to confirm none of them had some OTHER, unrelated reason
+  to force an immediate flush (e.g. wanting the juke to take effect before
+  some subsequent same-tick check) — read through all six removal sites and
+  didn't find any such dependency (they're all simple "set commands, then
+  return" patterns with nothing after the execute() call that depended on it
+  having already taken effect), but flagging in case a subtle behavioral
+  change shows up.
+- Did not touch bullet power, movement/orbit tuning, `PREFERRED_DISTANCE`,
+  or any of the escape-mode heading/rotation logic itself (rounds 23/25/37)
+  this round — this fix operates "underneath" all of that (it's about WHEN
+  commands get flushed and WHETHER lower-priority events get to run at all,
+  not what any handler decides to do), so all of that logic should behave
+  identically once actually given a chance to run every turn.
+- Did not extend `tools/analyze_freezes.py` or write a new tool to
+  specifically detect "gun heading frozen while radar keeps moving, during a
+  HIT_WALL/HIT_ROBOT streak" (the precise signature found this round,
+  distinct from the existing position-freeze and radar-freeze checks) — a
+  good next tooling step if this pattern needs further investigation:
+  something that flags `gh` frozen for N+ ticks specifically while `s` is
+  `HIT_WALL`/`HIT_ROBOT` would catch this exact bug class automatically.
+
+### Suggestions for next teammate
+1. **First step, as always**: check `/logs/rounds/<N>/trace.md`, and run
+   `python3 tools/analyze_freezes.py /logs/rounds/<N> --threshold 20 | grep -i
+   sonnet` as the standard regression check.
+2. **New, specific check for this round's fix**: for any losses or long
+   STUCK-RAMMING findings, dump per-tick `gh`/`rh`/`s` for our own robot
+   (template: this round's `sim_26.jsonl` trace above) and check whether
+   `gh` still ever freezes during a `HIT_WALL`/`HIT_ROBOT` streak. If it
+   does NOT freeze anymore (keeps updating every tick, i.e. `onScannedRobot()`
+   is clearly still being invoked every turn even during a lock), that
+   validates this round's diagnosis and fix — the escape-mode-timing logic
+   from rounds 23/25/37 should now finally get a fair, completely
+   uninterrupted chance to run every single turn, which none of those
+   rounds' fixes could fully guarantee before now.
+3. If `gh` still freezes despite this fix, the manual-`execute()`-inside-
+   handler theory would be wrong (or at least incomplete) — in that case,
+   look instead at whether `ScannedRobotEvent` itself is being suppressed by
+   some OTHER mechanism during body-turn-cancelled (`isMyFault`) ticks (e.g.
+   maybe the game engine only generates `ScannedRobotEvent` when the radar's
+   swept arc calculation uses the robot's ATTEMPTED heading for that tick,
+   not its actual achieved heading, and some interaction with `isMyFault`
+   corrupts that calculation specifically) — would need to dig into
+   decompiled engine internals (`libs/robocode.jar`'s
+   `net.sf.robocode.peer`/`net.sf.robocode.battle` classes, per round 6's
+   notes on how to decompile) rather than just black-box log tracing.
+4. If this fix is validated and losses against `robo_code__fire` (or
+   whatever opponent reappears) drop, consider whether `pez__gf1` (rounds
+   11-12, ~14% tie rate from mutual energy attrition) — still the toughest
+   opponent in this file's history, still hasn't reappeared after 28 rounds —
+   would show an even bigger improvement, since long grindy contact-heavy
+   fights are exactly where this bug would have mattered most.
+5. Local headless battle-runner: still unresolved after 39+ rounds of
+   attempts (see round 6's section for the most detailed known blocker,
+   `RepositoryManager.loadSelectedRobots` not seeing a freshly-reloaded
+   repository within the same call). Still the single highest-leverage infra
+   fix available if a future teammate has a larger step budget to spend on it
+   than usual — this round's fix in particular is exactly the kind of thing
+   that could have been confirmed or refuted in minutes with a working local
+   test harness, instead of requiring another full round's real-match data.

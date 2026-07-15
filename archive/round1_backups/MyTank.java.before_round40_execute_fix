@@ -259,34 +259,6 @@ public class MyTank extends AdvancedRobot {
         reissueEscape();
     }
 
-    // Round 40 fix (see README_agent.md round 40 notes): reissueEscape() and
-    // several other event-handler code paths (onHitWall, onHitRobot,
-    // onHitByBullet, and onScannedRobot's own ramming-trigger/orbit-movement
-    // tail) used to call execute() manually after queuing their turn/move
-    // commands. Manually calling execute() from INSIDE an event handler is a
-    // known Robocode pitfall: HitWallEvent (priority 30) and HitRobotEvent
-    // (priority 40) are dispatched BEFORE ScannedRobotEvent (priority 10)
-    // within the same game turn, and calling execute() from the higher-
-    // priority handler can cause the engine to consider that turn "done"
-    // before the still-pending, lower-priority onScannedRobot() dispatch for
-    // the SAME turn ever runs -- silently eating that turn's scan event.
-    // Traced this directly in a real losing game (sim_26.jsonl, round 40):
-    // once onHitWall() first fired (and called execute()), our gun heading
-    // (gh) froze byte-identical for 30+ consecutive ticks even though our
-    // own radar kept sweeping fine (radar is driven independently from
-    // run()'s own loop) -- i.e. onScannedRobot() had stopped being invoked
-    // at all, starving our gun of new aim updates and our fire logic of any
-    // chance to run, while the opponent (not colliding, so no competing
-    // high-priority handler stealing its turns) kept landing free full-power
-    // hits on us the whole time. Fix: removed every manual execute() call
-    // from event-handler code (onHitWall, onHitRobot, onHitByBullet,
-    // onScannedRobot's tail, and this function) and rely ENTIRELY on the
-    // single execute() call at the bottom of run()'s main while-loop to
-    // flush queued commands once per turn, after all of that turn's event
-    // handlers (regardless of priority) have had a chance to run and queue
-    // their own commands -- this is the standard, documented-safe
-    // AdvancedRobot pattern and avoids the priority-dependent turn-skipping
-    // risk entirely.
     // Reissue the current escape command (same target heading, recomputed relative
     // turn since our own heading may have changed slightly since escape mode
     // began). Called every tick from both onScannedRobot() and onHitRobot() while
@@ -362,6 +334,7 @@ public class MyTank extends AdvancedRobot {
             } else {
                 setAhead(100);
             }
+            execute();
             return;
         }
 
@@ -375,6 +348,7 @@ public class MyTank extends AdvancedRobot {
                 escapeHeadingRad - getHeadingRadians());
         setTurnRightRadians(turn);
         setAhead(100);
+        execute();
     }
 
     public void run() {
@@ -713,6 +687,7 @@ public class MyTank extends AdvancedRobot {
                     absBearing - getHeadingRadians());
             setTurnRightRadians(turnToEnemy);
             setAhead(enemyDistance + 20);
+            execute();
             return;
         }
 
@@ -784,6 +759,7 @@ public class MyTank extends AdvancedRobot {
         setTurnRightRadians(turnToMove);
         setAhead(finalMoveAmount);
 
+        execute();
     }
 
     private double bulletPowerForDistance(double distance, double enemyVelocity) {
@@ -879,6 +855,7 @@ public class MyTank extends AdvancedRobot {
         setTurnRightRadians(robocode.util.Utils.normalRelativeAngle(
                 Math.PI / 2 - e.getBearingRadians()));
         setAhead(60 * moveDirection);
+        execute();
     }
 
     public void onHitWall(HitWallEvent e) {
@@ -1021,6 +998,7 @@ public class MyTank extends AdvancedRobot {
                     e.getBearingRadians());
             setTurnRightRadians(turnToEnemy);
             setAhead(40);
+            execute();
             return;
         }
 
