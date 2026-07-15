@@ -3989,3 +3989,141 @@ clean win.
    repository within the same call). Still the single highest-leverage infra
    fix available if a future teammate has a larger step budget to spend on it
    than usual.
+
+## Round 33 update (this round) — new opponent (robo_code__regullarmonk), traced the single loss, no code change
+
+### Context
+Only `/logs/rounds/0/` exists in this environment for me. Per `trace.md` /
+`results.json`, this round's opponent is a **new** one, `robo_code__regullarmonk`
+(different from every opponent documented in rounds 1-32 above). Result:
+**99.6% win rate (249/250)**, team score-favorable margin (37% accuracy for
+us vs 17% for them, avg speed 6.5 vs 2.2, avg min energy 76 for us / 0 for
+them, avg death turn 947 for us / 356 for them). **1 loss** (`sim_53.jsonl`),
+0 ties. The opponent is weak overall (0% win rate) but not purely passive —
+it fires occasional power-1 shots (per the energy trace below) at a low but
+non-zero hit rate, and mostly stays put (avg speed 2.2).
+
+### Validation performed
+- `python3 tools/analyze_freezes.py /logs/rounds/0 --threshold 20 | grep -i
+  sonnet` -> only **1 finding**: a 70-tick STUCK-RAMMING in `sim_176.jsonl`
+  (a game we WON, ticks 43-113 out of 404 total). Consistent with the
+  already-understood, low-frequency, largely-benign "wall+enemy both block
+  straight-line escape" edge case documented in rounds 26/31/32 (gun aim/fire
+  isn't blocked by `isMyFault()`, only body movement) — did not re-trace in
+  full detail since the pattern and its benign nature are already
+  well-established across 3+ previous rounds; no new stuck-ramming bug found,
+  round 25/26's no-turn-escape fix is still holding.
+- `python3 tools/analyze_power_accuracy.py /logs/rounds/0 --bucket-width 0.5`
+  -> sanity check: 29.8 shots/game combined vs `trace.md`'s 21.3+9.5=30.8 —
+  within ~3%, tool still trustworthy (round 28's tick-step fix holding).
+  Notable per-bucket finding for `sonnet_5`: the 2.0-2.5 power bucket
+  (the 350-550px distance band, power ~2.2) shows only **11.5% accuracy**,
+  clearly the worst of our 4 active buckets this round (1.0-1.5: 22.9%,
+  1.5-2.0: 35.4%, 2.5-3.0: 34.8%). This looks like a **distance** effect
+  (350-550px is simply a harder range to land shots at, independent of
+  bullet power/speed — the classic Robocode wisdom that longer range =
+  harder to hit) rather than a power-value effect, since 2.5-3.0 (a mix of
+  the 150-350 "sweet spot" band and close-range/finishing overrides) is
+  actually one of the BETTER buckets this round, unlike some previous
+  opponents (rounds 28/29 saw the merged 2.5-3.0 bucket be the best; round
+  31/32's `tibola__markiv` saw it be notably worse — this round it's decent
+  again). Consistent with round 32's conclusion that per-power accuracy
+  patterns are opponent-dependent and shouldn't be over-generalized from a
+  single sample; did not act on this.
+- `javac -Xlint:all -cp libs/robocode.jar -d robots robots/custom/MyTank.java`
+  compiles clean, no errors/warnings. `.class` up to date. `MyTank.java`
+  unchanged from round 32 (980 lines).
+
+### Traced the single loss (`sim_53.jsonl`) in detail
+Dumped per-tick energy/velocity/status for both robots (filter to lines
+where either robot's energy changes by >0.5 — same technique as previous
+rounds' loss investigations, e.g. rounds 18/25/31). Findings:
+- This is a **long** game (874 ticks before we die, 948+ total) where our own
+  energy declines almost monotonically from 100 -> 0 via a very regular
+  firing cadence (mostly power ~1.3-3.0 shots roughly every 14-16 ticks,
+  matching gun cooldown), while the opponent's energy fluctuates in a
+  slower, choppier pattern between roughly 30-100 over the same window (they
+  take real periodic damage from our landed hits — visible as sharp
+  9-15-energy single-tick drops on their side, e.g. t=38 -15.4, t=260 -9.4,
+  t=376 -9.4, t=454 -7.0, t=604 -9.4 — so we ARE landing real hits
+  regularly) but never gets ground down to 0 the way we do, and recovers
+  some ground via their own occasional bullet-hit-bonus gains on us (smaller
+  +3.0 ticks matching a power-1.0 hit landing, e.g. t=130, t=690, t=948).
+  We also take 4 separate `HIT_WALL` hits in this one game (-3.0 each, ~12
+  energy total) — a similar (if smaller-scale) contributor to the pattern
+  rounds 18/31 already documented, where our own missed-shot costs plus
+  self-inflicted wall damage combine to outpace the damage we're actually
+  dealing, in this one specific game.
+- **We die from pure attrition at t=874** (energy ticks from 1.9 to 0.0 on a
+  routine firing-cost tick, NOT from an opponent bullet impact) — i.e. this
+  is the same "self-inflicted energy drain from a long string of
+  below-breakeven shots" signature rounds 18/25/31 have each independently
+  found against *different* opponents, just this time against a slow,
+  low-accuracy (17% overall) stationary-ish sentry rather than a fast mover
+  or a hard-hitting conservative shooter.
+- Checked whether this represents a systemic problem or plain variance: pooled
+  across all 250 games this round, our overall accuracy (37%) and the
+  `swing(P,p) = p*(9P-2) - P` framework (round 12) both indicate we are
+  solidly net-positive on expected energy swing per shot against this
+  opponent on average (e.g. at p=0.37, P=2.9: swing ≈ +6.0, comfortably
+  positive) — so losing this one specific game looks like ordinary
+  game-to-game variance (this one game apparently landed well below our
+  average hit rate, worsened by a few extra unlucky wall hits) rather than
+  evidence of a real bug or a mistuned parameter. 249/250 (99.6%) is
+  consistent with "very rarely, a single game's random hit sequence + a few
+  extra wall bumps conspire against us" rather than a repeatable failure
+  mode — no corrective action taken based on one sample.
+
+### What I did this round (or rather, chose NOT to do)
+Given (a) an extremely strong overall result (99.6% win rate, healthy
+accuracy/energy/speed stats, only one non-repeating loss), (b) a full trace
+of that loss showing normal variance rather than a new or recurring bug
+class, (c) clean freeze-detector output (only the already-well-understood
+benign STUCK-RAMMING edge case, and even that in a game we won), and (d) no
+local battle-testing available to validate any change before a full future
+round's real match anyway, I made **no changes to `MyTank.java`'s combat
+logic** this round — consistent with this file's long-established pattern
+(rounds 6, 13, 15, 21, 22, 26, 27, 28, 29, 32) of not touching already-working
+code without a clear, actionable signal of underperformance. I specifically
+considered (and rejected) re-adding an own-energy-based firing throttle for
+this scenario, since round 11/12's history already established that such a
+throttle is mathematically counter-productive at our typical accuracy levels
+(higher power is better for relative energy swing as long as `p` stays
+roughly constant) — the loss traced above isn't evidence that reasoning is
+wrong, just evidence that variance exists even in a favorable-EV process.
+
+### Suggestions for next teammate
+1. **First step, as always**: check `/logs/rounds/<N>/trace.md` for the
+   actual opponent this round, and run
+   `python3 tools/analyze_freezes.py /logs/rounds/<N> --threshold 20 | grep -i
+   sonnet` as the standard regression check (should print nothing, or only
+   short/benign STUCK-RAMMING findings in games we won, per rounds 26/31/32's
+   established understanding of that edge case).
+2. If `robo_code__regullarmonk` reappears and losses become MORE frequent
+   (not just 1/250), that would upgrade this round's "probably just variance"
+   read to "maybe a real pattern worth digging into further" — in that case,
+   check whether losses specifically correlate with elevated wall-hit counts
+   (this round's one loss had 4 `HIT_WALL` events, somewhat above the overall
+   2.8/game average) or with runs of many-consecutive-ticks-without-a-landed-
+   hit (would need a new/extended tool to detect "cold streaks" specifically,
+   distinct from the existing freeze/power-accuracy tools).
+3. Run `python3 tools/analyze_power_accuracy.py /logs/rounds/<N>
+   --bucket-width 0.5` and keep an eye on whether any power bucket
+   consistently underperforms across MULTIPLE different opponents (not just
+   one sample) before concluding it's power-driven rather than
+   distance/context-driven — round 32's notes already flagged this exact
+   caution, and this round's data (2.0-2.5 bucket = 350-550 distance band
+   being the clear worst, likely just "long range is hard") is a good
+   illustration of a distance-driven effect that shouldn't be misattributed
+   to the power value itself.
+4. `pez__gf1` (rounds 11-12, ~14% tie rate from mutual energy attrition)
+   remains the toughest opponent in this file's history and the single most
+   valuable target for directly re-testing the many stuck-ramming/energy-
+   management/dodge-on-fire/wall-margin changes accumulated since round 12 —
+   still hasn't reappeared after 21 rounds.
+5. Local headless battle-runner: still unresolved after 32+ rounds of
+   attempts (see round 6's section for the most detailed known blocker,
+   `RepositoryManager.loadSelectedRobots` not seeing a freshly-reloaded
+   repository within the same call). Still the single highest-leverage infra
+   fix available if a future teammate has a larger step budget to spend on it
+   than usual.
