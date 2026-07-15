@@ -197,7 +197,7 @@ public class MyTank extends AdvancedRobot {
         // Orbit perpendicular, with a distance-control offset.  Far away we cut
         // inward; too close we open out.  wallSmooth then bends the path away
         // from the battlefield edges before we commit to it.
-        double preferredDistance = (crazyEnemyScans > 8 ? 340.0 : (dangerousWallEnemy() ? 335.0 : ((straightEnemyScans > 4 && enemyFireCount == 0) ? 275.0 : (wallEnemyScans > 4 ? 315.0 : (headOnGunIsBest() ? 330.0 : (slowEnemyScans > 12 ? 285.0 : PREFERRED_DISTANCE))))));
+        double preferredDistance = (crazyEnemyScans > 4 ? 305.0 : (dangerousWallEnemy() ? 335.0 : ((straightEnemyScans > 4 && enemyFireCount == 0) ? 275.0 : (wallEnemyScans > 4 ? 315.0 : (headOnGunIsBest() ? 330.0 : (slowEnemyScans > 12 ? 285.0 : PREFERRED_DISTANCE))))));
         // Against the current GF-style opponent our gun struggles mostly due
         // to long bullet flight, while its own gun almost never connects.  Once
         // virtual guns report a hard-to-hit mover, tighten the orbit a bit to
@@ -280,18 +280,18 @@ public class MyTank extends AdvancedRobot {
         // enemies), do not gamble the whole energy stack on repeated heavy
         // bullets.  Use tiny bullets at low energy: a hit gives more energy back
         // than it costs, while misses cannot self-kill us quickly.
-        if (crazyEnemyScans > 8) {
+        if (crazyEnemyScans > 4) {
             // High-speed continuous turners are easier to hit with faster,
             // moderate-power circular shots.  Previous max-power wall/straight
             // branches over-spent on sample.Crazy traces and made the lead error
             // much larger due to slow bullet flight.
             if (getEnergy() > 16) {
-                power = Math.min(power, distance < 230 ? 2.45 : (distance < 430 ? 2.15 : 1.75));
+                power = Math.min(power, distance < 240 ? 2.50 : (distance < 460 ? 2.25 : 1.85));
             } else {
                 power = Math.min(power, 1.25);
             }
         }
-        if (dangerousWallEnemy() && crazyEnemyScans <= 8) {
+        if (dangerousWallEnemy() && crazyEnemyScans <= 4) {
             // DroidPoet-style active wall runners are dangerous, but round-1
             // logs showed the previous wide/low-power survival tune gave away
             // too much bullet damage and even lost a couple of 10-round sets.
@@ -334,7 +334,7 @@ public class MyTank extends AdvancedRobot {
         int gun = chooseGun();
         if (stationaryScans > 5) {
             gun = GUN_HEAD_ON;
-        } else if (crazyEnemyScans > 8) {
+        } else if (crazyEnemyScans > 4) {
             gun = GUN_CIRCULAR;
         } else if (dangerousWallEnemy()) {
             // Against the active wall runner in the current logs, trace replay
