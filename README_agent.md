@@ -11153,3 +11153,138 @@ regression to chase.
    repository within the same call). Still the single highest-leverage infra
    fix available if a future teammate has a larger step budget to spend on
    it than usual.
+
+## Round 101 update (this round) — new tougher opponent (alexbay218__shreker), traced losses to genuine opponent accuracy, no changes
+
+### Context
+Only `/logs/rounds/0/` exists in this environment for me. Per `trace.md`,
+this round's opponent is a **new** one, `alexbay218__shreker` (different
+from every opponent documented in rounds 1-100 above). Result: **87% win
+rate (217/250)**, 48% accuracy, avg speed 5.9, avg walls/game 0.4, avg
+rams/game 2.2, **avg min energy 47** (notably lower than the 80-95 typical
+of rounds 48-98, and lower than round 99/100's `vikdov__dominatorx` 55-57).
+**32 losses + 1 draw** (`sim_248.jsonl`) — a real, non-trivial step down
+from the recent 94-100% win-rate streak, though still solidly winning
+overall (team score `sonnet_5` ~53868 vs opponent's much lower, per
+`trace.md`'s per-game table). The opponent (`alexbay218__shreker`) itself:
+13% win rate, 29% accuracy, avg speed 2.3 (slow), avg rams/game 0.7, avg min
+energy only 4 (dies close to empty in most games) — i.e. it's still a much
+weaker bot overall than us, but it fires almost exclusively at **max power
+3.0** with a real, consistent **26.1% accuracy on 2871 shots** (per
+`tools/analyze_power_accuracy.py`) — a notably higher, more consistent
+accuracy-at-volume than most recent max-power-biased shooters documented in
+rounds 63-98 (which typically landed in the 14-24% range at max power).
+
+### Investigation
+1. `python3 tools/analyze_freezes.py /logs/rounds/0 --threshold 20 | grep -i
+   sonnet` -> only **2 short (25/31-tick) benign "radar heading frozen"**
+   findings (the well-established benign pattern documented since round 15,
+   most recently rounds 48-100, not the round-4 freeze bug). **Zero
+   `STUCK-RAMMING` findings.** Confirms the escape-mode mechanism (rounds
+   20/23/25/34-37/40) and round 47/48's radial-blend movement fix are both
+   still fully healthy — the loss count is NOT a freeze/deadlock
+   regression.
+2. Checked `HIT_WALL`/`HIT_ROBOT`-tagged energy deltas across a sample of
+   8 losses directly: wall hits are low (0-5 per game, nothing extreme),
+   and net ramming-contact energy swing is small and roughly balanced (in
+   a couple of losses slightly unfavorable to us, e.g. `sim_107`: -4.8 us
+   vs -2.4 opp from ramming, but nowhere near large enough to explain a
+   whole-game loss on its own). Ramming/walls are not the cause here.
+3. Traced two losses (`sim_107.jsonl`, `sim_148.jsonl`) tick-by-tick
+   (energy deltas for both robots, filtered to |delta|>0.5). Both show the
+   opponent landing an unusually large number of full-power `-16.0`
+   (`6*3-2` per `Rules.getBulletDamage()`) hits in quick succession
+   throughout the game (6+ such hits each, roughly every 15-30 ticks,
+   consistent with firing at gun-cooldown-limited cadence and connecting far
+   more often in these SPECIFIC games than its own 26% average) — this
+   looks like ordinary variance landing unusually favorably for the
+   opponent in these particular games, not a self-inflicted-attrition
+   pattern on our side (we're also landing real hits back throughout, e.g.
+   several `+8.7`/`+5.7`/`+9.0` `bulletHitBonus` refunds each), and not a
+   freeze/stuck pattern (`analyze_freezes.py` found nothing in either
+   game).
+4. `python3 tools/analyze_power_accuracy.py /logs/rounds/0 --bucket-width
+   0.5` -> sanity check 27.4 shots/game combined vs `trace.md`'s
+   15.8+12.6=28.4 (within ~4%, tool still trustworthy per round 28's
+   tick-step fix). Applied round 12's `swing(P,p) = p*(9P-2) - P` formula:
+   at our own observed accuracy/power mix (dominant bucket 2.5-3.0 at 41.0%,
+   1.5-2.0 at 36.9%), our per-shot swing is comfortably positive (~+7 to
+   +9); the opponent's own swing at their observed P=3.0/p=0.261 is lower
+   but still positive (~+3.5) — i.e. we should (and, per the 87% win rate,
+   do) win the energy race on average, but the opponent's strategy (commit
+   to max power, land it at a real, non-trivial rate) is a more
+   respectable choice than most previous opponents' bullet strategies, per
+   the same math framework used since round 12. This does NOT suggest our
+   current bullet-power tuning needs adjustment — the swing math still
+   favors us decisively, consistent with the overall win rate.
+5. `javac -Xlint:all -cp libs/robocode.jar -d robots
+   robots/custom/MyTank.java` compiles clean (exit 0, no errors/warnings).
+   `.class` up to date.
+6. `diff archive/round1_backups/MyTank.java.before_round47_radial_fix
+   robots/custom/MyTank.java` — confirmed round 47's radial-blend fix (and
+   nothing else since) is exactly what's currently live (32-line diff,
+   exactly the expected radial-blend block); `MyTank.java` is 1232 lines,
+   unchanged from round 47 onward through round 100.
+
+### What I did this round (or rather, chose NOT to do)
+Given (a) still-solidly-winning overall result (87% win, real score
+margin), (b) zero STUCK-RAMMING freeze findings (escape-mode mechanism
+fully healthy), (c) wall/ram contact not implicated in the losses traced,
+(d) both traced losses showing genuine back-and-forth combat with the
+opponent getting unusually lucky/accurate in those specific games rather
+than any self-inflicted-attrition or targeting bug on our side, (e) round
+12's swing-math confirming our current bullet-power tuning remains
+comfortably net-positive against this opponent's actual observed accuracy,
+and (f) this being only the FIRST round of data against this specific
+opponent (no second sample yet to distinguish "genuinely tougher opponent"
+from "one round's variance," exactly the situation rounds 95 and 99 were
+each in on their first appearance — both turned out stable/healthy on a
+2nd sample in rounds 96/100 without needing any code change), I made **no
+changes to `MyTank.java`** this round — consistent with this file's very
+long-established pattern (rounds 6, 13, 15, 21, 22, 26, 27, 28, 29, 32, 33,
+38, 39, 41, 42, 48-100) of not touching already-working code without a
+clear, actionable signal of underperformance, and specifically consistent
+with how this exact "harder-than-usual-but-still-winning-comfortably"
+situation has been handled every previous time it's come up.
+
+### Suggestions for next teammate
+1. **First step, as always**: check `/logs/rounds/<N>/trace.md` (or
+   `results.json` + per-`sim_*.jsonl` `winner` fields if `trace.md` is
+   missing, per round 68's note) for the actual opponent this round, and run
+   `python3 tools/analyze_freezes.py /logs/rounds/<N> --threshold 20 | grep -i
+   sonnet` as the standard regression check.
+2. **If `alexbay218__shreker` reappears, this is the highest-value
+   comparison this round set up**: check whether win rate stays around
+   ~85-90% (confirming a stable, moderately-tougher-than-usual but still
+   clearly-winning matchup, like rounds 95-96/99-100's opponents) or drops
+   further. If it drops meaningfully (e.g. below ~75%), that would be the
+   first real signal to dig deeper — in that case, check specifically
+   whether the opponent's max-power accuracy is climbing above the ~26%
+   seen this round (would suggest its targeting is specifically exploiting
+   something about our movement pattern), and re-run the per-loss
+   `HIT_WALL`/`HIT_ROBOT` energy-delta and `swing(P,p)` checks described
+   above as a template.
+3. `admiralrasmussen__wavesurfing` (rounds 95-96, ~99% win/24-29% accuracy,
+   very long games, likely a genuine wave-surfer), `vikdov__dominatorx`
+   (rounds 99-100, ~94-96% win/43-44% accuracy), and the historically
+   toughest opponents in this file (`alpian__ianstank`/`pez__gf1`, rounds
+   43-44/11-12) all remain valuable comparison points if any of them
+   resurface.
+4. If a genuinely different/tougher opponent shows up with new symptoms, the
+   diagnostic playbook accumulated across rounds 18/25/31/33/38/43-100 is
+   well-documented above: check (a) freeze/escape-mode health via
+   `analyze_freezes.py`, (b) opponent's position-range vs. our own
+   (corner-camper detection), (c) whether our distance-to-enemy converges
+   toward `effectivePreferredDistance` over time (round 47's radial-blend fix
+   should now handle this generally), (d) energy-delta tracing for the
+   self-inflicted-attrition signature vs. ordinary variance from a real,
+   accurate opponent (this round's finding), and (e) round 12's `swing(P,p)`
+   formula to sanity-check whether current bullet-power tuning is still net-
+   positive at the observed accuracy before considering any throttle-based
+   change (per the round-11-vs-12 cautionary history).
+5. Local headless battle-runner: still unresolved after 100+ rounds of
+   attempts (see round 6's section for the most detailed known blocker,
+   `RepositoryManager.loadSelectedRobots` not seeing a freshly-reloaded
+   repository within the same call). Still the single highest-leverage infra
+   fix available if a future teammate has a larger step budget to spend on
+   it than usual.
