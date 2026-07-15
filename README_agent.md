@@ -5394,3 +5394,55 @@ If it becomes a HEAVY spinner (avg|dh|>0.06), circular (W=0.0 predictor applies)
 if SLOW/near-stationary, raise W toward 1.0. Always re-check
 `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING first.
 Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 1 / current pass) — opponent = miradoconsulting__roleksii (COMPETITIVE, 52 losses -> half-lead gun fix)
+
+## KEY FINDING: gun aim was WRONG (W=0.0 full lead, leftover from smallpoet) for this MODERATE NEAR-STRAIGHT mover -> net-energy-NEGATIVE (bleeding)
+Opponent CHANGED to miradoconsulting__roleksii. Round 0 result (BEFORE my change):
+opus-4-8 28648 vs roleksii 17275 (63% share). results_0.txt: opus 1230 (63%),
+8/10 firsts (enemy got 2 firsts!). Full 250-sim sweep: 52 LOSSES, 30 close(<20E),
+ourFE mean 42.6 (min 0.0), killtick 358. Genuinely competitive mutual slugfest.
+
+## Opponent profile (250 sims; header maps idx->name, enemy=non-'opus'; i=0=enemy R0)
+- movefrac 0.665, avgV 3.62 (MODERATE), avg|dh| 0.0115 (NEAR-STRAIGHT), engages ~312px.
+- Gun = HEAD-ON: median offset 0.041 rad, mean 0.063 (aims at our CURRENT position).
+
+## CHANGE THIS PASS: gun aim W 0.0 (full lead) -> 0.5 (HALF LEAD). ONE line (349).
+W-sweep replay (per-tick interception, 2 independent 80-game slices), CLEAN PEAK at W=0.5:
+  slice A: W0.0 0.230 | W0.25 0.249 | W0.5 0.315 | W0.75 0.257 | W0.9 0.275 | W1.0 0.297
+  slice B: W0.0 0.245 | W0.25 0.262 | W0.5 0.332 | W0.75 0.262 | W0.9 0.282 | W1.0 0.304
+Damage/net-energy model (120 games, distance-tiered power + gunheat) DECISIVE:
+  W0.0 (current): dmg 66400, net -13629 (BLEEDING -> the 52 losses), hit 25.0%
+  W0.5:           dmg 94263, net  +3377 (energy-POSITIVE),          hit 34.8%
+  W0.75: dmg 72965 net -9761 | W1.0: dmg 77871 net -6147.
+W=0.5 wins big on BOTH hit rate AND net energy. ANTI-BIAS: we FIRED W=0.0 in R0, so
+the replay reactivity bias FAVORS W=0.0 — yet W=0.5 wins by a huge margin -> very
+trustworthy signal (opposite of the usual bias trap). A moderate near-straight mover
+that's ~stationary 33% of ticks is best hit with a HALF lead (full lead overshoots
+the pauses/near-straight sections; head-on trails the moving sections). The current
+W=0.0 was leftover from smallpoet/crawler; wrong profile here -> net-negative firing.
+
+## Movement/dodge UNCHANGED (deliberate)
+Enemy hit density vs OUR hit density by distance (150 sims, from the OLD W=0.0 gun):
+  100-200px our 20.2/1k enemy 13.3 | 200-300px our 11.2 enemy 6.5 (most ticks) |
+  300-400px our 7.5 enemy 6.0. We already WIN the exchange at every zone; with W=0.5
+  (~35% hit vs 25%) our hit density rises further -> the gun fix alone should convert
+  most losses. Enemy uses a HEAD-ON gun (offset 0.041) so the current dodge (0.30,
+  tuned for LEAD gunners) is slightly high, BUT README documents movement/dodge
+  changes REPEATEDLY backfiring (wallspoet conservation LOST, wallspoet/juggernaut
+  dodge-up REGRESSED). The gun is the clear decisive lever; left movement alone to
+  avoid regression risk. Compiles Java 8 (major version 52). Backup: /tmp/MyTank.bak.java.
+
+## For next teammate — VERIFY
+- Want NEW /logs: the 52 losses REDUCED (ideally <20), ourFE mean UP from 42.6,
+  enemy score DOWN from 17275, share UP from 63%, firsts UP from 8/10, killtick DOWN.
+  If it REGRESSED (unlikely — W-sweep + damage model both peak at W=0.5 + anti-bias),
+  revert W to 0.0 (/tmp/MyTank.bak.java or git prior). roleksii is a MODERATE
+  near-straight HEAD-ON-gun mover -> KEEP W=0.5 half-lead. If it becomes a HEAVY
+  spinner (avg|dh|>0.06), set W=0.0 (circular); if a FAST constant-velocity straight
+  mover (avgV>5, avgdh<0.02), lower W toward 0.0. Re-run /tmp/wsweep.py + /tmp/dmg.py.
+- If losses persist after the gun fix, the SECONDARY lever is dodge: vs a HEAD-ON gun,
+  LOWER dodge-on-fire (0.30 -> 0.10-0.15) so we keep steady lateral speed (reversing
+  walks into head-on bullets). Test carefully — movement changes are high-risk.
+- Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING.
+- Keep MyTank class name + Java-8 bytecode (only hard requirement).

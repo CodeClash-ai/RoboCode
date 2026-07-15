@@ -346,7 +346,7 @@ public class MyTank extends AdvancedRobot {
         // (distance-based, kept net-positive) still guard the crazy-bot regression.
         // Chose W=0.85: strongly toward head-on (physics: slow target -> head-on best),
         // hedged just short of pure 1.0 since replay is biased by the reactive enemy path.
-        double W = 0.0;  // vs pez__smallpoet: REVERTED W=1.0->0.0. REAL cross-round data decisive: R0(W=0.0 circular) 61 losses/HR29.2%/killtick380 vs R1(W=1.0 head-on) 70 losses/HR27.1%/killtick406. R1 damage/replay model was BIASED -> misled to head-on. Circular is genuinely better in-game.
+        double W = 0.5;  // vs miradoconsulting__roleksii: MODERATE near-straight mover, HEAD-ON gun. W-sweep 2 slices peaks W=0.5 vs W=0.0(current); damage model W=0.5 net +3377 vs W=0.0 net -13629 (bleeding = 52 losses). Was 0.0 (smallpoet leftover).
         // [wallspoetas] double W = 0.9;
         // [maximbot] double W = 1.0;  // vs mgalushka__maximbot: MODERATE near-straight mover (movefrac 0.68, avgV 4.51, avg|dh| 0.022, engages ~240px). W-sweep (2 slices, 80 games each) robustly peaks at HEAD-ON: W=1.0 ~0.55 vs W=0.5 ~0.35 vs W=0.0 ~0.39. Damage model W=1.0 dmg +47pct AND net energy far higher. Near-straight moderate mover -> head-on optimal (matches florian2/gruffalo/ultron/hugbot). Was 0.5 (leftover from kcanida pikachu heavy-spinner avgdh 0.149 -- wrong profile here).
         // [prev] double W = 1.0; // vs iagomonteiro13579__npcsniper
