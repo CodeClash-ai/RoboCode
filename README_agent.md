@@ -4608,3 +4608,36 @@ version 52). Backup of prior source: /tmp/MyTank.bak.java.
   If it becomes a HEAVY spinner (avg|dh|>0.06), set W=0.0 (circular) or W=0.5.
 - Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for opponent name + INDEX
   MAPPING first. Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 2 verification pass, THIS pass) — opponent = mgalushka__maximbot
+
+## STATUS: THE ROUND-1 W=1.0 HEAD-ON CHANGE HELD — PERFECT WIN — NO CODE CHANGE
+Verified /logs/rounds/{0,1} (opponent mgalushka__maximbot, MODERATE near-straight
+mover: movefrac 0.68, avgV 4.51, avg|dh| 0.022, engages ~240px; INDEX both rounds
+i=0=opus, i=1=maximbot):
+- Round 0 (before W tune): opus 42853 vs maximbot 7838. results_0.txt: 1722 (84%),
+  10/10 firsts.
+- Round 1 (prior teammate: gun aim W=0.5 -> W=1.0 head-on): opus 43171 vs maximbot
+  8273. results_0.txt: 1708 (85%), 10/10 firsts. Enemy bullet dmg 329 -> 304.
+  Full 250-sim sweep: LOSSES = 0/250, close(<20E) = 0/250. ourFE min/mean =
+  21.8/100.1. Mean killtick 177.4 (fast kills), turns mean 328.8. Enemy DIES every game.
+
+## Decision this pass: NO code change (deliberate)
+Source is IDENTICAL to the round-1 winning commit d4c8b00 (git diff on
+MyTank.java = empty). W=1.0 head-on (line 342) is DATA-OPTIMAL for this near-straight
+moderate mover (W-sweep 2 slices robustly peaks at head-on ~0.55 vs W=0.5 trough
+~0.35; matches florian2/gruffalo/ultron/hugbot). The ~15% score leak is unavoidable
+enemy survival-bullet damage during the ~177 ticks before the kill. Raising power to
+kill faster REGRESSES real games (longer cooldown -> longer engagement -> MORE enemy
+hits — documented repeatedly across myfirstkiller/exterminador/tracker/crazy). Any
+edit only risks regression on a 250/250 sweep we win with 21+ E to spare.
+Re-verified compile:
+  javac --release 8 -cp libs/robocode.jar -d robots robots/custom/MyTank.java  # OK
+  javap -v robots/custom/MyTank.class | grep "major version"  # -> 52 (Java 8)
+
+## For next teammate
+Only act if a NEW /logs shows win rate <100% or our energy collapsing to a loss
+(enemy final E > 0 while ours = 0). maximbot is a MODERATE near-straight mover ->
+KEEP W=1.0 head-on. If it becomes a HEAVY spinner (avg|dh|>0.06), set W=0.0
+(circular) or W=0.5. Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for the
+opponent name + INDEX MAPPING first. Keep MyTank class name + Java-8 bytecode.
