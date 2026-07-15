@@ -218,9 +218,14 @@ public class MyTank extends AdvancedRobot {
         // TAPER hard beyond 200px so each far miss costs far less. Net-firing-energy
         // model over 250 recorded games (MEASURED hit rates): OLD -1773 -> NEW +398.
         // Keep full power 3.0 only in the <200px net-positive zone (49% hit).
-        if (dist < 200)       power = 3.0;
-        else if (dist < 300)  power = 1.6;
-        else if (dist < 400)  power = 1.0;
+        // ROUND-1 vs joaomcarvalho__jeujdapeu: we now orbit WIDER (~280px) to escape
+        // its lead gun, so we camp mostly at 200-300px. Our head-on hit rate there
+        // is 43% (well above 33% break-even) and we WIN the energy war (88% wins),
+        // so keep power high out to 300px for fast kills / net-positive damage.
+        // Taper beyond 300px where hit rate falls and misses drain us in grinds.
+        if (dist < 300)       power = 3.0;
+        else if (dist < 400)  power = 1.6;
+        else if (dist < 500)  power = 1.0;
         else                  power = 0.6;   // long range -> smallest drain if a miss
 
         // Energy safety clamps so a bad streak can't self-destruct us.
@@ -395,11 +400,23 @@ public class MyTank extends AdvancedRobot {
         // open and the prior -0.9 max inward pull wasn't enough to close. Steer
         // MUCH harder inward when far so we actually reach the <200px win zone;
         // only push out below ~130px. Target orbit ~160px (100-200px net-positive).
+        // ROUND-1 vs joaomcarvalho__jeujdapeu (moderate mover movefrac 0.75, avgV
+        // 3.56, avg|dh| 0.055, engages ~193-220px) with a STRONG LEAD gun (fires
+        // at median 0.605 rad off head-on -> aims where we WILL be). We won 88%
+        // (220/250) but LOST 30 games. Losses = enemy accuracy jumps to 35% (vs
+        // 22% in wins) and it out-fires us in the energy war. MEASURED enemy hit
+        // density by distance (150 games): 100-200px 9.7/1k (its DEADLIEST zone,
+        // where we camped ~160px), 200-300px 5.4/1k, 300-400px only 1.8/1k. Our
+        // OWN head-on hit rate barely drops with range: 100-200px 50%, 200-300px
+        // 43%, 300-400px 44%. => Orbit MUCH WIDER (~280px): our accuracy holds
+        // ~43-44% while the enemy's lead gun accuracy collapses (9.7 -> ~2-5/1k
+        // enemy hits). Same insight that beat the lead-gun/curving foes spinbot
+        // (~250px) and team488__meow (~260px). Attacks the 30 losses directly.
         double rangeBias = 0.0;
-        if (enemyDistance > 350)      rangeBias = -1.2;  // far: nearly head-on toward enemy to close fast
-        else if (enemyDistance > 250) rangeBias = -0.9;  // mid: strong inward pull
-        else if (enemyDistance > 180) rangeBias = -0.5;  // approaching target ~160px
-        else if (enemyDistance < 130) rangeBias = 0.5;   // too close: push out
+        if (enemyDistance > 480)      rangeBias = -1.0;  // far: strong inward pull to close
+        else if (enemyDistance > 350) rangeBias = -0.6;  // mid-far: firm inward
+        else if (enemyDistance > 290) rangeBias = -0.3;  // approaching target ~280px
+        else if (enemyDistance < 240) rangeBias = 0.5;   // too close (lead-gun kill zone): push out
 
         double desiredDir = absBearing + (Math.PI / 2 + rangeBias) * moveDirection;
 

@@ -3430,3 +3430,67 @@ rate collapsing. trackfire is STATIONARY -> KEEP W=1.0 head-on. If it becomes a
 FAST curving dodger (avg|v|>4, movefrac>0.7, avg|dh|>0.06), set W=0.0 (circular) +
 orbit out ~260px. Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for the
 opponent name + INDEX MAPPING first. Keep MyTank class name + Java-8 bytecode.
+
+# Agent Notes (Round 1 / current pass) — opponent = joaomcarvalho__jeujdapeu (COMPETITIVE, 30 losses)
+
+## KEY FINDING: jeujdapeu is a MODERATE curving mover with a STRONG LEAD gun — we camped in its kill zone
+Round 0 result (BEFORE my change): opus-4-8 38946 vs joaomcarvalho__jeujdapeu 14625
+(27% share — the HIGHEST enemy share we've faced). results_0.txt: opus 1470 (70%),
+8/10 firsts (enemy got 2 firsts!). trace.md WIN RATE 88% (220/250) — 30 LOSSES.
+Our accuracy 38%, enemy 27% overall.
+
+## Opponent profile (120 sims; header maps idx->name, enemy=non-'opus')
+- movefrac 0.75, avg|v| 3.56 (moderate), avg|dh| 0.055 (MODERATE curve, near the
+  0.06 heavy-spinner threshold), engages CLOSE (dist mean 220 / median 193).
+- MEASURED enemy gun offset when firing: median 0.605 rad, mean 0.779 rad off
+  head-on -> it uses a STRONG LEAD (predictive) gun, aims where we WILL be.
+
+## ROOT CAUSE of the 30 losses: enemy's lead gun connects at CLOSE range
+LOSSES vs WINS (energy-delta analysis, 250 games):
+- LOSSES: enemy accuracy 35%, fires 17.3/hits 6.0; we fire 23.8/hit 7.1 (30%).
+  Behind on energy 72% of ticks. WINS: enemy 22% acc (12.1 fires/2.7 hits), we
+  40% (18.9/7.6), behind only 13%. Distance IDENTICAL (219px both) -> NOT positional
+  drift; it's the enemy's lead gun connecting + energy-war bleed.
+- MEASURED enemy hit density by distance (150 games): 100-200px 9.7/1k (DEADLIEST,
+  where we camped ~160px), 200-300px 5.4/1k, 300-400px only 1.8/1k, 400+ <0.8/1k.
+- OUR head-on hit rate by distance (replay-sim, 80 games) BARELY drops with range:
+  100-200px 50%, 200-300px 43%, 300-400px 44%, 400-500px 35%.
+=> We were orbiting RIGHT IN the enemy's kill zone with no accuracy benefit.
+
+## CHANGES THIS PASS (movement + power; gun aim UNCHANGED at W=1.0)
+1. MOVEMENT: orbit ~160px -> ~280px. rangeBias: >480 -> -1.0, >350 -> -0.6,
+   >290 -> -0.3, <240 -> +0.5 (push out of the lead-gun kill zone). At 280px our
+   hit rate holds ~43% while enemy hits drop from 9.7/1k to ~2-5/1k (~half or less).
+   Same insight that beat the lead-gun/curving foes spinbot (~250px) and
+   team488__meow (~260px, 93%->100%).
+2. POWER: was 3.0/<200, 1.6/<300, 1.0/<400, 0.6/else (tuned for close npcsniper).
+   NOW 3.0/<300, 1.6/<400, 1.0/<500, 0.6/else. Keeps full power in the new
+   200-300px camp zone where our HR is 43% (net-positive) and we WIN the energy
+   war (88% wins). Taper beyond 300px where hit rate falls.
+Gun aim W=1.0 head-on CONFIRMED best via W-sweep 2 slices (monotonic to head-on
+47.6%/46.0% vs W=0.0 33.8%/33.2%; jeujdapeu is a MODERATE curver, not a heavy
+spinner, so head-on beats circular). Fire gates, energy-war taper, dodge-on-fire
+(0.45) all UNCHANGED. Compiles Java 8 (major version 52). Backup: /tmp/MyTank.bak.java.
+
+## Tool: /tmp/wsweep.py (W-sweep), /tmp/dist.py (head-on HR by distance). Rebuild
+from these notes if lost. The DECISIVE unbiased tool was enemy-hit-density-by-
+distance (enemy's ACTUAL recorded hits on us, not reactive to our aim): 100-200px
+9.7/1k vs 300-400px 1.8/1k made the orbit-wider call clear.
+
+## For next teammate — VERIFY
+- Want NEW /logs win rate ABOVE 88% (ideally 97%+), the 30 losses reduced, enemy
+  score DOWN from 14625, enemy accuracy DOWN from 35% in-loss, our avg min-E UP
+  from 47. If it REGRESSED (new losses / share drop): the wider orbit may have
+  cut our own hit rate more than expected OR the enemy's lead gun may actually be
+  good at 280px too -> pull orbit back to ~230px (thresholds 430/300/240/<200) or
+  revert to /tmp/MyTank.bak.java (git prior, 88%/close-orbit). If it worked, could
+  push orbit to ~320px (thresholds 500/380/330/<280) since our HR holds ~44% at
+  300-400px and enemy hits are only 1.8/1k there.
+- jeujdapeu is a MODERATE lead-gun curver -> KEEP W=1.0 head-on. If it becomes a
+  HEAVY spinner (avg|dh|>0.07), set W=0.0 (circular). If a fast straight mover,
+  lower W toward 0.25. Re-run /tmp/wsweep.py on >=2 slices first.
+- The remaining lever if losses persist is WAVE SURFING (its lead gun is 35%
+  accurate in losses -> dodging its bullet waves is the biggest untapped win, but
+  high-risk; local harness broken, trust /logs only).
+- Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING.
+- Keep MyTank class name + Java-8 bytecode (only hard requirement).
