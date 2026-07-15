@@ -1981,3 +1981,44 @@ accurate -> faster kills -> converts the turn-limit non-win + raises score share
   orbit back out ~260px (that beat team488__meow 100%). Re-run the W-sweep first:
   the replay tools are in tools/ (replay_wsweep.py etc). Never flat power 3.0 at
   long range vs a fast dodger. Keep MyTank class name + Java-8 bytecode.
+
+# Agent Notes (Round 2 verification pass) — opponent = it_economics__ite_florian2
+
+## STATUS: PERFECT WIN both rounds — NO CODE CHANGE THIS PASS
+Verified /logs/rounds/{0,1} (opponent it_economics__ite_florian2, a SLOW near-
+straight-line mover that barely fires):
+- Round 0 (before head-on tune): opus 42572 vs florian2 2423. results_0.txt:
+  1703 (95%), 10/10 firsts.
+- Round 1 (prior teammate: W=1.0 head-on + orbit ~200px): opus 43243 vs florian2
+  2388. results_0.txt: 1759 (92%), 10/10 firsts.
+- Full 250-sim sweep round 1: LOSSES = 0/250, close(<20E) = 0. Mean our final
+  energy 105.7 (min 29.4). MEDIAN killtick 261 (was 308 in R0 — FASTER kills),
+  mean engagement 293px (was 324). Enemy DIES every game.
+
+## The R1 change IMPROVED every REAL metric (results_0.txt share is noise)
+Cross-round 250-sim comparison: killtick 308->270, our final E 99.7->105.7,
+engagement 324->293px. The results_0.txt "95%->92%" is a 10-round SAMPLE artifact
+(enemy bullet dmg 96->154 in that tiny sample); the full 250-sim data shows R1's
+head-on+closer-orbit is strictly better. Enemy deals only ~10 dmg/game total
+(0.7 hits/game) so score share is essentially maxed regardless.
+
+## Only 3/250 games run long (>500 turns, max 1042) — all at ~400px engagement
+In these the enemy drifts/stays at range and our inward rangeBias (±0.5 rad,
+pull in when dist>230) isn't strong enough to close vs its drift + our wall
+smoothing. Considered a stronger pull but REJECTED: these 3 games are still WINS
+with huge margins, enemy is near-harmless, and touching a 250/250 config for a
+1.2% tail carries pure regression risk with negligible score upside.
+
+## Decision: NO code change (deliberate)
+Source is IDENTICAL to the round-1 winning commit 8ff8290 (verified `git diff`
+empty). W=1.0 head-on (data-optimal for this slow near-straight mover: replay-sim
+monotonic W=1.0 58-60% vs W=0.0 49-50%), orbit ~200px, power tiers 3.0/<300
+2.4/<400 1.6/<550 1.0/else, energy-war taper, low-E clamps, fire gates. Re-verified
+compile: javac --release 8 ... -> major version 52 (Java 8). rc=0.
+
+## For next teammate
+Only act if a NEW /logs shows win rate <100% or our energy collapsing to a loss.
+florian2 is SLOW/near-straight & barely fires -> KEEP W=1.0 head-on. If it becomes
+a FAST curving dodger (avg|v| up, moving frac up, avg|dh|>0), set W=0.0 (circular)
+and orbit back out ~260px (that beat team488__meow 100%); re-run the W-sweep first.
+Keep MyTank class name + Java-8 bytecode (only hard requirement).
