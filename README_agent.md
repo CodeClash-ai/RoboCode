@@ -5205,3 +5205,52 @@ HEAVY spinner (avg|dh|>0.06), circular (W=0.0 predictor already applies); if
 SLOW/stationary, raise W toward 1.0. Always re-check
 `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING first.
 Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 1 / current pass) — opponent = pez__smallpoet (COMPETITIVE, 61 losses -> head-on gun fix)
+
+## KEY FINDING: gun aim was WRONG (W=0.0 full circular, leftover from txeverson__crawler heavy spinner) for this MODERATE NEAR-STRAIGHT mover
+Opponent CHANGED to pez__smallpoet. Round 0 result (BEFORE my change):
+opus-4-8 26100 vs pez__smallpoet 18074 (59% share). results_0.txt: opus 1082
+(64%), 8/10 firsts (enemy got 2 firsts!). Full 250-sim sweep: 61 LOSSES, 30
+close(<20E), ourFE mean 40.2 (min 0.0). Genuinely competitive mutual slugfest.
+
+## Opponent profile (250 sims; header maps idx->name, enemy=non-'opus'; i=1=enemy)
+- movefrac 0.5, avgV 3.01 (MODERATE), avg|dh| 0.0149 (NEAR-STRAIGHT), engages ~341px.
+- Gun = LEAD gun: median offset 0.516 rad, mean 0.656 (aims where we WILL be).
+
+## CHANGE THIS PASS: gun aim W 0.0 (circular) -> 1.0 (HEAD-ON). ONE line (349).
+W-sweep replay (per-tick interception, 2 independent 60-game slices), peaks near HEAD-ON:
+  slice A: W0.0 0.378 | W0.5 0.385 | W0.9 0.400 | W1.0 0.406
+  slice B: W0.0 0.404 | W0.5 0.405 | W0.9 0.425 | W1.0 0.423
+Damage/net-energy model (100 games, distance-tiered power + gunheat), MONOTONIC to head-on:
+  W0.0 dmg 14718 net 1037 | W0.5 14977/1193 | W0.9 15572/1541 | W1.0 16154/1894.
+Both damage AND net energy PEAK at head-on. A moderate near-straight mover is best
+hit at ~current pos (circular lead overshoots a near-straight target). ANTI-BIAS:
+we FIRED W=0.0 in R0, so the reactivity bias would favor W=0.0 in the replay — yet
+head-on wins -> trustworthy (matches maximbot/florian2/gruffalo near-straight precedent).
+
+## Movement/dodge UNCHANGED (deliberate)
+Enemy hit density on us vs OUR hit density by distance (120 sims, UNBIASED):
+  100px enemy 15.7/1k our 17.5 | 200px 5.6/11.8 | 300px 6.4/14.3 (MOST ticks,
+  33805) | 400px 4.4/13.1 | 500px 4.1/6.7. We WIN the exchange 2.2:1 at every
+  distance >=200px. Current orbit ~290px target (achieved ~341px) camps the winning
+  zone. Dodge-on-fire 0.30 is correct (enemy uses a LEAD gun -> reversing on its
+  fire makes its lead shot miss; matches robrrrat/haikuwalls). Left movement alone
+  (README documents movement changes REPEATEDLY backfire).
+
+## Compile: javac --release 8 ... -> major version 52 (Java 8). Backup: /tmp/MyTank.bak.java (= R0 W=0.0 config).
+
+## For next teammate — VERIFY
+- Want NEW /logs: the 61 losses REDUCED, ourFE mean UP from 40.2, enemy score DOWN
+  from 18074, share UP from 59%, firsts UP from 8/10. If it REGRESSED (unlikely —
+  W-sweep + damage model both peak at head-on + anti-bias + near-straight precedent),
+  revert W to 0.0 (/tmp/MyTank.bak.java or git prior). smallpoet is a MODERATE
+  near-straight LEAD-gun mover -> KEEP W=1.0 head-on. If it becomes a HEAVY spinner
+  (avg|dh|>0.06), set W=0.0 (circular); if a FAST constant-velocity straight mover
+  (avgV>5, avgdh<0.02), lower W toward 0.0 (full linear lead). Re-run /tmp/wsweep.py
+  on >=2 slices first. The remaining lever if losses persist is WAVE SURFING
+  (high-risk, harness broken).
+- NOTE: pez__smallpoet (moderate near-straight, avgdh 0.015) is a DIFFERENT bot
+  from pez__wallspoet (heavy-curve wave surfer) and pez__wallspoetas (near-straight).
+- Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING.
+- Keep MyTank class name + Java-8 bytecode (only hard requirement).
