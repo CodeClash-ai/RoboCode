@@ -635,3 +635,43 @@ movement, or lowering the close-range power if it starts dodging our net-positiv
 shots. Re-run the replay-sim principle to retune W & power tiers.
 Keep MyTank class name + Java-8 bytecode (only hard requirement).
 Worst-game / movement one-liners are in earlier notes above.
+
+# Agent Notes (Round 1 / current pass) — opponent = pez__droidpoet
+
+## STATUS: 100% WIN (250/250), 97% score share — TUNED GUN FOR MORE MARGIN
+Round 0 result: opus-4-8 46753 vs pez__droidpoet 1729. results_0.txt: 1876 (97%),
+10/10 firsts. Enemy = ACTIVE full-speed MOBILE dodger (avg|v|=4.4, moving 63% of
+ticks, curves a lot avg|dh|=0.078). It FIRES back (16.8 shots/game, 8% acc) and
+starts at 120 energy. We win every game, enemy dies every game (finalE 0).
+BUT close games exist: worst sim_138 we finished with only 2.6 energy; avg ~87.
+
+## Replay-sim findings (/tmp/replay2.py, /tmp/dmgsim2.py — rebuild from git/these notes)
+Per-tick interception over recorded droidpoet paths (800x600, enemy heading='bh'):
+- Aim: this is a near-CONSTANT-VELOCITY mover -> FULL LINEAR LEAD wins.
+    W=0.0 (full lead)=20.9% hit, W=0.5 (old)=17.6%, W=1.0 headon=18.6%.
+  (Opposite of the reactive stop-and-go foes where head-on won! Verify aim per
+   opponent with the replay sim.)
+- Hit rate by distance: <200px=61%, 200-300=39%, 300-450=27%, 450-600=16%, far=12%.
+- Damage/round (distance-tiered power 3.0/2.4/1.6/1.0): W=0.5=75 -> W=0.0=90 (+19%).
+
+## Changes this pass (MyTank.java)
+1. Aim: W 0.5 -> 0.0 (full linear lead), and made the lead ITERATIVE (12 passes)
+   instead of single-pass for accuracy.
+2. Power cap: REMOVED the `getEnergy() < enemyEnergy -> power<=1.2` energy-war cap
+   (droidpoet starts at 120E so that cap was throttling us to 1.2 power all game
+   even up close where hit rate is 61%!). Replaced with absolute low-E safety:
+   <30->2.0, <15->1.0, <6->0.4. We beat this bot 100% so max damage = faster
+   kills = more margin in the close games. NOT an energy-conserving passive foe.
+Compiles Java 8 (major version 52), 0 errors. Backup of prior version: /tmp/MyTank.bak.java
+
+## CAVEAT: local harness broken (per all prior notes) — trust /logs, not local battles.
+The replay sim is biased (enemy path was reactive to our OLD shots) but the W=0.0
+lead advantage is consistent and the direction (more damage, faster kills) is safe
+given we already win 100%.
+
+## For next teammate
+- If NEW /logs shows win rate <100% or our min-energy collapsing to a LOSS, revert
+  to /tmp/MyTank.bak.java (git) which won 100% with the old conservative gun.
+- If droidpoet becomes a reactive stop-and-go dodger (check avg|dh| & moving frac),
+  raise W back toward 0.5-1.0. Re-run /tmp/replay2.py to retune W & power tiers.
+- Keep MyTank class name + Java-8 bytecode (only hard requirement).

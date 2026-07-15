@@ -122,23 +122,30 @@ public class MyTank extends AdvancedRobot {
         else if (dist < 450)  power = 1.6;   // ~37% hit -> moderate, ~net neutral E
         else                  power = 1.0;   // ~19% hit -> minimal power, conserve E
 
-        // Never drop below the enemy in the energy war: if our energy is lower than
-        // the enemy's, dial power down to stay net-positive (only fire cheap shots).
-        if (getEnergy() < enemyEnergy) power = Math.min(power, 1.2);
-        // Low-energy safety.
+        // Energy safety: droidpoet is an active mobile dodger we beat 100% of the
+        // time, so unlike a passive energy-conserving foe we do NOT clamp power to
+        // enemy-relative energy (that wastes our high 61% close-range hit rate).
+        // Only ease off when genuinely low so a bad streak can't self-destruct us.
+        if (getEnergy() < 30) power = Math.min(power, 2.0);
         if (getEnergy() < 15) power = Math.min(power, 1.0);
         if (getEnergy() < 6)  power = Math.min(power, 0.4);
         power = Math.max(0.1, Math.min(power, 3.0));
 
         double bulletSpeed = 20 - 3 * power;
 
-        // Linear lead prediction over bullet flight time.
-        double flight = dist / bulletSpeed;
-        double leadX = enemyX + Math.sin(enemyHeading) * enemyVelocity * flight;
-        double leadY = enemyY + Math.cos(enemyHeading) * enemyVelocity * flight;
-
-        // Half-lead blend (W=0.5) measured optimal vs this reactive dodger.
-        double W = 0.5;
+        // Iterative linear lead prediction over bullet flight time.
+        // Replay-sim over pez__droidpoet paths shows this near-constant-velocity
+        // full-speed mover is best hit with a FULL lead (W=0.0): W=0.0 gave 20.9%
+        // vs 17.6% for the old half-lead, and ~90 vs ~75 avg bullet dmg/round.
+        double leadX = enemyX, leadY = enemyY;
+        for (int it = 0; it < 12; it++) {
+            double fd = Math.hypot(leadX - getX(), leadY - getY());
+            double ft = fd / bulletSpeed;
+            leadX = enemyX + Math.sin(enemyHeading) * enemyVelocity * ft;
+            leadY = enemyY + Math.cos(enemyHeading) * enemyVelocity * ft;
+        }
+        // Full lead (W=0.0) measured optimal vs this constant-velocity dodger.
+        double W = 0.0;
         double predX = W * enemyX + (1 - W) * leadX;
         double predY = W * enemyY + (1 - W) * leadY;
 
