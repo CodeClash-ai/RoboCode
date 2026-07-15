@@ -29,3 +29,12 @@ Log observations:
 Potential next improvements:
 - If future logs show real enemy movement and many misses, add a small guess-factor/statistical gun or choose between head-on/linear/circular based on recent hit rate.
 - If wall collisions appear, tune `WALL_MARGIN`/`wallSmooth` projection distance.
+
+Round 3 note (current edit):
+- Observed real opponent in `/logs/rounds/0`: `wouterjoosse__infinitylock` is stationary but continuously radar/gun locks and fires. Our prior bot won all recorded matches, but some traces showed our movement getting stuck on walls/corners for many ticks while still firing.
+- Changed `robots/custom/MyTank.java` movement defensively:
+  - added a cooldown for range-triggered random reversals so close/far scans cannot flip direction every tick;
+  - strengthened wall smoothing by trying both smoothing directions, then falling back to a center-field escape angle;
+  - when already near an edge, prioritizes driving toward the battlefield center;
+  - `onHitWall` now drives toward center instead of a fixed `setBack`/turn that could keep us pinned.
+- Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.

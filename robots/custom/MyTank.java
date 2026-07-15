@@ -26,6 +26,7 @@ public class MyTank extends AdvancedRobot {
     private double lastEnemyHeading = 0.0;
     private boolean haveEnemyHeading = false;
     private long lastScanTime = -1000;
+    private long lastDirectionChangeTime = -1000;
 
     public void run() {
         setBodyColor(new Color(18, 24, 34));
@@ -74,12 +75,15 @@ public class MyTank extends AdvancedRobot {
     private void doMovement(ScannedRobotEvent e, double absBearing) {
         double enemyDrop = lastEnemyEnergy - e.getEnergy();
         if (enemyDrop > 0.09 && enemyDrop <= 3.01) {      // likely enemy bullet
-            moveDirection = -moveDirection;
+            reverseDirection();
         }
         // Irregular reversals break simple linear targeting and prevent long
-        // straight runs.  Reverse more aggressively at dangerous ranges.
+        // straight runs.  Guard reversals with a cooldown; flipping every scan
+        // at very close/long range can leave us oscillating into a wall.
         if ((getTime() + 17) % 61 == 0 || e.getDistance() < 150 || e.getDistance() > 610) {
-            moveDirection = -moveDirection;
+            if (getTime() - lastDirectionChangeTime > 14) {
+                reverseDirection();
+            }
         }
 
         // Orbit perpendicular, with a distance-control offset.  Far away we cut
@@ -88,6 +92,11 @@ public class MyTank extends AdvancedRobot {
         double distanceOffset = limit(-0.62, (e.getDistance() - PREFERRED_DISTANCE) / 430.0, 0.55);
         double desired = absBearing + moveDirection * (Math.PI / 2.0 - distanceOffset);
         desired = wallSmooth(desired, moveDirection);
+        // If we are already in the danger band near an edge, prioritize getting
+        // back into the field over maintaining a perfect orbit.
+        if (!insideBattlefield(getX(), getY(), WALL_MARGIN + 18.0)) {
+            desired = Math.atan2(getBattleFieldWidth() / 2.0 - getX(), getBattleFieldHeight() / 2.0 - getY());
+        }
 
         double turn = Utils.normalRelativeAngle(desired - getHeadingRadians());
         double ahead = 150.0;
@@ -159,19 +168,18 @@ public class MyTank extends AdvancedRobot {
     }
 
     public void onHitByBullet(HitByBulletEvent e) {
-        moveDirection = -moveDirection;
+        reverseDirection();
         setTurnRightRadians(Utils.normalRelativeAngle(Math.PI / 2.0 - e.getBearingRadians()));
         setAhead(170.0 * moveDirection);
     }
 
     public void onHitWall(HitWallEvent e) {
-        moveDirection = -moveDirection;
-        setBack(130);
-        setTurnRight(70);
+        reverseDirection();
+        driveToward(getBattleFieldWidth() / 2.0, getBattleFieldHeight() / 2.0, 170.0);
     }
 
     public void onHitRobot(HitRobotEvent e) {
-        moveDirection = -moveDirection;
+        reverseDirection();
         double gunTurn = Utils.normalRelativeAngle(getHeadingRadians() + e.getBearingRadians() - getGunHeadingRadians());
         setTurnGunRightRadians(gunTurn);
         if (e.isMyFault()) {
@@ -196,7 +204,39 @@ public class MyTank extends AdvancedRobot {
                 && tries++ < 28) {
             smoothed += orientation * 0.075;
         }
-        return smoothed;
+        if (insideBattlefield(projectX(getX(), smoothed, 155.0), projectY(getY(), smoothed, 155.0), WALL_MARGIN)) {
+            return smoothed;
+        }
+
+        // If the preferred smoothing direction fails (common when spawned in a
+        // corner), try the other way before falling back to the center escape.
+        smoothed = angle;
+        tries = 0;
+        while (!insideBattlefield(projectX(getX(), smoothed, 155.0), projectY(getY(), smoothed, 155.0), WALL_MARGIN)
+                && tries++ < 28) {
+            smoothed -= orientation * 0.075;
+        }
+        if (insideBattlefield(projectX(getX(), smoothed, 155.0), projectY(getY(), smoothed, 155.0), WALL_MARGIN)) {
+            return smoothed;
+        }
+        return Math.atan2(getBattleFieldWidth() / 2.0 - getX(), getBattleFieldHeight() / 2.0 - getY());
+    }
+
+    private void reverseDirection() {
+        moveDirection = -moveDirection;
+        lastDirectionChangeTime = getTime();
+    }
+
+    private void driveToward(double x, double y, double distance) {
+        double angle = Math.atan2(x - getX(), y - getY());
+        double turn = Utils.normalRelativeAngle(angle - getHeadingRadians());
+        double ahead = distance;
+        if (Math.cos(turn) < 0) {
+            turn = Utils.normalRelativeAngle(turn + Math.PI);
+            ahead = -distance;
+        }
+        setTurnRightRadians(turn);
+        setAhead(ahead);
     }
 
     private boolean insideBattlefield(double x, double y, double margin) {
