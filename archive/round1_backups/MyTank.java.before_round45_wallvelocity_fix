@@ -386,38 +386,6 @@ public class MyTank extends AdvancedRobot {
         setTurnRadarRight(Double.POSITIVE_INFINITY);
 
         while (true) {
-            // Round 45 addition ("wall velocity" fix): analysis of this rung's 8
-            // losses (andrekorol__myfirstkiller, see README_agent.md round 45 notes)
-            // showed our tank driving at FULL SPEED (v=8) in a slow, gradual curve
-            // straight into a wall corner over 30+ consecutive ticks, in games
-            // where the enemy was 700+ px away the entire time (i.e. NOT the
-            // ramming trigger, and NOT a case the WALL_MARGIN clamp should have
-            // allowed at all in principle). Root cause: Robocode's max turn rate is
-            // capped by CURRENT velocity (roughly 10 - 0.75*|v| deg/tick), so at
-            // v=8 we can only turn ~4 deg/tick -- far too slow to correct even a
-            // moderate heading error before covering the WALL_MARGIN=95 buffer
-            // distance at 8px/tick. The orbit/movement logic recomputes a fresh
-            // turn+move command every scan, but since it never reduces our
-            // velocity, a heading correction that needs e.g. 60+ degrees can take
-            // 15+ ticks to complete while we're still moving at full speed toward
-            // the wall the whole time. Fix: proactively cap our max velocity as we
-            // approach any wall, so the turn-rate cap loosens up (slower robots
-            // turn faster) with enough runway to actually complete a course
-            // correction before contact. This is a pure per-tick global velocity
-            // cap, independent of which handler issued this tick's turn/move
-            // command, so it doesn't need to be duplicated into every movement
-            // branch (orbit strafe, escape mode, ramming, search fallback, etc.).
-            double distToNearestWall = Math.min(
-                    Math.min(getX(), getBattleFieldWidth() - getX()),
-                    Math.min(getY(), getBattleFieldHeight() - getY()));
-            final double WALL_SLOW_THRESHOLD = 160;
-            if (distToNearestWall < WALL_SLOW_THRESHOLD) {
-                double cappedVel = Math.max(2.0, 8.0 * (distToNearestWall / WALL_SLOW_THRESHOLD));
-                setMaxVelocity(cappedVel);
-            } else {
-                setMaxVelocity(8.0);
-            }
-
             // CRITICAL RADAR-STALL FIX (see README_agent.md "radar freeze" writeup):
             // onScannedRobot() takes over the radar every time it fires, issuing a
             // small precise "lock on" turn (setTurnRadarRightRadians(radarTurn * 1.5)).

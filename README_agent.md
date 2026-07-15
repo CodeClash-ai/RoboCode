@@ -5683,3 +5683,157 @@ quick diff/revert if next round's numbers look worse.
    than usual — the rounds 43-44 corner-camper saga in particular is exactly
    the kind of thing that could be iterated on much faster with a working
    local test harness instead of needing a full extra round per attempt.
+
+## Round 45 update (this round) — new opponent (andrekorol__myfirstkiller), found & fixed a "slow-curve into wall" bug via turn-rate/velocity coupling
+
+### Context
+Only `/logs/rounds/0/` exists in this environment for me. Per `trace.md` /
+`results.json`, this round's opponent is a **new** one,
+`andrekorol__myfirstkiller` (different from every opponent documented in
+rounds 1-44 above). Result: **97% win rate (242/250)**, team score-favorable
+(34% accuracy for us vs 17% for them, avg speed 6.6, avg walls/game 2.1, avg
+min energy 74). **8 losses** (`sim_0`, `sim_14`, `sim_115`, `sim_126`,
+`sim_181`, `sim_203`, `sim_228`, `sim_239`), 0 ties. The opponent is weak
+overall (3% win rate) but slow-and-steady (avg speed 2.1) with real, if
+modest, accuracy (17%) via mostly power-1 shots.
+
+### Investigation
+`python3 tools/analyze_freezes.py /logs/rounds/0 --threshold 20 | grep -i
+sonnet` -> only 3 short, benign findings (radar-settled + 1 short
+STUCK-RAMMING) — no escape-mode regression, rounds 34-37/40's fixes are
+holding fine. The 8 losses are NOT a freeze/deadlock pattern.
+
+**Key finding: all 8 losses are unusually LONG games** (853-1095 turns, vs the
+series avg of 512) and **all 8 show the exact same signature**: our own
+energy grinds down to *exactly* 0.0 from a long, steady combination of (a)
+below-breakeven-ish firing costs against this specific opponent's low-ish
+per-bucket accuracy (15-16% at some power bands, per
+`tools/analyze_power_accuracy.py`), (b) the opponent's own real, if
+infrequent, power-1 hits on us (each -4.0 damage, +3.0 bonus to them), and
+critically (c) **elevated wall-hit counts in 6/8 losses (9-15 hits/game vs
+the 2.1/game series average)** — while the opponent's own energy stayed
+comfortably above 0 (30-90) at the moment we hit 0 in every single loss.
+This "we die from pure attrition while the opponent survives with energy to
+spare" signature matches the pattern rounds 18/25/31/33/38/44 have each
+independently found against different opponents — but the *wall*
+contribution here was unusually large and worth digging into specifically,
+since 2.1 walls/game is otherwise a healthy series average (round 31/32
+already widened `WALL_MARGIN` 70->95 for a similar reason).
+
+### Root cause found: turning at high velocity is too slow to avoid a wall the margin-clamp logic *should* have prevented
+Traced the wall-hit clusters in `sim_14.jsonl` precisely (dumping x/y/v/body-
+heading every 2 ticks). Found the tank driving at **full speed (v=8) in a
+slow, gradual curve straight into a wall corner over ~36 consecutive ticks**
+— crucially, **the enemy was 700+ px away the ENTIRE time** in every such
+episode (ruling out the wall-unaware `enemyDistance < 60` opportunistic-
+ramming trigger, round 12, as the cause — that branch never fires this far
+from the enemy). Body heading was visibly trying to correct (drifting from
+4.641 rad down to 3.384 rad and back up toward the wall-bound 4.606 rad) the
+whole time, but never turned sharply enough soon enough. The reason:
+Robocode's max turn rate is capped by *current velocity*
+(`10 - 0.75*|v|` deg/tick), so at `v=8` (the game's max speed, which the
+orbit-strafe logic drives us at whenever `moveAmount` is large) we can only
+turn **~4 degrees/tick** — far too slow to correct even a moderate heading
+error before covering the `WALL_MARGIN=95` buffer distance at 8px/tick (i.e.
+~12 ticks to cross the whole margin zone, vs. needing 15-20+ ticks to
+complete a 60-90 degree turn at that speed). The existing wall-margin-clamp
+logic (round 3, widened round 31) correctly *recomputes* a safer target
+waypoint every tick, but never accounted for the fact that **completing the
+resulting turn takes longer than the time left before reaching the wall**
+when already moving at full speed toward it — a distinct, previously-
+unidentified failure mode from every earlier wall-related fix in this file's
+history (rounds 3/23/31/34/35/36/37 all addressed *what* to do once stuck or
+*how* to compute a safe target, never *whether we're moving too fast to turn
+in time* in the first place).
+
+### Fix applied (`robots/custom/MyTank.java`, top of `run()`'s main loop)
+Added a proactive, **global, per-tick max-velocity cap** based on current
+distance to the nearest wall: if `distToNearestWall < 160`, scale
+`setMaxVelocity()` down linearly from 8.0 (at 160px away) to a floor of 2.0
+(right at the wall), else reset to the full 8.0. This is placed once, at the
+very top of `run()`'s loop (before `execute()`), so it applies uniformly
+regardless of which handler issued that tick's turn/move command (orbit
+strafe, escape mode, ramming, search fallback, etc.) — no need to duplicate
+it into every movement branch. Slowing down as we approach a wall directly
+loosens the turn-rate cap (slower robots turn faster), giving any
+already-correct heading-correction command (which was already being
+computed every tick, just never had enough time to complete) the runway it
+needs to actually finish before contact, instead of only fixing the
+*target* while leaving the *speed* untouched. This does not change any
+targeting/movement decision logic at all — every existing handler's turn/move
+math is completely unchanged — it purely caps how fast we're allowed to
+physically go near a boundary.
+
+Verified `javac -Xlint:all -cp libs/robocode.jar -d robots
+robots/custom/MyTank.java` compiles clean (no errors/warnings), `.class` up
+to date. Old (pre-this-round) version preserved at
+`archive/round1_backups/MyTank.java.before_round45_wallvelocity_fix` for a
+quick diff/revert if next round's numbers look worse.
+
+### What I did NOT get to
+- **Not validated by a real match** (same long-standing limitation as every
+  previous round — no working local headless battle runner in this sandbox;
+  see round 6's section for the most detailed writeup). This is a real,
+  clearly-diagnosed bug (directly traced a 36-tick full-speed curve into a
+  wall with the enemy nowhere nearby, and the turn-rate-vs-velocity
+  relationship is a documented Robocode game rule, not speculation) with a
+  low-risk, purely-additive fix (it can only ever reduce our velocity near a
+  wall, never increase it or change any other decision) — but genuinely
+  untested. **First thing to check next round**: `avg walls/game` (baseline
+  this round: 2.1, but 6/8 losses specifically had 9-15) should drop in any
+  games that previously showed this pattern, and the loss count (baseline
+  8/250) should drop if `andrekorol__myfirstkiller` reappears. Also worth
+  spot-checking a game's x/y/v trace near a wall (template: this round's
+  `sim_14.jsonl` trace above) to confirm velocity is actually dropping as
+  the tank approaches a wall now, and that the curve-into-corner pattern is
+  gone/much shorter.
+- Did not tune the `WALL_SLOW_THRESHOLD` (160) or velocity floor (2.0)
+  constants at all — chose them so the slowdown starts well before the
+  `WALL_MARGIN=95` buffer (giving the tank room to actually decelerate
+  smoothly rather than instantly) and never goes all the way to a full stop
+  (2.0 still allows steady progress/repositioning). If wall hits are still
+  elevated next round, consider widening the threshold further (e.g. 200+)
+  or lowering the floor.
+- Did not touch bullet power, `PREFERRED_DISTANCE`, fire-angle threshold, or
+  any of the escape-mode/ramming logic this round — wanted to isolate this
+  one movement/velocity-side fix so it's cleanly attributable in next
+  round's logs, especially since the last time a movement-adjacent fix went
+  in (rounds 34-37's escape-mode saga) it took several rounds to get exactly
+  right — better to get a clean signal on this one first.
+- Did not investigate whether the same high-speed-turn-too-slow mechanism
+  also contributes to any of the OTHER movement branches' behavior away from
+  walls (e.g. does orbiting at v=8 ever cause us to overshoot/miss a
+  preferred-distance correction the same way, just without a wall to make it
+  visible as a `HIT_WALL` event?) — this round's fix only addresses the
+  wall-proximity case specifically (where the consequence is directly
+  visible/costly), not general turn-radius-at-speed tuning.
+
+### Suggestions for next teammate
+1. **First step, as always**: check `/logs/rounds/<N>/trace.md` for this
+   round's actual opponent/result, and run
+   `python3 tools/analyze_freezes.py /logs/rounds/<N> --threshold 20 | grep -i
+   sonnet` as the standard regression check.
+2. If `andrekorol__myfirstkiller` reappears, this is the highest-value
+   comparison: check whether losses dropped from 8/250, whether
+   `avg walls/game` dropped from 2.1 (and specifically whether the
+   previously-elevated-9-to-15-per-game losses no longer show that pattern),
+   and spot-check a game's x/y/v trace near a wall (same technique as this
+   round) to directly confirm velocity now drops as we approach a wall.
+3. If wall hits are still an issue against this or a future opponent, the
+   next lever to try is probably widening `WALL_SLOW_THRESHOLD` further (a
+   simple, low-risk constant change), or making the slowdown curve steeper/
+   earlier (e.g. quadratic rather than linear falloff) rather than
+   reworking the underlying clamp-and-redirect logic again — this round's
+   fix specifically targets the "moving too fast to turn in time" mechanism,
+   which is a different, complementary lever from the target-selection logic
+   every earlier wall-related round (3/23/31/34/35/36/37) already tuned.
+4. `pez__gf1` (rounds 11-12, ~14% tie rate from mutual energy attrition)
+   remains the toughest opponent in this file's history and the single most
+   valuable target for directly re-testing the FULL accumulated stack of
+   fixes since round 12 — still hasn't reappeared after 33 rounds.
+5. Local headless battle-runner: still unresolved after 44+ rounds of
+   attempts (see round 6's section for the most detailed known blocker,
+   `RepositoryManager.loadSelectedRobots` not seeing a freshly-reloaded
+   repository within the same call). Still the single highest-leverage infra
+   fix available if a future teammate has a larger step budget to spend on it
+   than usual.
