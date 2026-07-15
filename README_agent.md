@@ -3836,3 +3836,61 @@ Mean killtick is ~606 (long games) — that's FINE (enemy does 0 damage, we win 
 survival+bonuses regardless; faster kills would risk the strategy). Always re-check
 `head -1 /logs/rounds/0/sim_0.jsonl` for opponent name + INDEX MAPPING first.
 Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 1 / current pass) — opponent = tannerrogalsky__tannerbot1 (COMPETITIVE, 34 losses)
+
+## KEY FINDING: gun W was WRONG (0.75, leftover from SLOW ite_m9) for this SMOOTH moderate-fast mover + we bled at 300-400px
+Round 0 result (BEFORE my change): opus 36806 vs tannerbot1 13672 (19% share —
+highest firing-bot share in a while). results_0.txt: opus 1595 (81%), 10/10 firsts
+BUT full 250-sim sweep: 34 LOSSES, 23 close(<20E), ourFE mean 42.6 (min 0.0),
+games VERY LONG (avg 897, max 1319 turns), killtick mean 742. Genuinely competitive.
+
+## Opponent profile (250 sims; header maps idx->name, enemy=non-'opus')
+- movefrac 0.62, avg|v| 4.26 (moderate-fast), avg|dh| 0.019 (NEAR-STRAIGHT, smooth),
+  engages ~324px. Conserves energy (fires ~half as often as us: 20.9 vs 35.8 in
+  losses). It out-trades us in the long grinds.
+
+## ROOT CAUSE of the 34 losses (measured, 150 games — DECISIVE)
+Our REAL hit rate by distance (energy-drop=fire, enemy-energy-drop>3.5=our hit):
+  0-100px 0.68 | 100-200 0.30 | 200-300 0.32 | 300-400 0.08(!) | 400-500 0.09.
+We fired 2203 shots at 300-400px (8% hit = catastrophic net-negative bleed) and
+spent most ticks at 200-400px, drifting to ~324px avg (WIDE of the ~245px target).
+In losses our hit rate crashes to 30% while enemy's rises to 35% -> we bleed the
+energy war. Enemy hit density: 0-100 15/1k, 100-200 12/1k, 200-300 9.9/1k, 300-400
+6.9/1k (enemy gun MORE dangerous close, but 200-300 is the sweet spot: 32% our hit
++ moderate enemy density).
+
+## CHANGES THIS PASS (3 levers; all attack the 300-400px bleed)
+1. GUN aim W: 0.75 -> 0.0 (FULL LINEAR LEAD). W-sweep replay 2 slices MONOTONIC
+   to full lead: W=0.0 0.156/0.134 vs W=0.75 0.109/0.093 vs W=1.0 0.095/0.084.
+   This is a SMOOTH near-straight mover (like dacruzer) -> full lead best. The old
+   W=0.75 (tuned for the SLOW ite_m9) was misaimed here.
+2. POWER tiers: was 3.0/<300, 1.6/<400, 1.0/<500, 0.6/else. NOW 3.0/<250, 2.0/<320,
+   0.8/<400, 0.4/<500, 0.2/else. Tapers HARD past 250px so each far miss barely
+   costs energy (8% hit at 300-400 = pure bleed at full power).
+3. FIRE GATE: hold fire past 320px when behind on energy (was 400px) — conserve in
+   grinds instead of feeding the net-negative zone.
+4. MOVEMENT rangeBias: stronger inward pull (>450->-1.2, >330->-0.9, >240->-0.5,
+   <190->+0.5) to reach the ~225px net-positive zone instead of drifting to 324px.
+
+## Validation (net-firing-energy model, MEASURED per-bucket hit rates)
+OLD config @ old tick distribution: net -1023. NEW config (W=0.0 raises hr ~1.3x
++ closer orbit shifts ticks 300-400 -> 200-300): net +1040. Flips the energy war.
+The direction is strongly supported; should convert most of the 34 grind losses.
+enemyPassive mode STAYS OFF (enemy deals us 3-6 big hits/game -> damageTaken>=5),
+so the normal gun/movement applies. Compiles Java 8 (major version 52). Backup:
+/tmp/MyTank.bak.java (git prior = the 34-loss config).
+
+## For next teammate — VERIFY
+- Want NEW /logs: the 34 losses REDUCED (ideally <10), ourFE mean UP from 42.6,
+  killtick DOWN from 742, enemy score DOWN from 13672, engagement dist DOWN from
+  324 toward ~225px. If it REGRESSED (new losses / share drop): (a) the closer
+  orbit may have exposed us to the enemy's stronger close gun (15/1k @0-100) ->
+  push orbit back (thresholds 470/350/260/<210); (b) if W=0.0 overshoots (enemy
+  became reactive/stop-and-go), raise W toward 0.5 and re-run the W-sweep;
+  (c) full revert = /tmp/MyTank.bak.java (git prior, 34 losses but 81% share win).
+- tannerbot1 is a SMOOTH moderate-fast near-straight mover -> KEEP W=0.0 full lead.
+  If it becomes a HEAVY spinner (avg|dh|>0.06), circular already equals linear here.
+- The remaining lever if grinds persist is WAVE SURFING (high-risk, harness broken).
+- Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING.
+- Keep MyTank class name + Java-8 bytecode (only hard requirement).

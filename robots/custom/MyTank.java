@@ -246,10 +246,16 @@ public class MyTank extends AdvancedRobot {
         // is 43% (well above 33% break-even) and we WIN the energy war (88% wins),
         // so keep power high out to 300px for fast kills / net-positive damage.
         // Taper beyond 300px where hit rate falls and misses drain us in grinds.
-        if (dist < 300)       power = 3.0;
-        else if (dist < 400)  power = 1.6;
-        else if (dist < 500)  power = 1.0;
-        else                  power = 0.6;   // long range -> smallest drain if a miss
+        // vs tannerrogalsky__tannerbot1: real hit rate CRASHES beyond 300px
+        // (300-400px only 8% at any W) -> firing full power there is catastrophic
+        // net-negative bleed (we fired 2203 shots at 8% -> 34 grind losses). Taper
+        // HARD past 250px so each far miss barely costs energy; keep power high only
+        // in the <250px zone where our hit rate holds (30-60%).
+        if (dist < 250)       power = 3.0;
+        else if (dist < 320)  power = 2.0;
+        else if (dist < 400)  power = 0.8;
+        else if (dist < 500)  power = 0.4;
+        else                  power = 0.2;   // long range -> smallest drain if a miss
 
         // Energy safety clamps so a bad streak can't self-destruct us.
         if (getEnergy() < 30) power = Math.min(power, 2.0);
@@ -319,7 +325,7 @@ public class MyTank extends AdvancedRobot {
         // (distance-based, kept net-positive) still guard the crazy-bot regression.
         // Chose W=0.85: strongly toward head-on (physics: slow target -> head-on best),
         // hedged just short of pure 1.0 since replay is biased by the reactive enemy path.
-        double W = 0.75;  // vs it_economics__ite_m9 (SLOW near-straight mover: movefrac 0.37, avgv 1.23, avg|dh| 0.011, engages ~300px). W-sweep 2 independent slices (80 games each): W=0.75 hits 44.7/44.7pct = PEAK vs W=1.0 head-on 35.1/37.1pct. Replay BIASED toward W=1.0 (our old aim) yet W=0.75 wins by ~9pts DESPITE bias = strong signal. This slow mover has a tiny curve/drift so a partial lead beats pure head-on. Higher HR = faster kills = fewer of the 22 grind losses.
+        double W = 0.0;  // vs tannerrogalsky__tannerbot1 (moderate-fast near-straight mover, movefrac 0.62, avgV 4.26, avg|dh| 0.019, engages ~324px). W-sweep replay 2 slices MONOTONIC to full lead: W=0.0 0.156/0.134 vs W=0.75 0.109/0.093 vs W=1.0 0.095/0.084. Smooth mover -> full linear lead best. [OLD: W=0.75 vs it_economics__ite_m9] (SLOW near-straight mover: movefrac 0.37, avgv 1.23, avg|dh| 0.011, engages ~300px). W-sweep 2 independent slices (80 games each): W=0.75 hits 44.7/44.7pct = PEAK vs W=1.0 head-on 35.1/37.1pct. Replay BIASED toward W=1.0 (our old aim) yet W=0.75 wins by ~9pts DESPITE bias = strong signal. This slow mover has a tiny curve/drift so a partial lead beats pure head-on. Higher HR = faster kills = fewer of the 22 grind losses.
         // [prev] double W = 1.0; // vs iagomonteiro13579__npcsniper
         // [old] double W = 1.0; // HEAD-ON best vs alpian__ianstank (stop-and-reverse oscillator, ~50% stationary). Replay-sim 80 games: W=1.0 hits 40.3% vs W=0.0 21.4%.
         double predX = W * enemyX + (1 - W) * leadX;
@@ -350,7 +356,11 @@ public class MyTank extends AdvancedRobot {
         if (dist > 550 && getEnergy() < enemyEnergy) allowFire = false;
         // In the grind-loss state (behind on energy) don't waste far low-hit
         // shots (400px+ hit rate ~20% = net-negative); conserve to outlast.
-        if (dist > 400 && getEnergy() < enemyEnergy) allowFire = false;
+        // vs tannerrogalsky__tannerbot1: our hit rate CRASHES beyond 320px (8%),
+        // so when behind on energy in a grind, hold fire past 320px (was 400px) to
+        // stop the net-negative bleed that caused the 34 grind losses; conserve to
+        // outlast the energy-conserving foe / close to the ~230px net-positive zone.
+        if (dist > 320 && getEnergy() < enemyEnergy) allowFire = false;
         // Tighter alignment for distant shots (bullet spread grows with range).
         double alignThresh = (dist > 400) ? 0.09 : 0.12;
 
@@ -529,10 +539,15 @@ public class MyTank extends AdvancedRobot {
             }
             return;
         }
-        if (enemyDistance > 450)      rangeBias = -1.1;  // far: strong inward pull to close
-        else if (enemyDistance > 330) rangeBias = -0.7;  // mid-far: firm inward
-        else if (enemyDistance > 260) rangeBias = -0.35; // approaching target ~245px
-        else if (enemyDistance < 210) rangeBias = 0.5;   // too close (lead-gun kill zone): push out
+        // vs tannerrogalsky__tannerbot1: actual engagement drifted to ~324px (wide of
+        // the ~245px target) where our hit rate is only 8% -> grind losses. Pull in
+        // HARDER to reach the ~230px zone (32% hit, net-positive) instead of bleeding
+        // at 300-400px. Enemy gun is MORE dangerous <200px (15/1k @0-100 vs 9.9/1k
+        // @200-300) so don't overshoot inside ~200px.
+        if (enemyDistance > 450)      rangeBias = -1.2;  // far: strong inward pull to close
+        else if (enemyDistance > 330) rangeBias = -0.9;  // mid-far: firm inward
+        else if (enemyDistance > 240) rangeBias = -0.5;  // approaching target ~225px
+        else if (enemyDistance < 190) rangeBias = 0.5;   // too close (lead-gun kill zone): push out
 
         double desiredDir = absBearing + (Math.PI / 2 + rangeBias) * moveDirection;
 
