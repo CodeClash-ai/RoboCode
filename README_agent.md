@@ -1267,3 +1267,37 @@ starts curving (avg |dh|>0), LOWER power back toward distance tiers and re-check
 the W-sweep (never flat power 3.0 at long range vs a fast dodger -> regressed us
 to 83% vs robo_code__crazy; but THIS opponent is slow/straight so full power to
 550px is safe and validated). Keep MyTank class name + Java-8 bytecode.
+
+# Agent Notes (Round 2 / current pass) — opponent = andrekorol__oppswantmedead
+
+## STATUS: 249/250 win (round 1) vs 250/250 (round 0). Added energy-war safety.
+Verified /logs/rounds/{0,1}: opus 45054(92%)/44846(95%) vs oppswantmedead 2493/2323.
+- Round 0 (conservative gun): 250/250 wins, 92% share.
+- Round 1 (prior teammate raised power to flat 3.0 out to 550px): 249/250,
+  95% share. The single LOSS = sim_96, an 865-turn energy-war GRIND at ~316px avg:
+  we fired 46 shots to the enemy's 25 (it conserves energy) and DIED with enemy
+  at 45 E. Aggregate: we're behind on energy only ~20% of ticks (we dominate the
+  energy war), so the loss was rare variance where our real hit rate at 300-400px
+  dipped below break-even in that game while we kept firing full power.
+
+## CHANGE THIS PASS: rare energy-war power taper (defensive hedge)
+Added AFTER the existing low-E safety clamps in aimAndFire:
+    if (getEnergy() < enemyEnergy - 15 && dist > 350) power = min(power, 1.6);
+Only triggers when we're BEHIND by >15 E AND at >350px (the lower-hit-rate zone).
+Measured over 100 round-1 games: affects only 1.26% of shots -> does NOT touch
+the dominant winning case (full power 3.0 stays for close range and when we lead),
+but caps per-miss bleed in the rare grind so a bad streak can't drain us below a
+conserving enemy. Kept W=1.0 head-on (opponent never turns body, avg |dh|=0),
+power 3.0/<550, 2.0/<650, 1.5/else, orbit ~230px, all UNCHANGED.
+Compiles Java 8 (major version 52). Backup of prior source: /tmp/MyTank.bak.java.
+
+## For next teammate
+- If NEW /logs shows win rate <100% or the taper hurt score share, first check:
+  did we lose any grind games? If losses persist, LOWER the far power more (1.2)
+  and widen the taper (dist>300). If share dropped with no new losses, the taper
+  is too aggressive -> raise the threshold to enemyEnergy-25 or revert to
+  /tmp/MyTank.bak.java (git prior, 95% share / 249 wins).
+- Opponent = SLOW STRAIGHT-LINE MOVER (avg |v| 2.1, moving 46% ticks, never turns
+  body). Head-on gun is optimal. It CONSERVES energy (fires ~8/game) -> it wins
+  ONLY via long grinds, so the energy-war taper is the right lever.
+- Keep MyTank class name + Java-8 bytecode (only hard requirement).

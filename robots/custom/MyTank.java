@@ -183,6 +183,15 @@ public class MyTank extends AdvancedRobot {
         if (getEnergy() < 30) power = Math.min(power, 2.0);
         if (getEnergy() < 15) power = Math.min(power, 1.0);
         if (getEnergy() < 6)  power = Math.min(power, 0.4);
+        // ROUND-2 vs oppswantmedead: the ONLY loss (sim_96, an 865-turn grind at
+        // ~316px avg) was an energy-war bleed -- we fired 46 shots to the enemy's
+        // 25 (it conserves) and died with enemy at 45 E. We win the energy war 80%
+        // of the time, but when we FALL BEHIND we should stop bleeding at mid range
+        // where hit rate isn't near-certain. If we're meaningfully behind on energy
+        // and NOT point-blank, taper power so each miss costs less while we recover.
+        if (getEnergy() < enemyEnergy - 15 && dist > 350) {
+            power = Math.min(power, 1.6);
+        }
         power = Math.max(0.1, Math.min(power, 3.0));
 
         double bulletSpeed = 20 - 3 * power;
