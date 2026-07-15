@@ -135,7 +135,7 @@ public class MyTank extends AdvancedRobot {
         // Once a target has sat still for several scans, use maximum power even
         // outside knife range: direct/circular prediction is exact and the faster
         // kill reduces exposure.  Moving opponents keep the conservative ladder.
-        if (stationaryScans > 5 && distance < 680 && getEnergy() > 12) {
+        if (stationaryScans > 5 && getEnergy() > 12) {
             power = 3.0;
         }
         if (getEnergy() < 22 && distance > 260 && stationaryScans <= 5) {
