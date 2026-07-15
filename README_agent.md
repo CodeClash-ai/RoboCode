@@ -3760,3 +3760,146 @@ confirmations).
    repository within the same call). Still the single highest-leverage infra
    fix available if a future teammate has a larger step budget to spend on it
    than usual.
+
+## Round 31 update (this round) — new opponent (tibola__markiv), traced both losses, widened WALL_MARGIN
+
+### Context
+Only `/logs/rounds/0/` exists in this environment for me. Per `trace.md` /
+`results.json`, this round's opponent is a **new** one, `tibola__markiv`
+(different from every opponent documented in rounds 1-30 above). Result:
+**99% win rate (248/250)**, team score **43084 vs opponent's 1677**, 35%
+accuracy, avg speed 6.5, avg walls/game **3.3** (on the higher end of this
+file's history), avg rams/game 1.7, avg min energy 71. **2 losses**
+(`sim_25.jsonl`, `sim_70.jsonl`), 0 ties. The opponent moves relatively little
+on average (avg speed 2.2) but is not purely passive — it fires occasional
+strong (power-3) shots that land solidly (12% accuracy overall, but with real
+16-damage hits when they connect, plus the shooter's `bulletHitBonus` energy
+refund), rather than spraying weak shots constantly like several recent weaker
+opponents did.
+
+### Validation performed
+- `python3 tools/analyze_freezes.py /logs/rounds/0 --threshold 20 | grep -i
+  sonnet` -> only **1 finding**: a 124-tick STUCK-RAMMING in `sim_18.jsonl`
+  (a game we WON). Traced it tick-by-tick (x/y/v/e/status for both robots) —
+  this is the exact same "wall + enemy simultaneously block both straight-line
+  escape directions" edge case round 26 already identified and characterized
+  as low-frequency and net-favorable (gun aim/fire isn't blocked by
+  `isMyFault()`, only body movement, so we keep landing point-blank shots
+  during the freeze). Confirmed again this round: during the 124-tick freeze,
+  our energy dropped 67->22 (-45) while the opponent's dropped 48->0 (they
+  died, ending the freeze) — we won the exchange decisively. No new
+  stuck-ramming bug found; round 25/26's `isMyFault`-based no-turn-escape fix
+  is still holding well.
+- `python3 tools/analyze_power_accuracy.py /logs/rounds/0` sanity check: 34.3
+  shots/game combined vs `trace.md`'s 23.4+11.9=35.3 — within ~3%, tool still
+  trustworthy (round 28's tick-step fix holding).
+- `javac -Xlint:all -cp libs/robocode.jar -d robots robots/custom/MyTank.java`
+  compiles clean, `.class` up to date.
+
+### Investigated both real losses (`sim_25.jsonl`, `sim_70.jsonl`)
+Dumped per-tick energy/velocity/status for both robots in `sim_25.jsonl`
+(template: filter to lines where either robot's energy changes by >0.5).
+Found a clear, consistent pattern:
+- We (robot 0) move fast and aggressively (`v` frequently at 8, the game max)
+  and hit walls repeatedly — **5 separate `HIT_WALL` events** in this one
+  game, each costing a flat **-3.0 energy** (matches Robocode's documented
+  wall-collision-damage formula for a robot near/at max speed), for a pure
+  unforced total of ~15 energy lost to nothing but our own movement in a
+  single game.
+- Simultaneously, our own energy bleeds down steadily from firing costs
+  (paid up front regardless of hit/miss, per `Rules.html`), while the
+  opponent (`tibola__markiv`) fires much less often but occasionally lands a
+  full power-3 hit (confirmed via the exact energy deltas: e.g. at t=104 we
+  lose exactly **-16.0** energy, `6*3-2` per `Rules.getBulletDamage()`, while
+  the opponent simultaneously GAINS **+9.0** = `3*3`, per
+  `Rules.getBulletHitBonus()` — the shooter's hit-bonus refund). The opponent
+  ends this specific game around 51-55 energy while we grind all the way down
+  to 0 by t=574, mostly from a combination of (a) paying for many low-yield
+  shots of our own, and (b) the wall-hit chip damage on top.
+- This is a variant of the "self-inflicted energy drain via low accuracy"
+  pattern round 18 first diagnosed (there, against a fast mover our own
+  finishing-override bullet speed made unhittable; here, against a
+  moderate-speed opponent that just happens to out-trade us per-shot because
+  its rarer hits are full-power while a meaningful chunk of our own energy
+  loss is pure wall-contact waste, not even bullet cost).
+
+### Change made this round: widened `WALL_MARGIN` 70 -> 95
+Given avg walls/game (3.3) is elevated vs. several recent rounds (2.6-3.2 in
+rounds 27-30) and the traced loss above shows wall hits directly contributing
+real, avoidable energy loss (5 hits x ~3 energy = 15 energy wasted in one
+game, non-trivial against an opponent capable of occasional 16-damage power-3
+hits), I widened the wall-avoidance safety margin used by
+`onScannedRobot()`'s waypoint-clamping logic (round 3's original fix) from 70
+to 95px. Rationale: since the tank turns and translates simultaneously (not
+sequentially) in classic Robocode, a large required turn combined with high
+current velocity (8, common in this bot's aggressive orbit movement) can
+carry the tank measurably past a tight margin before the heading actually
+finishes re-aiming away from the wall — a bigger buffer gives the turn more
+room to complete before the boundary is reached. This only changes the ONE
+constant (`WALL_MARGIN`), used in exactly one place (the `minX/maxX/minY/maxY`
+clamp inside `onScannedRobot()`'s movement block) — no other logic touched.
+Verified `javac -Xlint:all -cp libs/robocode.jar -d robots
+robots/custom/MyTank.java` compiles clean, `.class` up to date. Old
+(pre-this-round) version preserved at
+`archive/round1_backups/MyTank.java.before_round31_wallmargin` for a quick
+diff/revert if next round's numbers look worse.
+
+### What I did NOT get to
+- **Not validated by a real match** (same long-standing limitation as every
+  previous round — no working local headless battle runner in this sandbox;
+  see round 6's section for the most detailed writeup). This is a small,
+  low-risk change (a single constant, used in one place, that can only ever
+  make the wall-avoidance clamp trigger slightly earlier/more conservatively
+  — it cannot introduce a new failure mode by itself). **First thing to check
+  next round**: `trace.md`'s `avg walls/game` column — should drop from this
+  round's 3.3 baseline if the wider margin helps. If it doesn't move much,
+  the actual overshoot mechanism may be something else (e.g. the
+  `moveAmount`/velocity itself, not the margin) and a different fix (e.g.
+  explicitly capping velocity via `setMaxVelocity()` when within some
+  distance of a wall) would be the next thing to try.
+- Did not act on the accuracy-by-bullet-power breakdown this round (ran
+  `analyze_power_accuracy.py`: merged "2.5-3.0" bucket accuracy was only
+  28.2% this round, notably LOWER than the 55-64% seen in rounds 28-29 that
+  originally motivated round 30's 3.0->2.9 cap change) — this is a single,
+  different, confounding opponent (`tibola__markiv` behaves very differently
+  from `it_economics__ite_terminator`/`ite_simple`, moving less but hitting
+  harder when it does), so I don't think this round's lower number
+  meaningfully refutes round 30's change on its own; round 30's own notes
+  already flagged this exact risk ("if it drops toward the middle... the
+  accuracy difference was probably situational, not really about bullet
+  power") and recommended checking across MULTIPLE opponents before drawing a
+  firm conclusion either way. Flagging for a future teammate: **if the merged
+  2.5-3.0 bucket's accuracy stays consistently low (<35%) against 2+ MORE
+  different opponents**, that would be reasonably strong evidence the
+  round-30 change should be reconsidered/reverted (it's low-cost either way
+  per round 30's own notes, since 2.9 vs 3.0 barely changes damage output).
+- Did not touch bullet power bands, `PREFERRED_DISTANCE`, fire-angle
+  threshold, or ramming/escape logic this round — wanted to isolate the
+  wall-margin change so it's cleanly attributable in next round's logs.
+
+### Suggestions for next teammate
+1. **First step, as always**: check `/logs/rounds/<N>/trace.md` for this
+   round's actual opponent/result, and run
+   `python3 tools/analyze_freezes.py /logs/rounds/<N> --threshold 20 | grep -i
+   sonnet` as the standard regression check.
+2. Check `avg walls/game` specifically against this round's 3.3 baseline —
+   should drop if the widened `WALL_MARGIN` (70->95) helped. If it's flat or
+   only marginally improved, consider the `setMaxVelocity()`-near-walls idea
+   sketched above as a stronger follow-up.
+3. Run `python3 tools/analyze_power_accuracy.py /logs/rounds/<N>` and keep
+   tracking the merged 2.5-3.0 bucket's accuracy across opponents (see above)
+   — 2 samples now favor keeping the 2.9 cap (rounds 28-29, 55-64%), 1 sample
+   is inconclusive/against it (this round, 28.2%, but a very different,
+   more-conservative opponent). Need a few more samples before concluding
+   either way.
+4. `pez__gf1` (rounds 11-12, ~14% tie rate from mutual energy attrition)
+   remains the toughest opponent in this file's history and the single most
+   valuable target for directly re-testing the many stuck-ramming/energy-
+   management/dodge-on-fire changes accumulated since round 12 — still
+   hasn't reappeared after 19 rounds.
+5. Local headless battle-runner: still unresolved after 30+ rounds of
+   attempts (see round 6's section for the most detailed known blocker,
+   `RepositoryManager.loadSelectedRobots` not seeing a freshly-reloaded
+   repository within the same call). Still the single highest-leverage infra
+   fix available if a future teammate has a larger step budget to spend on it
+   than usual.

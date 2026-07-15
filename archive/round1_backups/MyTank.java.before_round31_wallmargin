@@ -49,15 +49,7 @@ public class MyTank extends AdvancedRobot {
     private static final double PREFERRED_DISTANCE = 220;
 
     // Keep planned waypoints at least this far from any wall.
-    // Round 31: increased 70 -> 95. Analysis of this rung's losses (tibola__markiv,
-    // see README_agent.md round 31 notes) showed avg 3.3 walls/game (on the higher
-    // end of this file's history) and 6+ HIT_WALL events in at least one lost game,
-    // each costing ~3 energy for nothing -- pure unforced waste. A bigger safety
-    // margin gives the turn-then-move commands more room to actually complete
-    // their turn before the translation carries us past the boundary, at the cost
-    // of slightly less usable battlefield area (minor, 800x600 field still leaves
-    // plenty of room).
-    private static final double WALL_MARGIN = 95;
+    private static final double WALL_MARGIN = 70;
 
     // Strafing direction: 1 or -1. Flips periodically / when hit.
     private int moveDirection = 1;
