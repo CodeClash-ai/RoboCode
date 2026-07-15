@@ -3894,3 +3894,44 @@ so the normal gun/movement applies. Compiles Java 8 (major version 52). Backup:
 - The remaining lever if grinds persist is WAVE SURFING (high-risk, harness broken).
 - Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING.
 - Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 2 verification pass, THIS pass) — opponent = tannerrogalsky__tannerbot1
+
+## STATUS: THE ROUND-1 W=0.0 GUN + CLOSER-ORBIT + POWER-TAPER CHANGE WORKED HUGE — NO CODE CHANGE
+Verified /logs/rounds/{0,1} (opponent tannerrogalsky__tannerbot1, a SMOOTH
+moderate-fast near-straight mover: movefrac 0.62, avgV 4.26, avg|dh| 0.019,
+engages ~324px, conserves energy):
+- Round 0 (OLD W=0.75 leftover from SLOW ite_m9 + orbit ~245px + power 3.0/<300):
+  opus 36806 vs tannerbot1 13672 (19% share). Full 250-sim sweep: 34 LOSSES,
+  23 close(<20E), ourFE mean 42.6, killtick mean 742, turns avg 897 (long grinds).
+- Round 1 (prior teammate: W=0.0 FULL LINEAR LEAD + power tiers 3.0/<250 2.0/<320
+  0.8/<400 0.4/<500 0.2/else + stronger inward pull to ~225px + hold-fire >320px
+  when behind): opus 44469 vs tannerbot1 5555. HUGE improvement:
+    * full 250-sim sweep: LOSSES = 0/250 (down from 34!), close(<20E) = 1
+    * enemy score 13672 -> 5555 (dropped 59%), our share 73% -> 89%
+    * ourFE min/mean = 15.8/109.2 (up from 42.6), killtick 742 -> 390.6, turns
+      avg 897 -> 541.7. Every metric improved decisively.
+  tannerbot1 is a smooth near-straight mover so FULL LINEAR LEAD (W=0.0) is
+  data-optimal (same as dacruzer); the old W=0.75 was misaimed. Confirmed.
+
+## Decision this pass: NO code change (deliberate)
+Source is IDENTICAL to the round-1 winning commit 5776dac (git diff on
+MyTank.java = empty; only the .class was recompiled). W=0.0 (line 328), power
+tiers 3.0/<250 2.0/<320 0.8/<400 0.4/<500 0.2/else, orbit ~225px w/ stronger
+inward pull, hold-fire >320px when behind, energy-war taper, dodge (0.45), low-E
+clamps. Any gun/movement edit only risks regression on a 250/250 sweep we now win
+with margin. enemyPassive mode stays OFF (tannerbot1 deals us real damage ->
+damageTaken>=5). Re-verified compile:
+  javac --release 8 -cp libs/robocode.jar -d robots robots/custom/MyTank.java  # OK
+  javap -v robots/custom/MyTank.class | grep "major version"  # -> 52 (Java 8)
+
+## For next teammate
+Only act if a NEW /logs shows win rate <100% or our energy collapsing to a loss
+(enemy final E > 0 while ours = 0). tannerbot1 is a SMOOTH moderate-fast
+near-straight mover -> KEEP W=0.0 full linear lead. Do NOT switch to head-on off
+any biased replay-sim (cross-round REAL result is decisive: W=0.75 lost 34, W=0.0
+lost 0). If it becomes a REACTIVE stop-and-go dodger (avg|dh| up, moving frac
+down, stops when we fire), full lead will overshoot -> raise W toward 0.5; re-run
+the W-sweep on >=2 slices first. Always re-check
+`head -1 /logs/rounds/0/sim_0.jsonl` for opponent name + INDEX MAPPING first.
+Keep MyTank class name + Java-8 bytecode (only hard requirement).
