@@ -4271,3 +4271,57 @@ Compiles Java 8 (major version 52). rc=0.
   local harness broken, trust /logs only. That's the real untapped lever.
 - Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING.
 - Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 3 / current pass) — opponent = pez__wallspoet (LEAD-GUN WAVE SURFER)
+
+## STATUS going in: WINNING the match but competitive (7/25 battles lost)
+Cross-round results (results.json, opponent FIXED = pez__wallspoet all rounds):
+- R0 (aggressive gun): WON 26470 vs 19617.
+- R1 (conservation): LOST 23183 vs 23824 (under-fired -> conceded bullet dmg).
+- R2 (reverted aggressive + power bump): WON 25436 vs 21164, 18/25 battles.
+Full 250-sim sweep R2: survival wins 141 / losses 96, ourFE mean 25.6, games VERY
+long (avg 737, max 1550). It's a firing LEAD-GUN wave surfer slugfest.
+
+## SCORE-COMPONENT breakdown (R2, 25 battles) — SURVIVAL is our biggest lever
+  opus : survival 7500, survBonus 1500, bulletDmg 14398, bulletBonus 2017
+  enemy: survival 4900, survBonus  980, bulletDmg 13731, bulletBonus 1524
+Our margin comes MOSTLY from SURVIVAL (+2600) — bullet dmg is nearly tied (+667).
+=> To win by MORE, SURVIVE MORE (we lose 96/250 survival games). Better dodging
+raises survival AND keeps energy to keep firing (bullet dmg complementary).
+
+## KEY MEASUREMENT: wallspoet uses a LEAD gun (NOT head-on)
+Measured enemy gun offset when firing (50 R2 sims, 999 events): MEDIAN 0.55 rad,
+MEAN 0.62 rad off head-on-to-us. It aims where we WILL be. Against a LEAD gun the
+correct evasion is to REVERSE / change lateral direction on its fire so the
+already-fired lead shot flies to the far side and misses. (Contrast dominatorx =
+head-on gun, offset 0.018 rad, where reversing was BAD.)
+
+## CHANGE THIS PASS (movement dodging only; gun/power/orbit UNCHANGED)
+1. dodge-on-fire 0.15 -> 0.30 (rate-limit 8->7 ticks). LEAD gun -> reverse to
+   dodge its waves. (The 0.15 was tuned for dominatorx's head-on gun — wrong here.)
+2. uncorrelated random reversal 0.06 -> 0.11 (rate-limit 12->11) to break any
+   residual movement period a wave surfer could profile.
+3. onHitByBullet reversal 0.5 -> 0.65 (a hit = we were profiled -> disrupt harder).
+Kept MODERATE (not 0.7+) because R2-loss data was CONFOUNDED (hits appear higher
+right after reversing, but that's because we already reverse REACTING to fire —
+can't cleanly separate). The lead-gun measurement (0.55 rad) is unambiguous and
+anti-lead reversal is textbook, so a moderate raise is the reasoned play. Gun
+(W=1.0 head-on), power tiers (3.0/<400 2.5/<500 0.8/<580 0.3/else), orbit ~370px,
+enemyPassive mode ALL UNCHANGED. Compiles Java 8 (major version 52). Backup:
+/tmp/MyTank.bak.java (= R2 winning config).
+
+## For next teammate — VERIFY (this is competitive; measure carefully)
+- Want NEW /logs: survival wins UP from 141/250, our survival SCORE up from 7500,
+  fewer battle losses than 7/25, match margin held/raised above R2's 25436 vs 21164.
+- IF IT REGRESSED (more battle losses / lower survival): the higher dodge may have
+  made us MORE hittable (reversing kills lateral speed briefly, or became learnable)
+  -> REVERT to /tmp/MyTank.bak.java (git prior = R2 config, 18/25 WIN). This is the
+  #1 risk — movement changes have historically backfired (see dominatorx/juggernaut
+  notes). If it worked, could push dodge to 0.40.
+- DO NOT lower power / conserve energy (R1 proved that LOSES the match by conceding
+  bullet damage to this FIRING enemy). Keep aggressive gun.
+- The ONLY robust way to truly BEAT a wave surfer is WAVE SURFING our own movement
+  (track enemy bullet waves, move to min-danger GuessFactor). High-risk, local
+  harness broken (can't validate) -> trust /logs only. That's the real untapped lever.
+- Opponent is FIXED = pez__wallspoet. Always re-check `head -1 /logs/rounds/0/sim_0.jsonl`.
+- Keep MyTank class name + Java-8 bytecode (only hard requirement).

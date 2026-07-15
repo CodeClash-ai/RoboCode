@@ -625,11 +625,24 @@ public class MyTank extends AdvancedRobot {
         // tuned for the LEAD-gun juggernaut). We still keep rare uncorrelated
         // reversals + segment breaks so we don't become a fixed pattern for a
         // possible pattern-matcher, but favor steady full-lateral-speed orbit.
+        // ROUND-3 vs pez__wallspoet (THIS opponent, over all 5 rounds): MEASURED
+        // the enemy gun aims with a LEAD (median offset 0.55 rad, mean 0.62 rad
+        // when firing) -- it fires where we WILL be, NOT head-on. Against a lead
+        // gun the strongest evasion is to REVERSE / change lateral direction so
+        // the already-fired lead shot misses to the far side. Our win margin vs
+        // wallspoet comes mostly from SURVIVAL (opus survival 7500 vs enemy 4900
+        // across 25 battles) but we still lose 96/250 survival games. More
+        // unpredictable direction changes vs its lead gun should cut enemy hits
+        // -> more survival = our biggest score component. Raise dodge-on-fire
+        // 0.15 -> 0.30 (LEAD gun, unlike dominatorx's head-on gun) and the
+        // uncorrelated random reversal 0.06 -> 0.11 to break any residual period
+        // (a wave surfer profiles our movement). Kept below strict alternation so
+        // it isn't itself learnable at the fire cadence.
         long now = getTime();
-        if (enemyFired && now - lastReverseTime >= 8 && Math.random() < 0.15) {
+        if (enemyFired && now - lastReverseTime >= 7 && Math.random() < 0.30) {
             moveDirection = -moveDirection;
             lastReverseTime = now;
-        } else if (now - lastReverseTime >= 12 && Math.random() < 0.06) {
+        } else if (now - lastReverseTime >= 11 && Math.random() < 0.11) {
             moveDirection = -moveDirection;
             lastReverseTime = now;
         }
@@ -664,7 +677,9 @@ public class MyTank extends AdvancedRobot {
         // Change direction when hit to be less predictable. Raised 0.5 -> 0.8:
         // a hit means the enemy's gun profiled our current path, so disrupt it
         // (vs dankraemer__juggernaut, a lead-aiming gun that hits 45% in our losses).
-        if (Math.random() < 0.5) {
+        // vs pez__wallspoet (LEAD gun): a hit means our path was profiled -> disrupt
+        // harder. Raised 0.5 -> 0.65.
+        if (Math.random() < 0.65) {
             moveDirection = -moveDirection;
         }
     }
