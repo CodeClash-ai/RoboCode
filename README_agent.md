@@ -261,3 +261,114 @@ corner for the rest of the match.
    opponent when a stall starts, letting time run out could theoretically be
    safe) — but this is speculative and much lower priority than just not
    getting stuck in the first place.
+
+## Round 4 update (this round) — found and fixed the "radar freeze" bug behind both round-1 losses
+
+### Context
+This round's opponent (per `/logs/rounds/1/`, which is the most recent completed
+round available to me) was `wouterjoosse__infinitylock` again. `results.json` /
+`trace.md` show a strong 96% win rate (241/250), only 2 losses
+(`sim_1.jsonl`, `sim_41.jsonl`) + 1 draw. Real combat, not a walkover
+(`python3 tools/analyze_sim_logs.py /logs/rounds/1` confirms 2+ robots and
+bullets present in all 250 games).
+
+### What I found investigating the 2 losses
+Both losing games (`sim_1`, `sim_41`) show the *exact same* pattern, distinct
+from the round-3 "wall standoff" bug that was already fixed:
+- The opponent (`wouterjoosse__infinitylock`) is a **stationary sentry bot**:
+  `x`/`y`/`v` never change for the *entire* game in every game I checked (it
+  never moves and, in these two losses, never fires a single bullet either —
+  `o=0` never appears in the bullet log at all). It should be an easy kill.
+- In both losses, our own radar heading (`rh`) and gun heading (`gh`) froze
+  completely partway through the game (confirmed by dumping robot 1's `rh`/`gh`
+  every tick — e.g. in `sim_1.jsonl`, frozen at `rh=0.511` from t=520 onward, in
+  `sim_41.jsonl` frozen at `rh=4.233` from t=202 onward), for the *rest of the
+  match* (600-900+ more turns), even though our tank's `x`/`y` kept moving the
+  whole time (the movement/search logic in `run()` is independent of scanning,
+  so that part kept working).
+- Once the radar stops sweeping, `onScannedRobot()` never fires again, so we
+  never re-aim or fire again either. Both games then just coast for hundreds of
+  turns with **zero bullets landing on anyone**, hitting Robocode's built-in
+  inactivity-decay rule (~0.1 energy/turn drain on *both* robots once no hit has
+  landed for a while). Since we'd already spent some energy on earlier bullets
+  (bullet firing costs energy up front, hit or miss) while the sentry bot spent
+  none (it never fires), we were already down some energy heading into the
+  decay race, and eventually hit 0 first and died — purely due to the radar
+  freeze, not because the opponent ever actually outplayed us.
+
+### Root cause
+`run()` called `setTurnRadarRight(Double.POSITIVE_INFINITY)` exactly **once**,
+before the main loop, intending to keep the radar spinning forever so
+`onScannedRobot()` fires regularly. But `onScannedRobot()` unconditionally
+overwrites the radar command every time it runs with a small precise
+"lock-on" turn (`setTurnRadarRightRadians(radarTurn * 1.5)`). If that
+finite lock-on turn ever completes on a tick where the enemy is no longer
+inside the radar's arc (e.g. our own body turned away doing orbit/search
+movement, or the lock angle happened to be ~0), **nothing ever re-issues a
+fresh infinite sweep** — the one-time call before the loop is long gone. The
+radar then just sits frozen at whatever heading it stopped at, forever, since
+nothing else in the codebase ever touches it again for the rest of the match.
+This is a latent bug that can strike at any random point in *any* match,
+independent of the round-3 wall-standoff bug (already fixed) — it just hadn't
+shown up as a *loss* until this opponent's very low aggression (never
+firing/moving) made attrition-by-decay the deciding factor instead of being
+masked by combat damage swinging things one way or the other quickly.
+
+### Fix applied (`robots/custom/MyTank.java`, in `run()`'s main loop)
+Added, at the top of every loop iteration (before the existing movement
+fallback and `execute()`):
+```java
+if (getRadarTurnRemaining() == 0) {
+    setTurnRadarRight(Double.POSITIVE_INFINITY);
+}
+```
+This re-issues the infinite spin *every single tick* the radar has no pending
+turn left (i.e. any earlier command, ours or a stale one, has fully played
+out) — a pure safety net. While we're actively tracking a target,
+`onScannedRobot()`'s precise lock-on command fires afterward (during event
+processing) and immediately overrides this for that tick, so real tracking
+behavior from previous rounds is unchanged. But now, the instant the radar
+would otherwise have frozen (lock-on turn completed, no scan to redirect it),
+the very next loop iteration detects `getRadarTurnRemaining() == 0` and
+restarts the sweep, guaranteeing we reacquire the enemy within at most one
+full radar rotation instead of potentially never again.
+Verified `javac -cp libs/robocode.jar -d robots robots/custom/MyTank.java`
+compiles clean (no errors/warnings); `.class` is up to date in
+`robots/custom/MyTank.class`.
+
+### What I did NOT get to
+- Did not get local headless battle-running working in this sandbox (same
+  long-standing unresolved issue noted in every previous round's section
+  above). All validation this round was via post-hoc analysis of round 1's
+  real match logs (`tools/analyze_sim_logs.py`, plus ad-hoc per-tick dumps of
+  `rh`/`gh`/`x`/`y` for the two losing games — the ad-hoc snippets aren't saved
+  as a script; a good next step would be to generalize them into something
+  like `tools/analyze_radar_freeze.py` that flags any game where a robot's
+  `rh` stays byte-for-byte identical for more than, say, 100 consecutive
+  ticks while the match is still ongoing — directly analogous to the existing
+  wall-freeze detection idea from round 3's notes, but for radar instead of
+  position).
+- Did not touch movement/targeting-math/bullet-power tuning at all this round
+  — the 96% win rate suggests the core strategy is sound; this round's fix is
+  purely about eliminating a second unforced-error class of losses (radar
+  freeze), analogous in spirit to round 3's wall-standoff fix.
+
+### Suggestions for next teammate
+1. **First step**: once this round's `/logs/rounds/<N>/` exists, re-run
+   `python3 tools/analyze_sim_logs.py /logs/rounds/<N>` and check `trace.md`'s
+   win rate. If it's now 98-100% (i.e. both prior loss patterns eliminated),
+   the radar/wall fixes are validated — shift focus entirely to fine-tuning
+   (bullet power curve, `PREFERRED_DISTANCE`, strafe timer) using per-game
+   accuracy/damage stats.
+2. If any losses remain, dump `rh`/`gh` and `x`/`y` per-tick for robot index 1
+   (us) across the whole game (see the ad-hoc python snippets in this round's
+   git history / shell scrollback if still needed as a template) and check for
+   *either* a frozen `rh` (radar) *or* a frozen `x`/`y` (movement/wall) lasting
+   >100 ticks — those are the two known failure classes so far. If you find a
+   THIRD distinct freeze pattern (e.g. gun heading frozen while radar keeps
+   spinning fine), that would indicate a new, not-yet-found bug in the gun
+   turn logic specifically worth isolating.
+3. Consider writing the general freeze-detector script mentioned above
+   (`tools/analyze_radar_freeze.py` or extend `analyze_sim_logs.py` with a
+   `--check-freezes` flag) so this class of bug is caught automatically from
+   logs instead of requiring manual per-tick dumps each time.

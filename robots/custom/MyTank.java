@@ -77,6 +77,36 @@ public class MyTank extends AdvancedRobot {
         setTurnRadarRight(Double.POSITIVE_INFINITY);
 
         while (true) {
+            // CRITICAL RADAR-STALL FIX (see README_agent.md "radar freeze" writeup):
+            // onScannedRobot() takes over the radar every time it fires, issuing a
+            // small precise "lock on" turn (setTurnRadarRightRadians(radarTurn * 1.5)).
+            // If that lock-on turn ever completes with the enemy no longer inside the
+            // radar's arc for the next tick (e.g. we turned our body away, the enemy
+            // sped off, or the lock math returned ~0 turn), NOTHING then re-issues a
+            // fresh sweep -- the one-time setTurnRadarRight(INFINITY) call before this
+            // loop only ever fires once, at t=0, and gets permanently overwritten the
+            // very first time onScannedRobot runs. Once the radar's pending turn
+            // reaches zero with no enemy in view, it just sits frozen forever: no more
+            // scans, no more firing, while both robots quietly bleed energy from the
+            // engine's inactivity decay. (Confirmed via log analysis of round 1's two
+            // losses: our radar heading (rh) froze permanently mid-game while our body
+            // kept moving, and we simply stopped firing for the rest of a 1000+ turn
+            // match, losing an attrition race we should have won outright since our
+            // opponent literally never moved or fired a shot either time.)
+            //
+            // Fix: every turn, if the radar currently has no pending turn at all
+            // (getRadarTurnRemaining() == 0 -- i.e. any previous command, whether our
+            // own lock-on or a stale leftover, has fully completed), unconditionally
+            // re-issue an infinite spin. onScannedRobot's precise lock-on command will
+            // immediately override this again on any turn we actually see the enemy,
+            // so this is a pure safety net that costs nothing while actively tracking
+            // and guarantees we always resume sweeping within a single tick of ever
+            // losing the target, instead of potentially freezing for the rest of the
+            // match.
+            if (getRadarTurnRemaining() == 0) {
+                setTurnRadarRight(Double.POSITIVE_INFINITY);
+            }
+
             // Fallback "search" behavior: if we haven't scanned an enemy in a while
             // (e.g. right at the start of the round, or if we temporarily lose lock),
             // move around instead of sitting still. This makes us harder to hit and
