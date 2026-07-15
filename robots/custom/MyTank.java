@@ -208,13 +208,13 @@ public class MyTank extends AdvancedRobot {
             driveAwayFrom(absBearing, 240.0);
             return;
         }
-        if (e.getDistance() < 185.0
+        if (e.getDistance() < 225.0
                 && (harmlessLowFireEnemy() || wallEnemyScans > 2 || stopGoEnemyScans > 4
                         || Math.abs(enemyVelocityAvg) < 1.2)) {
             // Corners/sample.Fire-style close starts can turn into repeated rams
-            // before the stationary detector has enough scans.  Use a non-blocking
-            // escape command immediately, bypassing the orbit/wall-smoothing code
-            // that can curve us back across the opponent at knife range.
+            // before the stationary detector has enough scans.  Keep opening the
+            // gap until outside the point-blank danger band, bypassing orbit/wall-
+            // smoothing code that can curve us back across the opponent.
             driveAwayFrom(absBearing, 225.0);
             return;
         }
@@ -310,15 +310,13 @@ public class MyTank extends AdvancedRobot {
         double distanceOffset = limit(-0.62, (e.getDistance() - preferredDistance) / 430.0, 0.55);
         double desired = absBearing + moveDirection * (Math.PI / 2.0 - distanceOffset);
         if (e.getDistance() < 118
-                || (e.getDistance() < 185
+                || (e.getDistance() < 225
                         && (harmlessLowFireEnemy() || wallEnemyScans > 2 || stopGoEnemyScans > 4
                                 || Math.abs(enemyVelocityAvg) < 1.2))) {
             // Many simple/corner bots only become dangerous at spawn/knife range.
-            // The old guard only escaped non-firing enemies below 118px; sample
-            // Corners-style opponents can start moving through us, then fire or
-            // cause 0.6 collision drops, which disabled the escape and left both
-            // tanks grinding at ~36px.  Open a larger gap from low-fire or
-            // wall/stop-go targets before resuming the close farming orbit.
+            // Sample Corners can drive through us from ~180px and pin both tanks
+            // at ~36px.  Prefer direct separation until a healthy gap is open from
+            // low-fire or wall/stop-go targets, then resume the close farming orbit.
             desired = absBearing + Math.PI;
         }
         desired = wallSmooth(desired, moveDirection);
@@ -1051,13 +1049,13 @@ public class MyTank extends AdvancedRobot {
 
     private void driveAwayFrom(double threatBearing, double distance) {
         double away = threatBearing + Math.PI;
-        // Usually the safest response is a direct separation vector.  When that
-        // would immediately drive into a wall/corner, choose the best nearby
-        // escape angle by maximizing both distance from the threat line and field
-        // safety instead of blindly driving to the center (which can be through the
-        // other robot during close Corners/Fire-style spawn collisions).
-        if (!insideBattlefield(projectX(getX(), away, Math.min(distance, 170.0)),
-                projectY(getY(), away, Math.min(distance, 170.0)), WALL_MARGIN + 8.0)) {
+        // Usually the safest response is a direct separation vector.  Accept being
+        // somewhat close to a wall here: round-1 Corners traces showed the older
+        // WALL_MARGIN test over-smoothed a valid escape into a centerward curve,
+        // letting the enemy drive through and pin us at point blank.  Only search
+        // for a replacement angle if the direct vector is truly unsafe.
+        if (!insideBattlefield(projectX(getX(), away, Math.min(distance, 210.0)),
+                projectY(getY(), away, Math.min(distance, 210.0)), 24.0)) {
             double best = away;
             double bestScore = -1.0e9;
             for (int i = -10; i <= 10; i++) {
@@ -1070,7 +1068,7 @@ public class MyTank extends AdvancedRobot {
                 double margin = Math.min(Math.min(px, getBattleFieldWidth() - px),
                         Math.min(py, getBattleFieldHeight() - py));
                 double separation = Math.cos(Utils.normalRelativeAngle(a - away));
-                double score = 3.0 * margin + 120.0 * separation;
+                double score = 1.2 * margin + 240.0 * separation;
                 if (score > bestScore) {
                     bestScore = score;
                     best = a;

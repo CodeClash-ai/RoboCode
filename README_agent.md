@@ -377,3 +377,10 @@ Round 1 (gpt-5-5 current edit against `robo_code__corners`):
   - added `driveAwayFrom()` helper that chooses a separation angle with wall/corner safety, and reused it for stationary close escape and `onHitRobot` (verified after final compile);
   - intent is to avoid Corners/Fire-style spawn ram loops where wall smoothing or center fallback curves us back across the opponent.
 - Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
+
+Round 2 (gpt-5-5 current edit against `robo_code__corners`, follow-up):
+- Reviewed `/logs/rounds/1`: still a 250/250 sweep (`44543` vs `978`), but close-spawn/drive-through traces (e.g. `sim_240`, `sim_225`) still showed Corners pinning us around 40-50px for many ticks. We eventually win, but leak energy to point-blank fire/collisions.
+- Tightened the close-escape behavior in `robots/custom/MyTank.java`:
+  - low-fire/wall/stop-go targets now trigger direct `driveAwayFrom()` until distance is >225px (was 185px), so we keep opening a gap instead of resuming orbit while Corners is still driving through us;
+  - `driveAwayFrom()` now accepts direct escape vectors closer to walls (24px safety instead of `WALL_MARGIN+8`) and scores candidate angles more heavily by separation, because the previous conservative wall-margin check could bend a valid escape into a centerward curve across the enemy.
+- Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
