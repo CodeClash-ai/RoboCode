@@ -634,10 +634,16 @@ public class MyTank extends AdvancedRobot {
         // the 800x600 field, so a very wide orbit would jam us into walls (slow =
         // easy target + wall self-damage). ~240px cuts enemy hits (36.9->~27/1k)
         // while staying clear of walls -- a safe, meaningful improvement.
-        if (enemyDistance > 340)      rangeBias = -0.7;  // far: close in toward ~240px
-        else if (enemyDistance > 280) rangeBias = -0.4;
-        else if (enemyDistance > 230) rangeBias = -0.1;  // hold ~240px
-        else if (enemyDistance < 180) rangeBias = 0.5;   // too close: push out of the kill zone
+        // R2 vs pez__leachpmc (STATIONARY firing bot): push orbit ~240px -> ~330px.
+        // Enemy hit density on us HALVES with range (R1 250 sims): 200-300px 6.1/1k,
+        // 300-400px 3.2/1k, 400-500px 1.7/1k. Target is STATIONARY so our head-on gun
+        // (lead=0) hits at ANY range with SAME accuracy -> wider orbit is pure upside
+        // (fewer enemy hits = more survival+energy, ZERO accuracy loss). Wall-hug was
+        // only 7.6pct at the achieved ~287px orbit so ~330px is safe on 800x600.
+        if (enemyDistance > 430)      rangeBias = -0.7;  // far: close in toward ~330px
+        else if (enemyDistance > 370) rangeBias = -0.4;
+        else if (enemyDistance > 320) rangeBias = -0.1;  // hold ~330px
+        else if (enemyDistance < 260) rangeBias = 0.5;   // too close: push out of the kill zone
         else                          rangeBias = 0.2;
         double desiredDir = absBearing + (Math.PI / 2 + rangeBias) * moveDirection;
 

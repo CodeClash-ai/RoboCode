@@ -4896,3 +4896,45 @@ high so kill speed is preserved).
   becomes a mover in a new round, re-check `head -1 /logs/rounds/0/sim_0.jsonl` and
   the movement profile; a wide orbit vs a MOVING accurate gunner may need retuning.
 - Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 2 / current pass) — opponent = pez__leachpmc (STATIONARY firing bot)
+
+## STATUS: WINNING both rounds; R1 widened orbit helped (R0 enemy 10711 -> R1 9012).
+## THIS pass: push orbit ~240px -> ~330px to cut damage taken further.
+Opponent = pez__leachpmc, COMPLETELY STATIONARY (v=0.0, never turns) but fires an
+accurate gun. INDEX both rounds: i=0=opus, i=1=leachpmc. Verified /logs/rounds/{0,1}:
+- R0 (orbit ~170px leftover from walls): opus 43390 vs leachpmc 10711 (83% share).
+- R1 (prior teammate orbit ~240px, achieved ~287px): opus 42255 vs leachpmc 9012
+  (83% share, results_0.txt). Full 250-sim sweep: 1 loss (variance), close 1,
+  ourFE mean 95.4, killtick 185, avg engagement 287px. Enemy DIES every game.
+
+## KEY UNBIASED SIGNAL: enemy hit density on us HALVES with range (R1 250 sims)
+  0-100px 21.8/1k | 100-200 18.8 | 200-300 6.1 | 300-400 3.2 | 400-500 1.7 | 500+ ~1.7
+We spent most ticks (19140) at 200-300px (6.1/1k). Since the target is STATIONARY,
+our head-on gun (W=0.9, lead=0 for a still target) hits at ANY range with the SAME
+accuracy -> orbiting WIDER is pure upside: fewer enemy hits = more survival+energy
+= less enemy bullet-dmg score (its entire 17% share is bullet damage). We take
+~38.5 dmg/game; wider orbit cuts that.
+
+## CHANGE THIS PASS (movement only): orbit ~240px -> ~330px (rangeBias line ~637)
+  was: >340 -0.7, >280 -0.4, >230 -0.1 (hold ~240), <180 +0.5, else 0.2
+  now: >430 -0.7, >370 -0.4, >320 -0.1 (hold ~330), <260 +0.5, else 0.2
+Targets the 300-400px zone (3.2/1k, HALF of 240px). Wall-hug was only 7.6% at the
+achieved ~287px orbit, so ~330px is safe on 800x600. Power tiers UNCHANGED: at
+~330px power=2.2 (<380 tier) -> kill speed preserved (avoids the slow-kill
+regression documented vs myfirstkiller). Energy-war taper (dist>300 when behind)
+rarely bites: we're behind on energy only 7.4% of ticks vs this bot. Gun W=0.9
+(~head-on, optimal for stationary target) UNCHANGED. Backup: /tmp/MyTank.bak.java.
+Compiles Java 8 (major version 52), rc=0.
+
+## For next teammate — VERIFY
+- Want NEW /logs: enemy score DOWN from 9012, share UP from 83%, ourFE mean UP from
+  95.4, dmg-taken/game DOWN from 38.5, killtick similar (~185) NOT ballooning,
+  engagement dist UP from 287 toward ~330px. If it REGRESSED (share drop / slower
+  kills from wall-hugging at the wider orbit), REVERT to /tmp/MyTank.bak.java (git
+  prior = ~240px orbit, 83% share WIN) or pull orbit back to ~290px (thresholds
+  390/330/280/<230). If wall-hug spiked, that's the culprit.
+- leachpmc is STATIONARY -> W=0.9 (~head-on) is optimal; do NOT change aim. If it
+  becomes a mover in a new round, re-check `head -1 /logs/rounds/0/sim_0.jsonl` +
+  movement profile (a wide orbit vs a MOVING accurate gunner needs retuning).
+- Keep MyTank class name + Java-8 bytecode (only hard requirement).
