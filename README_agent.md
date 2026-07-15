@@ -1405,3 +1405,43 @@ hit if <18px to enemy future pos, 800x600 bounds + gunheat cooldown.
 - Never go flat power 3.0 at long range vs a FAST dodger (regressed us to 83% vs
   robo_code__crazy) — the distance taper guards this.
 - Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 2 verification pass) — opponent = philipmjohnson__dacruzer
+
+## STATUS: THE ROUND-1 W=0.0 GUN CHANGE WAS A BIG WIN — NO CODE CHANGE THIS PASS
+Verified /logs/rounds/{0,1} (this match, opponent philipmjohnson__dacruzer):
+- Round 0 (OLD head-on W=1.0 gun): opus 44343 vs dacruzer 1211. 250/250 wins BUT
+  long grinds (avg 773 turns), accuracy only 22%, worst-game final E ~12-17.
+- Round 1 (prior teammate switched to W=0.0 FULL LINEAR LEAD + power tiers
+  3.0/<500, 2.4/<620, 1.5/else): opus 44792 vs dacruzer 581. results_0.txt:
+  opus_4_8.MyTank 1786 (99%), 10/10 firsts. HUGE improvement:
+    * win rate 100% (250/250), 0 LOSSES
+    * accuracy 22% -> 61%
+    * game length avg 773 -> 361 turns (kills 2x faster)
+    * worst-game final energy ~12 -> 92.5 (enemy DIES every game, finalE 0.0)
+    * enemy score 1211 -> 581 (halved)
+  The W=0.0 change flipped a tight grind into a crushing dominant win — dacruzer
+  is a fast constant-velocity curving mover (avg|v|4.1, avg|dh|0.069) so full
+  linear lead nearly DOUBLES hit rate vs head-on. Confirmed data-optimal.
+
+## Worst-game check (round 1): 0 losses, worst final E 92.5
+python one-liner (per-file header maps idx->name, enemy=non-'opus') confirmed
+losses=0/250; worst-6 our final E: 92.5/98.4/102.6/107.2/107.4/107.5, enemy 0.0
+in all. No close games. This is near-theoretical-maximum performance.
+
+## Decision this pass: NO code change (deliberate)
+Source is the round-1 winning config (W=0.0 full linear lead, power tiers
+3.0/<500, 2.4/<620, 1.5/else, low-E safety clamps, energy-war taper, orbit ~230px).
+Verified W=0.0 at line 230. Any gun/movement edit only risks regression on a
+250/250 sweep we win with 92+ E to spare. Re-verified compile:
+  javac --release 8 -cp libs/robocode.jar -d robots robots/custom/MyTank.java  # OK
+  javap -v robots/custom/MyTank.class | grep "major version"  # -> 52 (Java 8)
+
+## For next teammate
+Only act if a NEW /logs shows win rate <100% or our energy collapsing to a loss
+(enemy final E > 0 while ours = 0). dacruzer is a smooth fast mover -> KEEP W=0.0.
+If it becomes a REACTIVE stop-and-go dodger (avg|dh| up, moving frac down, stops
+when we fire), full lead will overshoot -> raise W toward 0.5-1.0 and re-run the
+W-sweep replay (/tmp/rep.py per prior notes) on >=2 slices first. Never go flat
+power 3.0 at long range vs a FAST dodger (regressed us to 83% vs robo_code__crazy;
+the distance taper guards this). Keep MyTank class name + Java-8 bytecode.
