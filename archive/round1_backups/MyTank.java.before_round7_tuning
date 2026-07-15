@@ -121,26 +121,11 @@ public class MyTank extends AdvancedRobot {
             // move around instead of sitting still. This makes us harder to hit and
             // helps us find enemies faster than standing in one spot spinning radar.
             if (getTime() - lastScanTime > 15 && getDistanceRemaining() == 0 && getTurnRemaining() == 0) {
-                double sx = getX();
-                double sy = getY();
-                double edgeMargin = 100;
-                if (sx < edgeMargin || sx > getBattleFieldWidth() - edgeMargin
-                        || sy < edgeMargin || sy > getBattleFieldHeight() - edgeMargin) {
-                    // Near a wall while blind-searching -- head toward field center
-                    // instead of risking a wall hit via the plain random-turn patrol.
-                    double cx = getBattleFieldWidth() / 2.0;
-                    double cy = getBattleFieldHeight() / 2.0;
-                    double angleToCenter = Math.atan2(cx - sx, cy - sy);
-                    setTurnRightRadians(robocode.util.Utils.normalRelativeAngle(
-                            angleToCenter - getHeadingRadians()));
-                    setAhead(120);
-                } else {
-                    if (Math.random() < 0.15) {
-                        searchTurnDir = -searchTurnDir;
-                    }
-                    setTurnRight(30 * searchTurnDir);
-                    setAhead(120);
+                if (Math.random() < 0.15) {
+                    searchTurnDir = -searchTurnDir;
                 }
+                setTurnRight(30 * searchTurnDir);
+                setAhead(120);
             }
             execute();
         }
@@ -325,23 +310,14 @@ public class MyTank extends AdvancedRobot {
     }
 
     private double bulletPowerForDistance(double distance) {
-        // Round 7 tuning: pushed power up across all bands. Round 0 logs (this rung's
-        // opponent, it_economics__ite_bomax) show it barely moves (avg speed 0.8) and
-        // has very low accuracy (4%) against us, i.e. it's not punishing us for taking
-        // slightly slower bullets in exchange for more damage per hit. Since our own
-        // hit-chance is governed mostly by our targeting math (bullet travel time is a
-        // second-order effect against a near-stationary target), trading a bit of
-        // bullet speed for more damage-per-hit should raise total damage dealt (and
-        // thus score) without materially hurting our win rate. Kept graceful power
-        // falloff at long range since bullet travel time still matters more there.
         if (distance < 150) {
             return 3.0;
-        } else if (distance < 350) {
-            return 2.6;
-        } else if (distance < 550) {
-            return 2.0;
+        } else if (distance < 300) {
+            return 2.2;
+        } else if (distance < 500) {
+            return 1.5;
         }
-        return 1.3;
+        return 1.0;
     }
 
     public void onHitByBullet(HitByBulletEvent e) {
@@ -372,20 +348,7 @@ public class MyTank extends AdvancedRobot {
     }
 
     public void onHitRobot(HitRobotEvent e) {
-        // Rammed something (or got rammed) - back away toward the field center rather
-        // than blindly setBack() along our current heading, which could just as easily
-        // re-drive us into the same robot/wall corner repeatedly (same class of bug as
-        // the old onHitWall() handler, fixed in an earlier round -- applying the same
-        // fix here since round-0 logs show avg 1.1 rams/game, a plausible source of
-        // repeated unnecessary contact damage).
-        double myX = getX();
-        double myY = getY();
-        double cx = getBattleFieldWidth() / 2.0;
-        double cy = getBattleFieldHeight() / 2.0;
-        double angleToCenter = Math.atan2(cx - myX, cy - myY);
-        double turnToCenter = robocode.util.Utils.normalRelativeAngle(
-                angleToCenter - getHeadingRadians());
-        setTurnRightRadians(turnToCenter);
+        // Rammed something - back away.
         setBack(60);
         execute();
     }

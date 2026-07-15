@@ -638,3 +638,113 @@ validation. I made concrete progress on this:
    aggressive opponent to finally validate the circular-motion gun
    prediction (round 5's change) and current bullet-power/movement tuning
    against something that fights back.
+
+## Round 7 update (this round) — bullet power increase + onHitRobot/search wall-awareness fixes
+
+### Context
+Only `/logs/rounds/0/` exists in this environment for me. Per `trace.md`, this
+round's real opponent is `it_economics__ite_bomax` (a new rung — different from
+`robo_code__sittingduck` seen in rounds 5-6's notes above). Confirmed via
+`python3 tools/analyze_sim_logs.py /logs/rounds/0`: 250/250 games have 2 real
+robots, bullets, and movement (real combat). Result: **100% win rate (250/250)**,
+69% accuracy, avg speed 6.0, avg walls/game 2.5, avg rams/game 1.1, avg min
+energy 93. The opponent is weak (0% win rate, 4% accuracy, avg speed 0.8 — barely
+moves and almost never hits us) but not a total no-op sentry like
+`robo_code__sittingduck` was (it does fire occasionally, just very inaccurately).
+
+Ran `python3 tools/analyze_freezes.py /logs/rounds/0 --threshold 100 | grep -v
+it_economics` -> **zero matches on our own bot (`sonnet_5`)**, confirming the
+round-3 wall-standoff and round-4 radar-freeze fixes are still holding (all 500
+freeze findings are on the opponent, and in this case they correspond to it
+being dead/destroyed mid-game and staying frozen for the remainder — expected,
+not a bug, since `it_economics__ite_bomax`'s avg death turn is ~204 out of
+avg-355-turn games).
+
+### Changes made this round (`robots/custom/MyTank.java`)
+Since we're already winning every game comfortably against a weak opponent,
+focused on squeezing more *score* (damage dealt / efficiency) out of games we
+were already winning, plus two small defensive-in-depth cleanups, rather than
+touching the core targeting/movement algorithms (which look healthy):
+
+1. **`bulletPowerForDistance()` increased across all bands**
+   (0-150: unchanged 3.0; 150-350: 2.2->2.6; 350-550: 1.5->2.0; 550+: 1.0->1.3).
+   Rationale: this rung's opponent barely moves (avg speed 0.8) and has very low
+   accuracy against us (4%), so slightly slower bullets (higher power => lower
+   `bulletSpeed = 20 - 3*power`) shouldn't meaningfully hurt our hit rate against
+   a near-stationary target, while `4*power + 2*max(0,power-1)` damage-per-hit
+   scaling means more power per landed hit converts directly into more damage
+   dealt (and, presumably, more score) per game. **NOT yet validated by a real
+   match** (no local battle-runner available in this sandbox — see many earlier
+   rounds' notes on this unresolved issue) — if next round's `trace.md` shows
+   accuracy dropping *sharply* (not just a point or two of normal variance) vs
+   this round's 69% baseline, suspect this change and consider reverting bands
+   back toward the old values (old version preserved at
+   `archive/round1_backups/MyTank.java.before_round7_tuning`).
+2. **`onHitRobot()` now steers toward field center before backing away**
+   (previously just `setBack(60)` along current heading with no directional
+   awareness at all) — mirrors the fix already applied to `onHitWall()` in an
+   earlier round, for the same reason: blindly backing up along whatever
+   heading we happened to be facing when we bumped something could just as
+   easily re-drive us into the same wall/robot corner repeatedly instead of
+   actually escaping. Round-0 logs show avg 1.1 rams/game as a plausible
+   (if minor, since we still won every game) source of avoidable contact
+   damage.
+3. **Fallback "search" movement (in `run()`'s main loop, used when we haven't
+   scanned an enemy in 15+ ticks) is now wall-aware.** Previously this was the
+   *one* remaining movement path with zero wall-margin logic (the
+   `onScannedRobot()`-driven orbit movement got wall-clamping back in round 3,
+   but the blind patrol/search fallback never did). Added a check: if current
+   position is within 100px of any edge while in search mode, steer toward
+   field center instead of the plain random-turn patrol. Low-impact fix (this
+   fallback path rarely triggers once an enemy has been scanned at all,
+   per round 2's notes) but closes a previously-unaddressed gap.
+
+Verified `javac -cp libs/robocode.jar -d robots robots/custom/MyTank.java`
+compiles cleanly (no errors/warnings); `.class` is up to date. Full diff
+against the pre-round-7 version is preserved via
+`archive/round1_backups/MyTank.java.before_round7_tuning` (`diff` it against
+the current file to see exactly what changed this round if you need to revert
+piecemeal).
+
+### What I did NOT get to
+- Did not touch `PREFERRED_DISTANCE`, strafe timing, radar lock, or the
+  circular-motion gun prediction math (round 5's change) at all — no evidence
+  in the logs that any of those are underperforming, and this rung's opponent
+  is too passive to give strong signal either way on movement/dodging quality.
+- Still did not resolve local headless-battle-running in this sandbox (every
+  round back to round 1 has tried and failed/partially-progressed on this —
+  see round 6's section above for the most detailed writeup of exactly where
+  it currently breaks, `RepositoryManager.loadSelectedRobots` not seeing a
+  freshly-reloaded repository within the same call). All validation this round
+  was static (code review + compilation), same limitation as every prior
+  round's bugfix-only changes, but this round's *bullet power* change in
+  particular is a genuine behavior change to already-working combat code
+  (unlike e.g. round 3/4's freeze fixes, which only mattered in previously-
+  broken edge cases) — so it carries slightly more risk of an unseen
+  regression than most previous rounds' changes. Flagged clearly above for
+  the next teammate to double check against real results.
+
+### Suggestions for next teammate
+1. **First step**: check `/logs/rounds/<N>/trace.md` for this round's result.
+   - If win rate stayed ~100% and accuracy is roughly steady (65-75%) or
+     higher, with average damage-dealt/score noticeably higher than this
+     round's baseline (38929 team score per `results.json` this round), the
+     bullet-power increase is validated — consider pushing power even higher
+     if there's still no accuracy/win-rate cost, or leave as-is if the score
+     gain has plateaued.
+   - If accuracy craters or (unlikely, given the opponent, but check anyway)
+     a loss appears, revert `bulletPowerForDistance()` back to the values in
+     `archive/round1_backups/MyTank.java.before_round7_tuning`.
+2. Run `python3 tools/analyze_freezes.py /logs/rounds/<N> --threshold 100 |
+   grep sonnet` (or your bot's actual name) as a standard regression check —
+   should print nothing.
+3. If/when the ladder rung changes to a genuinely aggressive, accurate
+   opponent (this one and `robo_code__sittingduck` before it have both been
+   quite weak/passive), that's the first real opportunity to see how the
+   round-5 circular-motion gun prediction and current movement/strafe tuning
+   hold up under real pressure — worth close attention to avg-min-energy and
+   whether losses start appearing at all.
+4. Local headless battle-runner: still unresolved, still the single most
+   valuable thing a future teammate with steps to spare could fix, per every
+   round's notes back to round 1. See round 6's section for the most specific
+   known blocker (`RepositoryManager.loadSelectedRobots` ordering issue).
