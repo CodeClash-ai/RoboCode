@@ -6540,3 +6540,54 @@ If we can't fully reach 380px, the power taper alone still cuts bleed 63%.
   The only robust further lever is WAVE SURFING (high-risk, harness broken).
 - Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING.
 - Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 3 / current pass) — opponent = johan_adriaans__berendbotje — AGGRESSIVE CLOSE-FIGHT REWRITE (was LOSING all 3 rounds)
+
+## CRITICAL: we LOST all 3 prior rounds (opus 17538/18665/21533 vs 29907/30088/36850).
+R1 (orbit-wider ~320px) and R2 (flee ~380px + conservation/power-taper) BOTH FAILED
+because berendbotje is a FAST AGGRESSIVE PURSUER with a LEAD gun (offset ~0.34 rad)
+that CHARGES us to point-blank (mean engage ~228px; pins us <200px 46%% of ticks;
+it ramped one game to 57-77px then bled us to 0 by tick 360). We could NEVER reach
+380px vs the pursuer. R2 made it WORSE on bullet damage: it cut close-range power so
+hard that enemy bullet dmg (808) EXCEEDED ours (619) while we still lost survival.
+
+## KEY MEASUREMENT (R2 250 sims, DECISIVE): our accuracy is HIGHEST where it charges
+Real hit rate by distance: 0-150px ~80-100%%, 200px 37%%, 250px 26%%, 300px 20%%.
+Enemy hit density on us CLIFFS: ~90/1k at <=200px -> 5.8/1k at >=250px.
+Per-game: we deal 111.8 dmg / receive 122.0 dmg / spend 46.7 firing / fire 40.8
+shots vs its 23.6. We bleed to 0 (ourFE ~10, enemyFE ~38). Speed does NOT reduce
+hits (lead gun hits ~55/1k at all our speeds) -> DISTANCE is the only defensive lever.
+
+## Net-energy model (measured hit rates + enemy density, per 1k ticks):
+  R2 @200px pow1.2: netE -753, dmgLead -592 (catastrophic, matches the losses)
+  R3 @260px pow2.0: netE  -89, dmgLead +185 (near break-even + WINS damage race)
+  R3 @150px pow2.0: netE -496, dmgLead  -28 (even if pinned, near-even on damage)
+
+## CHANGES THIS PASS (movement + power; gun aim W=0.0 circular UNCHANGED)
+1. MOVEMENT rangeBias (line ~713): stop fleeing to 380px (impossible vs pursuer).
+   Target ~260px with MODERATE outward bias (>400 -0.4, >300 -0.1, >260 0.1,
+   <160 0.7, else 0.4) -- keep near-PERPENDICULAR full-speed orbit (maintains
+   distance better than turning tail; harder for its lead gun). 260px is the CLIFF
+   edge (enemy hit 5.8/1k) while we still hit ~26%%.
+2. POWER tiers (line ~320): fight HARD at close range. dist<160 -> 3.0 (base tier,
+   80%%+ hit -> max damage/bullet-bonus), 150-250 -> 2.0, 250-350 -> 1.0, else 0.5.
+   REPLACED R2's over-conservative 1.2/0.7/0.4 that conceded the bullet-damage race.
+3. FIRE GATE (line ~405): hold-fire-when-behind pushed 330 -> 400px (we fight ~260
+   now; only gate truly-far shots).
+Dodge-on-fire 0.30 (anti-LEAD-gun, correct for offset 0.34) UNCHANGED. Gun W=0.0
+full circular lead (correct for heavy spinner) UNCHANGED. Compiles Java 8 (major 52).
+Backup of R2 (losing) source: /tmp/MyTank_r2.java.
+
+## For next teammate — VERIFY (this is a MATCH-LOSS we're trying to flip)
+- Want NEW /logs: winner=opus-4-8, our bullet dmg > enemy's (reverse the 808 vs 619),
+  survival score UP from 150, ourFE mean UP from 10, losses REDUCED from ~197/250.
+- IF STILL LOSING: (a) if we're STILL pinned <200px (pursuer too fast), the close
+  fight at power 3.0 (80%% hit) should at least make the damage race even/winning even
+  if survival is close -- check bullet dmg share; (b) if the moderate orbit still
+  can't hold 260px, that's expected (fast pursuer) -- the win now comes from
+  out-DAMAGING it at close range where we hit 80%%, NOT from fleeing; (c) consider
+  raising close-range power everywhere (remove the 150-250 cap, fire 3.0 to 250px)
+  if bullet-dmg share is close; (d) full revert = /tmp/MyTank_r2.java (but R2 LOST).
+- The only robust further lever vs its lead gun is WAVE SURFING (high-risk, harness
+  broken, trust /logs). Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for
+  opponent + INDEX MAPPING first. Keep MyTank class name + Java-8 bytecode.

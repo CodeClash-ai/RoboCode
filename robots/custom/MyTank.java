@@ -309,10 +309,18 @@ public class MyTank extends AdvancedRobot {
         // conserve HARD: our hit rate collapses to 3-12% at 150-400px so full-power
         // misses are pure bleed. Cut power by distance (cheap misses) so the energy
         // war flips in our favor -- we deal ~= damage while spending far less.
-        if (dist > 120) {
-            if (dist < 250)      power = Math.min(power, 1.2);
-            else if (dist < 350) power = Math.min(power, 0.7);
-            else                 power = Math.min(power, 0.4);
+        // R3 vs berendbotje (LEAD-gun aggressive PURSUER that charges to point-blank):
+        // MEASURED real hit rate by distance (R2 250 sims): 0-150px ~80-100%%,
+        // 200px 37%%, 250px 26%%, 300px 20%%. The enemy CHARGES us to <200px 46%% of
+        // ticks -- exactly where WE are most accurate. R2's mistake was FLEEING +
+        // cutting close-range power, which conceded the bullet-damage race (enemy
+        // 808 vs our 619) AND still lost survival (we couldn't reach 380px vs a
+        // fast pursuer). FIX: fight HARD at close range with HIGH power where we
+        // hit 80%%+ (max damage/bullet-bonus), taper only at range where we miss.
+        if (dist > 150) {
+            if (dist < 250)      power = Math.min(power, 2.0);
+            else if (dist < 350) power = Math.min(power, 1.0);
+            else                 power = Math.min(power, 0.5);
         }
         power = Math.max(0.1, Math.min(power, 3.0));
 
@@ -402,7 +410,7 @@ public class MyTank extends AdvancedRobot {
         // is <10% so mid/far shots bleed. When behind on energy, hold fire past
         // 300px (conserve to outlast). Tighter alignment for distant shots so only
         // high-confidence bullets are spent on this hard-to-hit spinner.
-        if (dist > 330 && getEnergy() < enemyEnergy) allowFire = false;
+        if (dist > 400 && getEnergy() < enemyEnergy) allowFire = false;  // R3: fight ~260px, only gate truly-far shots when behind
         // Tighter alignment for distant shots (bullet spread grows with range).
         double alignThresh = (dist > 300) ? 0.06 : (dist > 200 ? 0.09 : 0.13);
 
@@ -702,12 +710,19 @@ public class MyTank extends AdvancedRobot {
         // range, but the KEY is SURVIVAL: at 350-400px the enemy does ~0 damage. We
         // must FLEE HARD to ~380px and stay there. Strong outward bias whenever
         // inside 350px so the spinner can't pin us in its 50-150px kill zone.
-        if (enemyDistance > 480)      rangeBias = -0.7; // charge inward only when very far
-        else if (enemyDistance > 420) rangeBias = -0.3;
-        else if (enemyDistance > 380) rangeBias = 0.0;  // hold ~380-420px
-        else if (enemyDistance < 200) rangeBias = 1.1;  // BOLT out of the point-blank kill zone
-        else if (enemyDistance < 300) rangeBias = 0.9;  // strong push out of the mid kill zone
-        else                          rangeBias = 0.55; // keep pushing toward ~380px
+        // R3 vs berendbotje: the R2 "flee to 380px" NEVER worked -- this fast
+        // pursuer closes to ~228px avg (pins us <200px 46%% of ticks). Turning tail
+        // (bias 1.1) kills our lateral speed and lets the pursuer ram/track us.
+        // MEASURED: enemy hit density on us CLIFFS from ~90/1k (<=200px) to 5.8/1k
+        // (>=250px). So target ~260px with MODERATE outward bias -- keep near-
+        // perpendicular full-speed orbit (harder for its lead gun, maintains
+        // distance better than fleeing straight back). Only a gentle inward pull
+        // when very far so we don't drift out of our own firing range.
+        if (enemyDistance > 400)      rangeBias = -0.4;  // gentle inward only when very far
+        else if (enemyDistance > 300) rangeBias = -0.1;
+        else if (enemyDistance > 260) rangeBias = 0.1;   // hold ~260-300px
+        else if (enemyDistance < 160) rangeBias = 0.7;   // push out of point-blank kill zone
+        else                          rangeBias = 0.4;   // steer outward toward ~260px
         double desiredDir = absBearing + (Math.PI / 2 + rangeBias) * moveDirection;
 
         // Wall smoothing: steer away from walls
