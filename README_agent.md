@@ -4841,3 +4841,58 @@ real dmg). Compiles Java 8 (major version 52). Backup: /tmp/MyTank.bak.java (=R1
   broken). Do NOT conserve energy/lower power (documented loss vs wallspoet).
 - Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING.
 - Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 1 / current pass) — opponent = pez__leachpmc (STATIONARY firing bot)
+
+## STATUS: WINNING 250/250 (0 losses); WIDENED ORBIT ~170px -> ~320px to cut damage taken
+Opponent CHANGED to pez__leachpmc. Verified /logs/rounds/0 (INDEX: i=0=opus, i=1=leachpmc):
+- results.json: winner=opus-4-8, 43390 vs 10711 (83% share).
+- results_0.txt: opus 1656 (83%), 10/10 firsts; enemy 336 (17%, all bullet dmg).
+- Full 250-sim sweep: LOSSES=0/250, close(<20E)=0. ourFE min/mean=29.8/90.5.
+  killtick mean 187, turns mean 338. Enemy DIES every game.
+
+## Opponent = COMPLETELY STATIONARY (v=0.0, bh never changes) but FIRES an accurate gun
+Verified 60 sims: maxV=0, 0 moved ticks / 20478. It just sits and shoots. The 17%
+leak is entirely enemy bullet damage during the ~187 ticks before we kill it.
+
+## KEY UNBIASED SIGNAL: enemy hit density ON US drops sharply with distance (120 sims)
+  100-200px 36.9/1k | 200-300 27.3 | 300-400 19.1 | 400-500 15.8 | 500-600 12.8
+  600-700 0.0 | 0-100 8.6 (rarely reached)
+We were orbiting ~170px (leftover from robo_code__walls match) -- DEEP in the
+36.9/1k kill zone. Since the target is STATIONARY, our head-on gun (W=0.9 ~= head-on;
+lead=0 for a still target) hits at ANY range with the SAME accuracy. So orbiting
+WIDER is strictly better: ~half the enemy hits, ZERO accuracy loss.
+
+## CHANGES THIS PASS (movement + power; gun aim W=0.9 UNCHANGED = effectively head-on)
+1. MOVEMENT rangeBias: orbit ~170px -> ~240px (NOT 320px -- 60pct of enemy starts
+   are near a wall on 800x600, so a very wide orbit would jam us into walls =
+   slow/easy target + wall self-damage). New tiers: >340 -0.7, >280 -0.4,
+   >230 -0.1 (hold ~240), <180 +0.5 (push out of the close kill zone), else 0.2.
+   Cuts enemy hits (36.9->~27/1k) while staying clear of walls.
+2. POWER: kept HIGH at the new orbit for fast kills (fewer total ticks exposed):
+   3.0/<160, 2.6/<250, 2.2/<380 (our orbit zone), 1.5/<500, 1.0/<600, 0.5/else.
+   Was 3.0/<160 2.4/<250 1.6/<400 1.0/<560 0.5.
+Gun aim W=0.9, dodge, energy-war taper, fire gates, enemyPassive mode UNCHANGED.
+enemyPassive stays OFF (leachpmc fires & hits us ~13 shots -> damageTaken>=5).
+Compiles Java 8 (major version 52). Backup of prior source: /tmp/MyTank.bak.java.
+
+## RATIONALE
+vs a stationary firing target the ONLY damage we take is from its gun, which is
+~2x more accurate at 150px than 320px. Wider orbit -> fewer enemy hits -> higher
+survival + bullet-dmg share + higher final energy, with no accuracy cost (still
+target). Kept power high so killtick doesn't balloon (fewer total ticks exposed
+matters -- see the myfirstkiller/exterminador lesson that SLOWER kills = more
+enemy hits; here fewer-hits-per-tick from wider orbit dominates and power stays
+high so kill speed is preserved).
+
+## For next teammate — VERIFY
+- Want NEW /logs: share UP from 83%, ourFE mean UP from 90.5, enemy score DOWN from
+  10711, killtick similar (~187) NOT much higher, still 0 losses. If it REGRESSED
+  (share drop / slower kills letting enemy score more via longer exposure), REVERT
+  to /tmp/MyTank.bak.java (git prior = ~170px orbit, 83% share / 250-0 WIN). If the
+  wider orbit caused wall-hugging (field 800x600, 320px orbit can push into walls),
+  pull orbit back to ~260px (thresholds 380/320/280/<220).
+- leachpmc is STATIONARY -> W=0.9 (~head-on) is optimal; do NOT change aim. If it
+  becomes a mover in a new round, re-check `head -1 /logs/rounds/0/sim_0.jsonl` and
+  the movement profile; a wide orbit vs a MOVING accurate gunner may need retuning.
+- Keep MyTank class name + Java-8 bytecode (only hard requirement).

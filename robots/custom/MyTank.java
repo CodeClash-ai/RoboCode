@@ -268,11 +268,15 @@ public class MyTank extends AdvancedRobot {
         // vs robo_code__walls: a v=8 fast mover -> use FAST bullets (lower power)
         // so they arrive before the enemy moves out of the linear-lead prediction.
         // Close orbit (~140px) means short flight even at moderate power.
+        // vs pez__leachpmc (STATIONARY): we hit at every range, so keep power
+        // high through our ~240px orbit zone for fast kills (fewer total ticks
+        // exposed). Taper only in the truly-far low-relevance zone.
         if (dist < 160)       power = 3.0;   // point-blank: high hit + big damage
-        else if (dist < 250)  power = 2.4;   // our ~140-200px orbit zone
-        else if (dist < 400)  power = 1.6;   // faster bullet to catch the fast mover
-        else if (dist < 560)  power = 1.0;
-        else                  power = 0.5;   // long range -> small drain if a miss
+        else if (dist < 250)  power = 2.6;
+        else if (dist < 380)  power = 2.2;   // still fast kills if pushed out
+        else if (dist < 500)  power = 1.5;
+        else if (dist < 600)  power = 1.0;
+        else                  power = 0.5;
 
         // Energy safety clamps so a bad streak can't self-destruct us.
         if (getEnergy() < 30) power = Math.min(power, 2.0);
@@ -620,10 +624,20 @@ public class MyTank extends AdvancedRobot {
         // full linear lead (W=0.0) on a perfectly-predictable straight mover
         // lands reliably. Close + fast bullet + linear lead is the classic
         // Walls counter.
-        if (enemyDistance > 280)      rangeBias = -0.8;  // far: charge inward hard
-        else if (enemyDistance > 200) rangeBias = -0.45; // closing to ~170px
-        else if (enemyDistance > 140) rangeBias = -0.1;  // hold ~170px
-        else if (enemyDistance < 110) rangeBias = 0.5;   // too close: push out (avoid ram/corner)
+        // vs pez__leachpmc (STATIONARY firing bot): our head-on gun hits a still
+        // target at ANY range, but the enemy's gun hit density on US drops sharply
+        // with distance (measured: 100-200px 36.9/1k, 200-300 27.3, 300-400 19.1,
+        // 400-500 15.8). So orbit WIDER (~320px) to cut damage taken ~half with
+        // ZERO accuracy loss -> higher survival + bullet-dmg share. (Was ~170px
+        // from the robo_code__walls match -- deep in this bot's kill zone.)
+        // Target ~240px (not ~320px): 60pct of leachpmc starts are near a wall on
+        // the 800x600 field, so a very wide orbit would jam us into walls (slow =
+        // easy target + wall self-damage). ~240px cuts enemy hits (36.9->~27/1k)
+        // while staying clear of walls -- a safe, meaningful improvement.
+        if (enemyDistance > 340)      rangeBias = -0.7;  // far: close in toward ~240px
+        else if (enemyDistance > 280) rangeBias = -0.4;
+        else if (enemyDistance > 230) rangeBias = -0.1;  // hold ~240px
+        else if (enemyDistance < 180) rangeBias = 0.5;   // too close: push out of the kill zone
         else                          rangeBias = 0.2;
         double desiredDir = absBearing + (Math.PI / 2 + rangeBias) * moveDirection;
 
