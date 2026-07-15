@@ -8,6 +8,7 @@ import java.awt.geom.*;
 public class MyTank extends AdvancedRobot {
 
     private double lastEnemyHeading = 0;
+    private double lastEnemyEnergy = 100.0;
     private int moveDirection = 1;
 
     public void run() {
@@ -25,8 +26,20 @@ public class MyTank extends AdvancedRobot {
     }
 
     public void onScannedRobot(ScannedRobotEvent e) {
-        double radarTurn = getHeadingRadians() + e.getBearingRadians() - getRadarHeadingRadians();
+        // Precise radar lock
+        double absoluteBearing = getHeadingRadians() + e.getBearingRadians();
+        double radarTurn = absoluteBearing - getRadarHeadingRadians();
         setTurnRadarRightRadians(Utils.normalRelativeAngle(radarTurn) * 1.5);
+
+        // Enemy bullet firing detection
+        double energyDrop = lastEnemyEnergy - e.getEnergy();
+        if (energyDrop >= 0.1 && energyDrop <= 3.0) {
+            // Dodge immediately on enemy firing
+            if (Math.random() < 0.5) {
+                moveDirection = -moveDirection;
+            }
+        }
+        lastEnemyEnergy = e.getEnergy();
 
         double bulletPower = 3.0;
         if (e.getDistance() > 400) {
@@ -39,7 +52,6 @@ public class MyTank extends AdvancedRobot {
         
         double bulletSpeed = 20 - 3 * bulletPower;
 
-        double absoluteBearing = getHeadingRadians() + e.getBearingRadians();
         double enemyX = getX() + e.getDistance() * Math.sin(absoluteBearing);
         double enemyY = getY() + e.getDistance() * Math.cos(absoluteBearing);
         
@@ -75,16 +87,24 @@ public class MyTank extends AdvancedRobot {
             setFire(bulletPower);
         }
 
-        double targetAngle = absoluteBearing + Math.PI / 2 + (moveDirection * 0.4);
+        // Improved movement and wall smoothing
+        double preferredDistance = 350.0;
+        double approachAngle = 0.0;
+        if (e.getDistance() > preferredDistance + 50) {
+            approachAngle = 0.3 * moveDirection; 
+        } else if (e.getDistance() < preferredDistance - 50) {
+            approachAngle = -0.3 * moveDirection;
+        }
+        double targetAngle = absoluteBearing + Math.PI / 2 + approachAngle;
         
-        double nextX = getX() + 80 * Math.sin(targetAngle);
-        double nextY = getY() + 80 * Math.cos(targetAngle);
+        double nextX = getX() + 100 * Math.sin(targetAngle);
+        double nextY = getY() + 100 * Math.cos(targetAngle);
         
         double wallMargin = 45.0;
         if (nextX < wallMargin || nextX > getBattleFieldWidth() - wallMargin ||
             nextY < wallMargin || nextY > getBattleFieldHeight() - wallMargin) {
             moveDirection = -moveDirection;
-            targetAngle = absoluteBearing + Math.PI / 2 + (moveDirection * 0.4);
+            targetAngle = absoluteBearing + Math.PI / 2 + (-approachAngle);
         }
         
         setTurnRightRadians(Utils.normalRelativeAngle(targetAngle - getHeadingRadians()));
