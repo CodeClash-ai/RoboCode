@@ -712,3 +712,52 @@ net energy (fire cost - hit gain, ignoring enemy dmg -> optimistic).
 - If droidpoet changes to a reactive stop-and-go dodger (check avg|dh| & moving
   frac), raise W toward 0.5-1.0 and re-run /tmp/quick.py to retune W & power.
 - Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 1 / current pass) — opponent = robo_code__crazy
+
+## KEY FINDING: opponent is the "Crazy" sample bot (wall-bouncing wide-arc mover)
+Analyzed /logs/rounds/0 (opponent robo_code__crazy). Prior result BEFORE my change:
+- results.json: opus-4-8 38430 vs crazy 1352 (92% share in results_0.txt).
+- trace.md: WIN RATE 100% (249/250) but games are LONG (avg 673 turns), our
+  accuracy only 22%, avg min energy 60. We LOST 1/250 (sim_1): a 1340-turn
+  nail-biter ending our E 0.0 vs enemy 0.2.
+- Enemy: avg|v|=7.09 (near full speed), moves 95% of ticks, curves hard
+  (avg|dh|=0.068), hits walls ~7.3x/game. Classic "Crazy" bot: drives in wide
+  arcs and bounces off walls.
+
+## GUN REWRITE: full-linear-lead (W=0.0) was TERRIBLE here -> switched to HEAD-ON
+The prior gun (tuned for pez__droidpoet's constant-velocity path) used W=0.0 full
+linear lead + distance power tiers. That is the WORST aim vs this wall-bouncer.
+Replay-sim (/tmp/rep2.py) per-tick interception over 100 recorded crazy paths
+(800x600, enemy heading='bh', wall-clamped predictions):
+  HEAD-ON (W=1.0): 27.8% hit, 4.45 dmg/shot  <-- BEST
+  W=0.9: 23.4/3.74   W=0.5: 21.7/3.47   circular+turn: 18.3/2.92
+  W=0.0 (OLD): 13.3% hit, 2.12 dmg/shot  <-- what we were using!
+The enemy curves + bounces so much that ANY lead overshoots; aim at current pos.
+Power: flat 3.0 maximizes dmg/shot (tiering LOWERED it: tierA 3.99, flat3 4.45).
+We win 100% w/ energy to spare, so max power = max bullet damage = more score.
+
+## Changes made (robots/custom/MyTank.java)
+1. aimAndFire: power tiers -> flat power = 3.0 (kept low-E safety clamps
+   30->2.0, 15->1.0, 6->0.4 as anti-self-destruct nets).
+2. Aim blend: W 0.0 -> 1.0 (head-on). Lead-prediction loop still runs but W=1.0
+   makes predX/predY = current enemy pos.
+This ~doubles our hit rate (13.3% -> 27.8%) => far more bullet damage + faster
+kills => should convert the 1 loss and boost our 92% score share.
+Compiles Java 8 (major version 52), rc=0. Backup: /tmp/MyTank.bak.java (also git).
+
+## Replay tool: /tmp/rep2.py (rebuild from this note if lost)
+Loads /logs/rounds/0/sim_*.jsonl (per-file header maps index->name; enemy=non-
+'opus'). For each tick fires a bullet from OUR recorded (x,y) along an aim (W blend
+of head-on vs iterative linear lead), steps at 20-3*power, hit if dist<18 to
+enemy's recorded future pos, 800x600 bounds. Samples every 2nd tick for speed
+(30s cmd timeout). CIRC prediction is in /tmp/rep.py.
+
+## For next teammate
+- If crazy reappears: head-on W=1.0 flat power 3.0 is data-optimal; verify NEW
+  /logs killtick DROPS and score share rises above 92%. If enemy becomes a
+  straight-line constant-velocity mover, RAISE lead (lower W toward 0.0) and
+  re-run /tmp/rep2.py. If it becomes stationary, head-on still optimal.
+- Keep MyTank class name + Java-8 bytecode (only hard requirement):
+    javac --release 8 -cp libs/robocode.jar -d robots robots/custom/MyTank.java
+    javap -v robots/custom/MyTank.class | grep "major version"  # -> 52

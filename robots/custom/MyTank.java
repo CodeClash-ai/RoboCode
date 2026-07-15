@@ -117,13 +117,15 @@ public class MyTank extends AdvancedRobot {
         double dist = Point2D.distance(getX(), getY(), enemyX, enemyY);
 
         double power;
-        // Round-2 replay-sim retune (tier C): raising mid/long-range power lifts
-        // bullet dmg/round ~13% (100.8 -> 114.1) with acceptable energy safety
-        // (we win 250/250 with 80+ E to spare, so more damage = more score share).
-        if (dist < 200)       power = 3.0;   // ~61% hit
-        else if (dist < 350)  power = 2.5;
-        else if (dist < 500)  power = 1.8;   // was 1.6 at <450
-        else                  power = 1.2;   // was 1.0 far
+        // ==== TUNING vs robo_code__crazy (wall-bouncing, wide-arc curving mover) ====
+        // Replay-sim over 100 recorded games (per-tick interception on the enemy's
+        // actual future path) shows this opponent curves so hard and bounces off
+        // walls so often that ANY lead (linear or circular) overshoots. HEAD-ON aim
+        // (W=1.0, aim at current position) is by far the best: 27.8% hit / 4.45
+        // dmg/shot, vs full-linear-lead (W=0.0) only 13.3% / 2.12, circular 18.3%.
+        // Flat power 3.0 maximizes dmg/shot (tiering lowered it). We win 100% with
+        // ~60 avg min energy, so max power = max bullet damage = more score share.
+        power = 3.0;
 
         // Energy safety: droidpoet is an active mobile dodger we beat 100% of the
         // time, so unlike a passive energy-conserving foe we do NOT clamp power to
@@ -147,8 +149,9 @@ public class MyTank extends AdvancedRobot {
             leadX = enemyX + Math.sin(enemyHeading) * enemyVelocity * ft;
             leadY = enemyY + Math.cos(enemyHeading) * enemyVelocity * ft;
         }
-        // Full lead (W=0.0) measured optimal vs this constant-velocity dodger.
-        double W = 0.0;
+        // Head-on (W=1.0) measured optimal vs robo_code__crazy: its heavy curving +
+        // wall bounces make any lead overshoot. Aim at the enemy's current position.
+        double W = 1.0;
         double predX = W * enemyX + (1 - W) * leadX;
         double predY = W * enemyY + (1 - W) * leadY;
 
