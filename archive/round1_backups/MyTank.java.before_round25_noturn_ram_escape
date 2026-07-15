@@ -158,29 +158,6 @@ public class MyTank extends AdvancedRobot {
     private double lastEscapeX = Double.NaN;
     private double lastEscapeY = Double.NaN;
 
-    // Round 25: "no-turn" ram-escape mode. Decompiled javadoc for HitRobotEvent
-    // (javadoc/robocode/HitRobotEvent.html) confirms a mechanism nobody had
-    // checked in 24 rounds of chasing this bug: "If isMyFault() returns true
-    // then your robot's movement (including turning) will have stopped and
-    // been marked complete." I.e. while we are actively moving/turning TOWARD
-    // a robot we're touching, the game engine cancels BOTH our translation
-    // AND our rotation for that tick -- not just translation. Real match
-    // traces (round 25 notes, sim_7.jsonl vs it_economics__ite_ctbot) showed
-    // body heading (getHeadingRadians()) frozen byte-identical for 60+
-    // consecutive ticks during a stuck-ramming lock, which the turn-based
-    // escape mode (rounds 20/23) could never fix: rotating toward a computed
-    // "away" heading requires several ticks of partial turning, and during
-    // every one of those ticks our heading is *still* pointed enough toward
-    // the enemy that "ahead" motion counts as "moving toward" it, so the
-    // turn itself keeps getting cancelled before it can ever complete --
-    // a total deadlock. Fix: when escaping specifically from a robot-contact
-    // lock, issue ZERO turn and only setBack()/setAhead() along our EXISTING
-    // heading (whichever one actually points away from the enemy already) --
-    // this can never be blocked by the isMyFault mechanism since it requires
-    // no rotation to take effect, sidestepping the trap entirely.
-    private boolean escapeNoTurn = false;
-    private boolean escapeMoveBack = false;
-
 
     // Round 16 addition: "dodge on fire" reactive evasion. Detect the enemy
     // just firing a bullet (their energy dropped by an amount consistent with
@@ -202,28 +179,8 @@ public class MyTank extends AdvancedRobot {
     // forward -- callers should compute headingRad as an escape direction that's
     // already away from whatever we're stuck against (enemy and/or wall).
     private void beginEscape(double headingRad, int durationTicks) {
-        escapeNoTurn = false;
         escapeBaseHeadingRad = headingRad;
         escapeHeadingRad = headingRad;
-        escapeRotationSteps = 0;
-        escapeStuckTicks = 0;
-        lastEscapeX = getX();
-        lastEscapeY = getY();
-        escapeUntil = getTime() + durationTicks;
-        reissueEscape();
-    }
-
-    // Round 25: no-turn variant, for breaking a robot-contact ("stuck ramming")
-    // lock specifically -- see the escapeNoTurn field comment above for why
-    // this exists and why the turn-based beginEscape() above cannot reliably
-    // work for this particular failure mode. moveBack=true means "the enemy is
-    // roughly ahead of us, so back away along our current heading"; false
-    // means "the enemy is roughly behind us, so continue ahead along our
-    // current heading" -- either way, zero turn is requested, only straight-
-    // line translation along whatever heading we already have.
-    private void beginNoTurnEscape(boolean moveBack, int durationTicks) {
-        escapeNoTurn = true;
-        escapeMoveBack = moveBack;
         escapeRotationSteps = 0;
         escapeStuckTicks = 0;
         lastEscapeX = getX();
@@ -254,28 +211,6 @@ public class MyTank extends AdvancedRobot {
         }
         lastEscapeX = curX;
         lastEscapeY = curY;
-
-        // Round 25: no-turn mode (see escapeNoTurn field comment) -- explicitly
-        // issue a ZERO turn (never risk the isMyFault-blocks-turning trap) and
-        // only translate along our existing heading. If we're still not making
-        // progress after a few ticks, flip direction (maybe it's a wall behind
-        // us in that direction, not the enemy) rather than trying to rotate,
-        // which is exactly what we're trying to avoid here.
-        if (escapeNoTurn) {
-            if (escapeStuckTicks >= 3) {
-                escapeMoveBack = !escapeMoveBack;
-                escapeStuckTicks = 0;
-            }
-            setTurnRightRadians(0);
-            if (escapeMoveBack) {
-                setBack(100);
-            } else {
-                setAhead(100);
-            }
-            execute();
-            return;
-        }
-
         if (escapeStuckTicks >= 3) {
             escapeRotationSteps++;
             escapeHeadingRad = robocode.util.Utils.normalRelativeAngle(
@@ -858,16 +793,7 @@ public class MyTank extends AdvancedRobot {
         lastHitRobotX = myX;
         lastHitRobotY = myY;
 
-        // Round 25: lowered from >=2 to >=1. Per the isMyFault mechanism
-        // documented above, once we're in continued contact, re-pressing
-        // "forward" every tick gives no further ROBOT_HIT_BONUS (that's only
-        // awarded on the tick a fresh moving-into collision actually happens,
-        // per observed real-match energy traces showing only the flat 0.6
-        // ROBOT_HIT_DAMAGE per tick during a static lock, not the extra 1.2)
-        // while *also* risking freezing our own turning via isMyFault -- so
-        // there's no reason to wait for a second confirmation once we've
-        // already seen one stationary hit; disengage immediately.
-        boolean stuckRamming = hitRobotStationaryCount >= 1;
+        boolean stuckRamming = hitRobotStationaryCount >= 2;
 
         // Round 12 change (still applies for the normal case): collision handling
         // depends on our health, to work with (not against) the opportunistic-
@@ -915,36 +841,29 @@ public class MyTank extends AdvancedRobot {
         // angle, via atan2 on field coordinates) or the vector blend below
         // would be mixing two different reference frames and produce a
         // meaningless result.
-        // Round 25 REPLACEMENT of the round-19/20 turn-based disengage: real
-        // match traces (see README_agent.md round 25 notes, sim_7.jsonl vs
-        // it_economics__ite_ctbot) showed this turn-based approach (compute an
-        // "away + toward center" absolute heading, then beginEscape() to turn
-        // toward it) still froze body heading AND velocity at exactly 0 for
-        // 60+ consecutive ticks in real games, because of the isMyFault
-        // mechanism documented above the escapeNoTurn field: while our
-        // commanded motion still counts as "toward" the enemy (true for
-        // every partial-turn tick before the turn completes), the engine
-        // cancels our rotation too, so we could never actually complete the
-        // turn toward the "safe" heading in the first place -- a total
-        // deadlock that only ever resolved when the enemy died first.
-        //
-        // Fix: don't turn at all. e.getBearingRadians() tells us whether the
-        // enemy is roughly ahead of our CURRENT heading (|bearing| < 90deg)
-        // or roughly behind it. Either way, moving along our EXISTING heading
-        // in the direction away from the enemy (setBack() if they're ahead,
-        // setAhead() if they're behind) requires no rotation at all, so it
-        // can never trigger the isMyFault-blocks-turning trap -- it either
-        // works immediately (if that direction is physically clear) or, if
-        // still blocked after a few ticks (e.g. a wall is back there
-        // instead), reissueEscape()'s no-turn stuck-detection flips to the
-        // opposite direction and tries that instead (see reissueEscape()).
-        boolean enemyAhead = Math.abs(
-                robocode.util.Utils.normalRelativeAngle(e.getBearingRadians()))
-                < Math.PI / 2.0;
+        double enemyAbsBearing = getHeadingRadians() + e.getBearingRadians();
+        double awayAngle = robocode.util.Utils.normalRelativeAngle(
+                enemyAbsBearing + Math.PI);
+        double cx = getBattleFieldWidth() / 2.0;
+        double cy = getBattleFieldHeight() / 2.0;
+        double angleToCenter = Math.atan2(cx - myX, cy - myY);
+        double vx = Math.sin(awayAngle) + Math.sin(angleToCenter);
+        double vy = Math.cos(awayAngle) + Math.cos(angleToCenter);
+        double combinedAngle = (Math.hypot(vx, vy) < 0.05)
+                ? angleToCenter
+                : Math.atan2(vx, vy);
         moveDirection = -moveDirection;
         strafeTimer = 0;
         hitRobotStationaryCount = 0;
         rammingCooldownUntil = getTime() + 30;
-        beginNoTurnEscape(enemyAhead, 30);
+        // Round 20: use the shared escape-mode helper (beginEscape) instead of a
+        // one-shot setTurnRightRadians()+setAhead(), so onScannedRobot() (which
+        // runs right after this handler within the same tick, per event priority
+        // ordering -- see field comments) reissues this *same* command instead of
+        // silently overwriting it with fresh orbit/ram-trigger logic. This was the
+        // actual root cause of round 19's "fix" still getting stuck 100+ ticks at
+        // a time in real matches (see README_agent.md round 20 notes) despite
+        // fixing the original setBack()-drives-toward-enemy direction bug.
+        beginEscape(combinedAngle, 30);
     }
 }

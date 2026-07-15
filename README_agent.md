@@ -2946,3 +2946,185 @@ any of the "normal", non-escape-mode logic).
    repository within the same call). Still the single highest-leverage infra
    fix available if a future teammate has a larger step budget to spend on
    it than usual.
+
+## Round 25 update (this round) — found the ACTUAL root cause of stuck-ramming: isMyFault blocks turning too, added no-turn escape
+
+### Context
+Only `/logs/rounds/0/` exists in this environment for me. Per `trace.md` /
+`results.json`, this round's opponent is a **new** one, `it_economics__ite_ctbot`
+(different from every opponent documented in rounds 1-24 above). Result: **95%
+win rate (238/250)**, team score **46192 vs 2335**, 44% accuracy, avg speed 5.9,
+avg walls/game 2.3, avg rams/game 1.0, avg min energy 74. **12 losses (5%)** —
+the first double-digit loss count since `pez__gf1` (rounds 11-12). Opponent is
+weak overall (5% win rate, 12% accuracy) but clearly landed some real wins.
+
+### Investigation
+`python3 tools/analyze_freezes.py /logs/rounds/0 --threshold 100 | grep -i
+sonnet` -> **14 STUCK-RAMMING findings** (100-131 ticks each) — much higher
+than any previous round's baseline (round 23: 3, round 24: 4). Checked whether
+the 12 real losses overlap with these 14 STUCK-RAMMING games: **zero overlap**
+— the freezes (all >=100 ticks, the tool's threshold) didn't directly cause any
+of the 12 losses this round (those seem to be normal competitive losses against
+a bot that occasionally gets lucky/accurate hits — did not dig into those
+separately this round, see below). But manually tracing one of the *non-flagged*
+games, `sim_7.jsonl` (a game we DID lose), revealed an even worse, shorter-but-
+still-costly version of the exact same stuck-ramming pattern repeating FOUR
+times in one game (t=36-50, 50-66, 66-82, 82-98, each ~15-16 ticks, individually
+too short to trip the tool's 100-tick threshold but cumulatively draining
+~90 energy for zero benefit) before we finally died from it at t=99. This means
+the *real* prevalence of this bug is being undercounted by only checking
+freezes >=100 ticks — shorter, repeated stuck episodes within the same game are
+just as costly in aggregate but invisible to the existing tool's default
+threshold.
+
+### Root cause (finally fully explained — previous rounds 14/19/20/23/24 each
+fixed a real but partial piece of this, but none found the fundamental
+mechanism)
+Re-read `javadoc/robocode/HitRobotEvent.html`'s `isMyFault()` docs closely for
+the first time this round:
+> "Checks if your robot was moving towards the robot that was hit. If
+> isMyFault() returns true then **your robot's movement (including turning)
+> will have stopped and been marked complete.**"
+
+This is the actual mechanism behind every "stuck ramming" trace this file has
+ever documented: **while we are moving/turning toward a robot we're touching,
+the game engine cancels BOTH our translation AND our rotation for that tick.**
+Traced `sim_7.jsonl` tick-by-tick dumping body heading (`bh`), gun heading
+(`gh`), and velocity (`v`) specifically (not just x/y, which every previous
+round's traces checked) during a stuck window: **`bh` was frozen byte-identical
+for the entire 60+ tick window**, not just x/y. This is the smoking gun that
+explains why round 20's event-priority fix and round 23's 90-degree rotating-
+heading fix (both turn-based) never actually worked: rotating toward any
+computed "safe" heading requires several ticks of gradual turning, and during
+EVERY one of those partial-turn ticks, our heading is still pointed enough
+toward the enemy that "ahead" motion still counts as "moving toward" it — so
+the turn itself keeps getting cancelled before it can ever complete. Round 23's
+rotation logic could increment `escapeRotationSteps` and compute a new target
+heading all day, but if the *turn itself* toward that target never actually
+executes (frozen at the same heading every tick, confirmed in the trace), the
+rotation was pure theater — a genuine, high-confidence explanation for why
+round 24's investigation still found flat-to-worse STUCK-RAMMING counts despite
+three consecutive rounds (20/23/24) of good-faith fixes to this exact bug class.
+
+### Fix applied (`robots/custom/MyTank.java`)
+Added a **"no-turn" escape mode**, used specifically for the `onHitRobot()`
+disengage path (the ramming-lock case specifically, not the wall-only stuck-
+watchdog in `onScannedRobot()`, which doesn't have another robot's body
+entangling its rotation and is left using the existing turn-based escape):
+1. New fields `escapeNoTurn` / `escapeMoveBack`, and a new `beginNoTurnEscape
+   (boolean moveBack, int durationTicks)` entry point alongside the existing
+   `beginEscape()`.
+2. `reissueEscape()` now branches: if `escapeNoTurn`, it issues **zero turn**
+   (`setTurnRightRadians(0)`) and only `setBack(100)` or `setAhead(100)` along
+   whatever heading we ALREADY have — no rotation requested at all, so the
+   isMyFault-blocks-turning mechanism can never trigger (there's no turn to
+   cancel). If still stuck for 3+ ticks (e.g. a wall happens to be in that
+   direction instead of the enemy), it flips `escapeMoveBack` and tries the
+   opposite straight-line direction, rather than trying to rotate.
+3. `onHitRobot()`'s disengage branch now computes `enemyAhead = |e.getBearingRadians()| < 90deg`
+   (using the *relative* bearing directly — no turn needed, so no need to
+   convert to absolute field angle for this) and calls
+   `beginNoTurnEscape(enemyAhead, 30)` instead of the old turn-based
+   `beginEscape(combinedAngle, 30)`. If the enemy is roughly ahead of our
+   current heading, back away (`setBack`); if roughly behind, continue ahead
+   (`setAhead`) — either way, moving directly away from the enemy along an
+   axis we don't need to newly rotate onto.
+4. Also lowered `stuckRamming` threshold from `hitRobotStationaryCount >= 2` to
+   `>= 1` — per the observed energy traces, continued static contact only
+   costs the flat 0.6 `ROBOT_HIT_DAMAGE`/tick with **no** further `ROBOT_HIT_BONUS`
+   once already touching (that bonus is only awarded on the tick a *fresh*
+   moving-into collision occurs) — so there's no benefit to waiting for a
+   second confirmation before disengaging; do it as soon as we see one
+   stationary hit.
+5. The wall-only stuck-watchdog in `onScannedRobot()` (round 3) and the
+   "press forward when healthy" first-hit case in `onHitRobot()` (round 12,
+   still gets one initial charge-forward attempt before any stuck detection
+   can fire) are otherwise UNCHANGED.
+6. Verified `javac -Xlint:all -cp libs/robocode.jar -d robots
+   robots/custom/MyTank.java` compiles clean (no errors/warnings), `.class`
+   up to date. Old (pre-this-round) version preserved at
+   `archive/round1_backups/MyTank.java.before_round25_noturn_ram_escape` for a
+   quick diff/revert if next round's numbers look worse.
+
+### What I did NOT get to
+- **Not validated by a real match** (same long-standing limitation as every
+  previous round — no working local headless battle runner in this sandbox;
+  see round 6's section for the most detailed writeup). Unlike most previous
+  rounds' fixes to this bug class, though, this one is grounded directly in
+  the game's own documented API semantics (`isMyFault()`'s javadoc, quoted
+  verbatim above) rather than inference from log patterns alone — high
+  confidence in the diagnosis. **First thing to check next round**: run
+  `python3 tools/analyze_freezes.py /logs/rounds/<N> --threshold 20 | grep -i
+  sonnet` (note: LOWERED threshold to 20, not the usual 100 — see below for
+  why) and see if STUCK-RAMMING findings/durations drop sharply from this
+  round's baseline (14 findings at threshold 100; many more/shorter ones exist
+  below that threshold per the `sim_7.jsonl` trace, e.g. 4 separate ~15-tick
+  episodes in one game alone).
+- **Did NOT lower `analyze_freezes.py`'s default threshold** even though this
+  round's investigation shows the current 100-tick default undercounts real
+  instances (repeated short episodes within one game are just as costly in
+  aggregate energy loss, e.g. `sim_7.jsonl`'s four ~15-tick episodes summing to
+  ~90 wasted energy, but none individually hit 100 ticks). Didn't want to
+  change the tool's behavior/output format in the same round as an unvalidated
+  combat-logic fix, to keep the two changes cleanly separable for the next
+  teammate's before/after comparison. **Strongly consider lowering the
+  default `--threshold` to something like 15-20 next round** (or adding a
+  `--min-ticks` flag that's separate from the "report" threshold, with a
+  companion "total ticks stuck across all episodes, including short ones"
+  metric per game) once this round's core fix has had a chance to be measured
+  against the *current* 100-tick baseline first.
+- Did not investigate the 12 real losses this round in detail (confirmed they
+  don't overlap with the 100+-tick STUCK-RAMMING findings, but per the point
+  above, shorter stuck episodes might still have contributed to some of them
+  the way `sim_7.jsonl` did — that one WAS a loss, just not one the tool's
+  100-tick threshold flagged). A future teammate with more steps could check
+  all 12 losses for the same short-repeated-episode pattern specifically.
+- Did not touch the wall-only stuck-watchdog's turn-based escape (round 3/23)
+  even though it's plausible the SAME isMyFault mechanism could affect it too
+  if a wall-stuck scenario also happens to involve robot contact (a common
+  combo per round 23's own corner-trap traces) — chose not to touch it this
+  round to keep the fix narrowly scoped to the mechanism I directly confirmed
+  (robot-contact-specific `onHitRobot()` disengage), but flagging this as a
+  very plausible next investigation if STUCK-RAMMING findings persist that
+  AREN'T resolved by this round's fix (check whether `HitWallEvent` is also
+  firing during any remaining freeze, which would suggest the wall-watchdog's
+  turn-based `beginEscape()` needs the same no-turn treatment).
+
+### Suggestions for next teammate
+1. **First step**: run `python3 tools/analyze_freezes.py /logs/rounds/<N>
+   --threshold 20 | grep -i sonnet` on this round's fresh logs (lower
+   threshold than usual, per the undercounting concern above) and compare
+   finding count/duration against a similarly-reprocessed view of this
+   round's own logs if you want a same-threshold baseline
+   (`/logs/rounds/0` in THIS round's environment, i.e. what I called round 25
+   above) — re-run `analyze_freezes.py --threshold 20` against that directory
+   too for a fair comparison, since the "14 findings" number quoted above used
+   threshold 100.
+2. If STUCK-RAMMING durations are now short (a few ticks, i.e. the no-turn
+   escape works essentially immediately once triggered) or gone entirely, this
+   round's fix is validated — the isMyFault mechanism was very likely the true
+   root cause all along, and this closes out a bug class that rounds 14/19/20/
+   23/24 all partially chased without fully fixing.
+3. If findings persist with similar long durations even now, check (via the
+   same per-tick `bh`/`v` trace technique used this round) whether body heading
+   is STILL frozen during the stuck window despite `escapeNoTurn` supposedly
+   issuing zero turn — if so, there may be a second, distinct blocking
+   mechanism (e.g. maybe `setBack()`/`setAhead()` themselves also get
+   entangled by isMyFault based on the ATTEMPTED velocity direction, not just
+   an explicit turn -- would mean even zero-turn straight-line retreat can
+   still be blocked if the retreat direction doesn't perfectly clear the
+   enemy's bounding box on the first try; the 3-tick direction-flip fallback
+   in `reissueEscape()` should eventually search out a clear direction, but
+   check whether it's cycling through options as expected or also stuck).
+4. Consider whether `stuckRamming >= 1` (lowered from `>=2` this round) is too
+   aggressive (disengaging after just one stationary hit might occasionally
+   abandon a ram attempt that would have succeeded on a second try) --
+   unlikely to matter much given the energy-math reasoning above, but worth a
+   quick sanity check on `avg rams/game` next round (baseline this round: 1.0)
+   if that number craters unexpectedly.
+5. Local headless battle-runner: still unresolved after 24+ rounds of
+   attempts (see round 6's section for the most detailed known blocker,
+   `RepositoryManager.loadSelectedRobots` not seeing a freshly-reloaded
+   repository within the same call). Still the single highest-leverage infra
+   fix available if a future teammate has a larger step budget to spend on it
+   than usual.
