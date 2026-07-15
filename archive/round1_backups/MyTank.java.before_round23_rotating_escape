@@ -140,23 +140,6 @@ public class MyTank extends AdvancedRobot {
     // being reset from scratch (or overridden by conflicting logic) every tick.
     private long escapeUntil = -1;
     private double escapeHeadingRad = 0;
-    // Round 23: the round-20 escape mode fixed the event-priority override problem
-    // (both handlers agreeing on the same command), but real logs still showed
-    // 100+ tick freezes with velocity pinned at exactly 0.0 the whole time (see
-    // README_agent.md round 23 notes, sim_131.jsonl vs it_economics__ite_claptrap).
-    // Root cause: the chosen escape heading can itself be blocked (e.g. the
-    // enemy robot is sitting directly in the only direction that's away from the
-    // corner/wall we're pinned against), so reissuing the SAME blocked heading
-    // forever never makes progress -- we only ever escaped once the enemy
-    // happened to die and stop blocking us. Fix: track whether we're actually
-    // moving while in escape mode; if not, rotate the escape heading by 90
-    // degrees every few stuck ticks to search for a direction that's actually
-    // clear, instead of blindly trusting the first computed heading forever.
-    private double escapeBaseHeadingRad = 0;
-    private int escapeRotationSteps = 0;
-    private int escapeStuckTicks = 0;
-    private double lastEscapeX = Double.NaN;
-    private double lastEscapeY = Double.NaN;
 
 
     // Round 16 addition: "dodge on fire" reactive evasion. Detect the enemy
@@ -179,12 +162,7 @@ public class MyTank extends AdvancedRobot {
     // forward -- callers should compute headingRad as an escape direction that's
     // already away from whatever we're stuck against (enemy and/or wall).
     private void beginEscape(double headingRad, int durationTicks) {
-        escapeBaseHeadingRad = headingRad;
         escapeHeadingRad = headingRad;
-        escapeRotationSteps = 0;
-        escapeStuckTicks = 0;
-        lastEscapeX = getX();
-        lastEscapeY = getY();
         escapeUntil = getTime() + durationTicks;
         reissueEscape();
     }
@@ -194,29 +172,6 @@ public class MyTank extends AdvancedRobot {
     // began). Called every tick from both onScannedRobot() and onHitRobot() while
     // escapeUntil hasn't passed yet, so both handlers always agree.
     private void reissueEscape() {
-        // Round 23: detect no real progress (position essentially unchanged
-        // since the last time we reissued this command) and rotate the target
-        // heading by 90 degrees every 3 stuck ticks, cycling through all 4
-        // quadrants relative to the originally-computed escape direction. This
-        // is what actually breaks a mutual-lock deadlock where the 'ideal'
-        // away-from-enemy-and-wall heading happens to still be physically
-        // blocked (e.g. the enemy itself is sitting in that direction).
-        double curX = getX();
-        double curY = getY();
-        if (!Double.isNaN(lastEscapeX)
-                && Math.hypot(curX - lastEscapeX, curY - lastEscapeY) < 2) {
-            escapeStuckTicks++;
-        } else {
-            escapeStuckTicks = 0;
-        }
-        lastEscapeX = curX;
-        lastEscapeY = curY;
-        if (escapeStuckTicks >= 3) {
-            escapeRotationSteps++;
-            escapeHeadingRad = robocode.util.Utils.normalRelativeAngle(
-                    escapeBaseHeadingRad + escapeRotationSteps * (Math.PI / 2.0));
-            escapeStuckTicks = 0;
-        }
         double turn = robocode.util.Utils.normalRelativeAngle(
                 escapeHeadingRad - getHeadingRadians());
         setTurnRightRadians(turn);

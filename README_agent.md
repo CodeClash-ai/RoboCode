@@ -2670,3 +2670,147 @@ worth a closer look).
    repository within the same call). Still the single highest-leverage infra
    fix available if a future teammate has a larger step budget to spend on
    it than usual.
+
+## Round 23 update (this round) — found why escape-mode STILL froze for 100+ ticks; added rotating-escape-direction fix
+
+### Context
+Only `/logs/rounds/0/` exists in this environment for me. Per `trace.md` /
+`results.json`, this round's opponent is a **new** one, `it_economics__ite_claptrap`
+(different from every opponent documented in rounds 1-22 above). Result:
+**100% win rate (250/250)**, team score **46255 vs 461**, 43% accuracy, avg
+speed 6.5, avg walls/game 2.9, avg rams/game 1.4, avg min energy 81. Zero
+losses, zero ties. The opponent is weak (0% win rate, 9% accuracy, avg speed
+4.3, dies avg turn 389) but not passive.
+
+### Investigation: analyze_freezes.py found 3 STUCK-RAMMING findings on our own bot
+`python3 tools/analyze_freezes.py /logs/rounds/0 --threshold 100 | grep -i
+sonnet` -> 3 findings (`sim_91`, `sim_131`, `sim_214`), all labeled
+`STUCK-RAMMING`, 131-137 ticks each. We still won all 3 games, but this is
+exactly the bug class rounds 14/19/20 have repeatedly (and only partially)
+fixed — worth digging into rather than assuming "we won anyway, don't
+bother" (per round 14's own opening warning about that trap).
+
+Traced `sim_131.jsonl` and `sim_214.jsonl` tick-by-tick (x/y/v/e/status for
+both robots). **Both robots get physically wedged in the same corner** (e.g.
+top-right, near x=751-782/y=18-54 in a ~800x600-ish field) — both frozen at
+EXACTLY 0.0 velocity, both draining ~0.6 energy/tick from continuous
+`HIT_ROBOT` collision damage, for 130+ consecutive ticks. In `sim_131.jsonl`
+specifically: our energy went from 86 down to 11.7 (lost ~74 energy for
+*nothing*) before the freeze finally broke — and it only broke because the
+**enemy died** (hit 0 energy from the same mutual grind, since it also had
+wall-collision damage stacked on top) at that exact tick, not because our
+own round-20 escape-mode logic ever actually produced any movement. This is
+the same "we only escape because the enemy died first" failure signature
+round 19 originally diagnosed, but round 20's fix (shared escape-mode so
+`onHitRobot()`/`onScannedRobot()` don't fight over commands within a tick)
+did NOT actually fix — it just made sure both handlers *agree* on the same
+(still fundamentally blocked) command, which doesn't help if that command's
+target heading is itself unreachable.
+
+### Root cause (new, not previously identified)
+`beginEscape()`/`reissueEscape()` (round 20) always reissue the *exact same*
+target heading (`escapeHeadingRad`, computed once from "away from enemy +
+toward field center") for the full 30-tick escape window, then let
+`onHitRobot()` recompute a **fresh** heading and call `beginEscape()` again
+if still stuck 30 ticks later. But if that heading happens to be physically
+blocked — e.g. the enemy robot itself is sitting in the one direction that's
+away from the corner we're both wedged into, which is exactly what "two
+robots mutually pinned in the same corner" implies — then Robocode's own
+collision physics prevents ANY actual displacement in that direction, every
+single tick, for the entire 30-tick window. Since the heading calculation
+(`enemy bearing + PI`, blended with toward-center) is deterministic given
+roughly-unchanged positions, **recomputing it again 30 ticks later just
+produces the same blocked heading again** — hence the observed multi-hundred-
+tick deadlocks that only ever resolved via the opponent dying, never via our
+own action.
+
+### Fix applied (`robots/custom/MyTank.java`, `reissueEscape()`)
+Added real-time stuck-detection *within* the escape mechanism itself (not
+just at the moment of choosing a new heading): `reissueEscape()` now checks
+whether our position has moved more than ~2px since the last time it was
+called. If not, for 3 consecutive stuck ticks, it rotates the target heading
+by 90 degrees relative to the originally-computed base heading
+(`escapeBaseHeadingRad`), cycling through all 4 quadrants (and beyond, if
+still stuck — `escapeRotationSteps` just keeps incrementing) until it finds
+a direction that's actually clear enough to produce real movement. This
+directly targets the exact deadlock traced above: even if the "ideal" (enemy-
+and-wall-aware) heading is blocked because the enemy is physically in the
+way, a 90/180/270-degree rotation from it has a good chance of pointing
+somewhere genuinely open, since a robot's ~36px collision footprint can't
+simultaneously block all 4 directions from a point unless truly boxed in from
+every side (rare). New fields: `escapeBaseHeadingRad`, `escapeRotationSteps`,
+`escapeStuckTicks`, `lastEscapeX/Y`. `beginEscape()` resets all of these.
+This is a small, targeted addition on top of round 20's existing mechanism —
+does not change when escape mode is *entered* (still the same
+`hitRobotStationaryCount >= 2` / `stuckScanCount > 4` triggers from rounds
+14/3), only makes it actually productive once inside it.
+
+Verified `javac -Xlint:all -cp libs/robocode.jar -d robots
+robots/custom/MyTank.java` compiles clean (no errors/warnings), `.class`
+up to date. Old (pre-this-round) version preserved at
+`archive/round1_backups/MyTank.java.before_round23_rotating_escape` for a
+quick diff/revert if next round's numbers look worse.
+
+### What I did NOT get to
+- **Not validated by a real match** (same long-standing limitation as every
+  previous round — no working local headless battle runner in this sandbox;
+  see round 6's section for the most detailed writeup). This is a real,
+  previously-untested fix to a real, clearly-diagnosed bug (traced two
+  independent real-match games in detail, both showing the identical
+  "recompute-same-blocked-heading" deadlock signature) — high confidence in
+  the diagnosis, moderate confidence in the fix (the 90-degree rotation
+  heuristic is reasonable but untested against real collision geometry).
+  **First thing to check next round**: `python3 tools/analyze_freezes.py
+  /logs/rounds/<N> --threshold 100 | grep -i sonnet` should show FEWER
+  STUCK-RAMMING findings (ideally zero) and/or shorter freeze durations than
+  this round's baseline (3 findings, 131-137 ticks each).
+- Did not tune the "3 stuck ticks before rotating" or "90 degree" constants
+  at all — chose them as reasonable, low-risk defaults (3 ticks is enough to
+  distinguish "still accelerating normally" from "truly blocked", since a
+  robot from a stop should show nonzero velocity within 1-2 ticks if
+  genuinely unobstructed; 90 degrees guarantees covering all 4
+  perpendicular-ish directions within 3 rotation steps).
+- Did not investigate whether a similar "recompute same blocked heading
+  forever" pattern could also affect the OTHER caller of `beginEscape()`
+  (the round-3 wall-standoff watchdog in `onScannedRobot()`, line ~532) —
+  that one's heading is just "toward field center" with no enemy-bearing
+  component, so it's less likely to be blocked by a moving robot, but the
+  same rotating-escape fix now applies to it "for free" (it's the same
+  shared `reissueEscape()` function) even though I didn't specifically find
+  a real-match instance of that watchdog getting stuck long-term the way the
+  ramming one did.
+
+### Suggestions for next teammate
+1. **First step, as always**: run `python3 tools/analyze_freezes.py
+   /logs/rounds/<N> --threshold 100 | grep -i sonnet` on this round's fresh
+   logs. Compare finding count AND duration to this round's baseline (3
+   findings, 131/134/137 ticks). Zero findings, or much shorter durations
+   (e.g. <20 ticks, meaning the rotation kicks in and finds a clear direction
+   quickly), would validate the fix.
+2. If findings persist with similarly long durations, dump per-tick x/y/v/e
+   for the flagged robot (same technique as this round, see `sim_131.jsonl`
+   trace in this section) and check: is `escapeRotationSteps` actually
+   incrementing (would need to add temporary debug output, or infer from
+   whether the heading/turn direction changes every ~3 ticks in the
+   underlying turn commands if that's logged) — if the rotation isn't
+   actually happening, or is happening but STILL can't find a clear
+   direction, this may indicate genuinely all 4 directions are simultaneously
+   blocked (e.g. 3+ robots in a tiny space, or right at a literal corner
+   where 2 walls + the enemy account for all nearby directions) and a
+   different approach (e.g. explicitly trying `setBack()` as well as
+   `setAhead()`, or reducing the move distance so partial progress still
+   counts) might be needed.
+3. Check `trace.md`'s overall win rate / score as usual — should be at least
+   as good as this round's 100%/46255-vs-461 baseline; this fix should mostly
+   matter for reducing wasted energy in games we already win comfortably,
+   and for hardening against ties/losses in a future round against a tougher,
+   more competitive opponent (e.g. if `pez__gf1` reappears — still the
+   toughest opponent in this file's history, rounds 11-12, ~14% tie rate from
+   mutual energy attrition, which is exactly the kind of long grindy contact-
+   heavy fight where this bug would matter most).
+4. Local headless battle-runner: still unresolved after 22+ rounds of
+   attempts (see round 6's section for the most detailed known blocker,
+   `RepositoryManager.loadSelectedRobots` not seeing a freshly-reloaded
+   repository within the same call). Still the single highest-leverage infra
+   fix available if a future teammate has a larger step budget to spend on
+   it than usual.
