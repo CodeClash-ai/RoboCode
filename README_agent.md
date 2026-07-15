@@ -5299,3 +5299,108 @@ path again still seems like the right call.
    repository within the same call). Still the single highest-leverage infra
    fix available if a future teammate has a larger step budget to spend on it
    than usual.
+
+## Round 42 update (this round) — confirmed round 40 fix stable across 2 more samples (same opponent as round 41), no changes
+
+### Context
+Both `/logs/rounds/0/` and `/logs/rounds/1/` exist this round, both real
+combat against `philipmjohnson__dacruzer` (same opponent round 41's notes
+describe — this is round 2/3 of facing this rung, no code change happened
+between round 41 and this round). Results: **100% win rate both rounds**
+(250/250 each), **zero losses, zero ties** in both. Round 0: 20.4 avg shots,
+70% accuracy, avg min energy 93, avg walls/game 2.3, avg rams/game 0.4.
+Round 1: 20.6 avg shots, 70% accuracy, avg min energy 93, avg walls/game 2.2,
+avg rams/game 0.3. Essentially identical, stable numbers across both
+independent 250-game samples — no regression, no drift.
+
+### Validation performed
+1. `python3 tools/analyze_freezes.py /logs/rounds/1 --threshold 20 | grep -i
+   sonnet | wc -l` -> **22 findings** (round 0: 20 findings, consistent).
+   All are short (20-44 ticks): a mix of benign "radar heading frozen"
+   (the well-established radar-genuinely-settled pattern from rounds
+   15/29/32/33/39/41, not the round-4 freeze bug) and short `STUCK-RAMMING`
+   (28-44 ticks, well within the healthy post-round-37/40 range — nowhere
+   near the rounds 34-36 catastrophic hundreds-of-ticks/game-ending pattern).
+   None correlate with a loss (there are zero losses in either round). This
+   is now the **3rd consecutive round** (41, and this round's 2 samples)
+   showing this healthy pattern against `philipmjohnson__dacruzer`
+   specifically, and consistent with the also-healthy, different-opponent
+   result in round 41's own notes — good continued confirmation that round
+   37's alignment-based escape fix and round 40's execute()-removal fix are
+   BOTH holding up well, with no sign of regression across several different
+   opponents now.
+2. `python3 tools/analyze_power_accuracy.py /logs/rounds/1 --bucket-width
+   0.5` -> sanity check: 23.0 shots/game combined vs `trace.md`'s
+   20.6+3.4=24.0 (within ~4%, tool still trustworthy per round 28's
+   tick-step fix). `sonnet_5`'s power 1.0-1.5 bucket (round 17's velocity cap
+   for fast enemies) dominates shot volume (3541 of 5150 shots) at a very
+   high 78.1% accuracy — consistent with round 41's finding against this same
+   opponent. The merged 2.5-3.0 bucket (round 30's 2.9-cap change) shows
+   30.4% accuracy here, similar to round 41's 30.3% for the same bucket
+   against the same opponent — stable, not surprising given it's the same
+   opponent as round 41 and no code changed.
+3. `diff archive/round1_backups/MyTank.java.before_round40_execute_fix
+   robots/custom/MyTank.java` — confirmed round 40's execute()-removal fix
+   is still fully intact (exactly the same 6 removed call sites + explanatory
+   comment block as when I re-checked this in round 41), no accidental
+   reversion.
+4. `javac -Xlint:all -cp libs/robocode.jar -d robots
+   robots/custom/MyTank.java` compiles clean, no errors/warnings. `.class`
+   up to date. `MyTank.java` unchanged from rounds 40-41 (1088 lines).
+
+### What I did this round (or rather, chose NOT to do)
+Given two consecutive, fully healthy, essentially-identical 250-game samples
+(100% win, 0 losses, 0 ties, freeze findings all short/benign, tooling
+sanity checks green) against the same opponent as round 41's already-healthy
+result, and no fresh signal of any underperformance to chase, I made **no
+changes to `MyTank.java`** this round — consistent with this file's
+long-established pattern (rounds 6, 13, 15, 21, 22, 26, 27, 28, 29, 32, 33,
+38, 39, 41) of not touching already-working code without a clear, actionable
+signal. Given how costly the rounds 34-37 escape-mode iteration and round 40's
+execute()-removal fix were to get right, and that round 40's fix has now had
+3 rounds' worth of real-match data (rounds 40's own round 1, round 41, and
+this round's 2 samples) across at least 2 different opponents with zero signs
+of a problem, I'm increasingly confident it's fully stable — but still see no
+reason to introduce a new, unvalidated change on top of it while things are
+this healthy.
+
+### Suggestions for next teammate
+1. **First step, as always**: check `/logs/rounds/<N>/trace.md` for the
+   actual opponent this round, and run
+   `python3 tools/analyze_freezes.py /logs/rounds/<N> --threshold 20 | grep -i
+   sonnet` as the standard regression check. Should show mostly-short (well
+   under 50-tick) findings if healthy, per the now 4-times-confirmed (rounds
+   38, 39, 41, and this round, across at least 3 different opponents)
+   post-round-37/40 baseline.
+2. If `philipmjohnson__dacruzer` keeps reappearing, treat this round's
+   numbers (100% win, 0 losses, 20.4-20.6 avg shots, 70% accuracy, avg min
+   energy 93) as the stable healthy baseline for this specific matchup —
+   any future deviation (accuracy drop, losses appearing, freeze findings
+   growing to 100+ ticks) would be a real regression signal worth digging
+   into immediately.
+3. `pez__gf1` (rounds 11-12, ~14% tie rate from mutual energy attrition)
+   remains the toughest opponent in this file's history and the single most
+   valuable target for directly re-testing the FULL accumulated stack of
+   fixes since round 12 (energy-math, ramming, dodge-on-fire, wall-margin,
+   the escape-mode mechanism, and round 40's execute()-removal fix) — still
+   hasn't reappeared after 30 rounds. If it (or any similarly aggressive,
+   accurate opponent) ever reappears, that's the highest-value real stress
+   test available — everything since round 27's weak-opponent streak has
+   been a stability/healthiness confirmation, not a real test of the
+   defensive side of the bot.
+4. If you're looking for something proactive to do in a "no clear bug"
+   round like this one, consider either: (a) the still-unimplemented full
+   wave-surfing dodge (suggested since round 1, partially addressed by round
+   16's simpler dodge-on-fire juke, never fully attempted), or (b) building
+   the "GUN-STARVED" freeze-detector category round 41's notes suggested
+   (flagging `gh` frozen for N+ ticks specifically starting at a
+   `HIT_WALL`/`HIT_ROBOT` episode's onset AND with zero landed hits during
+   the streak — a stricter, more conclusive version of the ad-hoc check round
+   41 ran by hand) to make round 40's bug class auto-detectable in future
+   rounds instead of requiring a manual trace.
+5. Local headless battle-runner: still unresolved after 41+ rounds of
+   attempts (see round 6's section for the most detailed known blocker,
+   `RepositoryManager.loadSelectedRobots` not seeing a freshly-reloaded
+   repository within the same call). Still the single highest-leverage infra
+   fix available if a future teammate has a larger step budget to spend on it
+   than usual.
