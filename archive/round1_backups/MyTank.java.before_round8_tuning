@@ -39,14 +39,8 @@ import java.awt.Color;
  */
 public class MyTank extends AdvancedRobot {
 
-    // Preferred distance to keep from the enemy while orbiting. Round 8: reduced
-    // from 300 -> 220 so we spend more time inside the 150-350 bulletPowerForDistance
-    // band (2.9 power) rather than mostly straddling right at the edge of it, since
-    // this rung's opponent (it_economics__ite_bomax) is nearly stationary and very
-    // inaccurate (4%) -- closing distance a bit costs little in dodge risk but lets
-    // us land harder shots more often. Still leaves ~150px of margin from the 150
-    // threshold for the 3.0-power band, and plenty of room from walls/ram range.
-    private static final double PREFERRED_DISTANCE = 220;
+    // Preferred distance to keep from the enemy while orbiting.
+    private static final double PREFERRED_DISTANCE = 300;
 
     // Keep planned waypoints at least this far from any wall.
     private static final double WALL_MARGIN = 70;
@@ -331,26 +325,23 @@ public class MyTank extends AdvancedRobot {
     }
 
     private double bulletPowerForDistance(double distance) {
-        // Round 7 tuning pushed power up across all bands and it paid off: round 1's
-        // real match (this same opponent, it_economics__ite_bomax, still barely moves
-        // at avg speed 0.8 and only 4% accuracy against us) showed accuracy actually
-        // rose slightly (69% -> 70%) and team score rose (38929 -> 39892) with zero
-        // win-rate cost. Round 8 pushes the middle bands a bit further still (2.6->2.9,
-        // 2.0->2.2) and the long-range band a touch (1.3->1.5), on the same reasoning:
-        // this opponent doesn't meaningfully punish us for slower bullets, so more
-        // damage-per-hit should keep raising total damage dealt/score. Close-range band
-        // stays at 3.0, the Robocode engine's max bullet power. If a future, more
-        // mobile/accurate opponent shows a win-rate or accuracy regression here, revert
-        // toward archive/round1_backups/MyTank.java.before_round8_tuning (round 7 values:
-        // 2.6/2.0/1.3) or even further back to .before_round7_tuning (original 2.2/1.5/1.0).
+        // Round 7 tuning: pushed power up across all bands. Round 0 logs (this rung's
+        // opponent, it_economics__ite_bomax) show it barely moves (avg speed 0.8) and
+        // has very low accuracy (4%) against us, i.e. it's not punishing us for taking
+        // slightly slower bullets in exchange for more damage per hit. Since our own
+        // hit-chance is governed mostly by our targeting math (bullet travel time is a
+        // second-order effect against a near-stationary target), trading a bit of
+        // bullet speed for more damage-per-hit should raise total damage dealt (and
+        // thus score) without materially hurting our win rate. Kept graceful power
+        // falloff at long range since bullet travel time still matters more there.
         if (distance < 150) {
             return 3.0;
         } else if (distance < 350) {
-            return 2.9;
+            return 2.6;
         } else if (distance < 550) {
-            return 2.2;
+            return 2.0;
         }
-        return 1.5;
+        return 1.3;
     }
 
     public void onHitByBullet(HitByBulletEvent e) {

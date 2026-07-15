@@ -748,3 +748,85 @@ piecemeal).
    valuable thing a future teammate with steps to spare could fix, per every
    round's notes back to round 1. See round 6's section for the most specific
    known blocker (`RepositoryManager.loadSelectedRobots` ordering issue).
+
+## Round 8 update (this round) — confirmed round 7 tuning validated, pushed bullet power/distance further
+
+### Context
+`/logs/rounds/0` and `/logs/rounds/1` both exist this round, both real combat
+(confirmed via `tools/analyze_sim_logs.py`) against `it_economics__ite_bomax` —
+same opponent as round 7's notes above, so round 1's logs are the *actual real
+match result* of round 7's bullet-power-increase change (which was previously
+unvalidated). Result: **100% win rate both rounds** (250/250 each), and
+round 7's change is validated as a genuine improvement, not a regression:
+- Round 0 (pre-round-7-change baseline, per its own trace.md): 69% accuracy,
+  team score 38929.
+- Round 1 (post-round-7-change, i.e. this same tuning played out for real):
+  **70% accuracy** (slightly up, not down), team score **39892** (up ~2.5%).
+  So increasing bullet power did NOT cost us accuracy or win rate against this
+  opponent, and did increase score. Ran `tools/analyze_freezes.py` on round 1's
+  logs too — all findings are on the opponent (expected, it dies mid-game and
+  stays frozen), zero on our own bot, so the wall/radar freeze fixes are still
+  holding with no regression.
+
+### Change made this round
+Since round 7's "push bullet power up" direction was validated by a real
+match, pushed the same lever further, plus a matching movement tweak, still
+targeting the same lever (more damage per hit against a nearly-stationary,
+barely-accurate opponent) rather than touching movement/targeting math that
+already looks healthy:
+1. `bulletPowerForDistance()`: 150-350 band 2.6->2.9, 350-550 band 2.0->2.2,
+   550+ band 1.3->1.5. (0-150 band stays at 3.0, the Robocode engine's hard
+   max bullet power — can't push that one further.)
+2. `PREFERRED_DISTANCE` reduced 300->220, so our orbit-strafing spends more of
+   its time inside the 150-350 (2.9-power) band instead of hovering near its
+   outer edge. Still leaves clear margin from the 150 threshold (don't want to
+   cross into point-blank/ramming range unintentionally) and plenty of room
+   from the wall-margin/stuck-watchdog logic.
+Old version (round 7's values, pre-this-round) preserved at
+`archive/round1_backups/MyTank.java.before_round8_tuning` for a quick diff/
+revert if needed. Verified `javac -cp libs/robocode.jar -d robots
+robots/custom/MyTank.java` compiles clean, `.class` up to date.
+
+### What I did NOT get to
+- As with round 7, this is a real behavior change to already-working combat
+  code (not just a bugfix for a previously-broken edge case), so it carries
+  more regression risk than a pure bugfix, and — same limitation as literally
+  every previous round — I could NOT validate it locally (headless battle
+  running in this sandbox remains unresolved; see round 6's section above for
+  the most detailed writeup of exactly where that effort currently gets stuck,
+  `RepositoryManager.loadSelectedRobots` not seeing a freshly-reloaded
+  repository within the same call — nobody has fixed this in 7+ rounds now,
+  might be worth a fresh, focused attempt if a future teammate has steps to
+  spare and wants faster iteration than "wait a round and read the logs").
+- Did not touch the circular-motion gun prediction (round 5), radar lock-on,
+  wall-avoidance/stuck-watchdog (round 3), or `onHitRobot`/`onHitWall`/search
+  wall-awareness (round 4/7) logic at all this round — all of that continues
+  to look healthy in the logs (no freezes, 100% win rate, high survival) and
+  didn't seem like the priority while this opponent is still so passive.
+
+### Suggestions for next teammate
+1. **First step, as always**: check the newest `/logs/rounds/<N>/trace.md`.
+   - If accuracy stayed >=~68% and win rate stayed 100% with team score
+     >=~39892 (this round's/round-1's baseline), this round's change is
+     validated — consider whether it's worth pushing bullet power/distance
+     even further, or whether returns have plateaued (e.g. if accuracy starts
+     dropping because we're now landing in awkward ram-adjacent range too
+     often, or getting hit more due to being closer).
+   - If accuracy or win rate drops noticeably, or a loss appears, revert via
+     `archive/round1_backups/MyTank.java.before_round8_tuning` (round 7
+     values: bands 2.6/2.0/1.3, PREFERRED_DISTANCE 300).
+2. Run `python3 tools/analyze_freezes.py /logs/rounds/<N> --threshold 100 |
+   grep -v it_economics` (substitute the actual opponent name if it's changed)
+   as a standard regression check for the wall/radar freeze bug classes —
+   should print nothing if we're still healthy.
+3. Watch for the ladder rung finally changing to a different, more aggressive
+   opponent (per git history this rotates every ~2 rounds, and this is now the
+   *second* round against `it_economics__ite_bomax`) — that would be the
+   first real test of whether the round-5 circular-motion gun prediction and
+   this round's closer-orbit-distance tuning hold up against something that
+   actually punishes proximity (faster/more-accurate return fire, deliberate
+   ramming, etc.), rather than another data point against a passive opponent.
+4. Local headless battle-runner: still unresolved after 7+ rounds of attempts
+   (see round 6's section for the most specific known blocker). Would be the
+   single highest-leverage infra fix for future rounds if anyone wants to dig
+   in with a larger step budget than a single round typically allows.
