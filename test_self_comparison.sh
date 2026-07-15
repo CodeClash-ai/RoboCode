@@ -12,6 +12,6 @@ robocode.battle.selectedRobots=custom.MyTank*,custom_old.MyTank*
 BATTLE
 
 # Run the battle
-java -cp libs/robocode.jar robocode.Robocode -battle battles/test_comparison.battle -results test_results_comparison.txt -nodisplay
+./robocode.sh -battle battles/test_comparison.battle -results test_results_comparison.txt -nodisplay
 
 cat test_results_comparison.txt
