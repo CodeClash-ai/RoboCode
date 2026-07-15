@@ -301,6 +301,19 @@ public class MyTank extends AdvancedRobot {
         if (getEnergy() < enemyEnergy && dist > 300) {
             power = Math.min(power, 0.8);
         }
+        // R2 vs berendbotje (FAST HEAVY spinner, LEAD gun, energy-CONSERVING):
+        // MEASURED (R1 250 sims) we fire ~40 shots/game to its ~17 at only 12.5%
+        // hit vs its 28.6% -- we land 5 hits, it lands 5, but we FIRE 2.3x more so
+        // we BLEED energy on misses and die first (ourFE ~5, it keeps ~44). It
+        // barely fires beyond 250px. The fix is to fight at ~380px (survival) AND
+        // conserve HARD: our hit rate collapses to 3-12% at 150-400px so full-power
+        // misses are pure bleed. Cut power by distance (cheap misses) so the energy
+        // war flips in our favor -- we deal ~= damage while spending far less.
+        if (dist > 120) {
+            if (dist < 250)      power = Math.min(power, 1.2);
+            else if (dist < 350) power = Math.min(power, 0.7);
+            else                 power = Math.min(power, 0.4);
+        }
         power = Math.max(0.1, Math.min(power, 3.0));
 
         double bulletSpeed = 20 - 3 * power;
@@ -385,8 +398,13 @@ public class MyTank extends AdvancedRobot {
         // stop the net-negative bleed that caused the 34 grind losses; conserve to
         // outlast the energy-conserving foe / close to the ~230px net-positive zone.
         if (dist > 690 && getEnergy() < enemyEnergy) allowFire = false;  // josephjeon: orbit ~560px is our fighting zone; only gate truly-far shots when behind
+        // R2 vs berendbotje: energy-CONSERVING spinner. Beyond ~330px our hit rate
+        // is <10% so mid/far shots bleed. When behind on energy, hold fire past
+        // 300px (conserve to outlast). Tighter alignment for distant shots so only
+        // high-confidence bullets are spent on this hard-to-hit spinner.
+        if (dist > 330 && getEnergy() < enemyEnergy) allowFire = false;
         // Tighter alignment for distant shots (bullet spread grows with range).
-        double alignThresh = (dist > 540) ? 0.10 : 0.13;
+        double alignThresh = (dist > 300) ? 0.06 : (dist > 200 ? 0.09 : 0.13);
 
         // ===== PASSIVE-ENEMY CONSERVATION MODE (vs admiralrasmussen__wavesurfing) =====
         // This opponent is a wave surfer that fires ZERO bullets and never rams:
@@ -676,12 +694,20 @@ public class MyTank extends AdvancedRobot {
         // our circular gun holds). So orbit WIDER ~350px to reach the 3.4:1 dominance.
         // Sweet spot = 300-350px (ratio 4.0: our 5.5/1k vs enemy 1.4/1k). Beyond
         // 350px both guns collapse. Target ~320px.
-        if (enemyDistance > 430)      rangeBias = -0.9; // charge inward when very far
-        else if (enemyDistance > 360) rangeBias = -0.45;// pull toward ~320px zone
-        else if (enemyDistance > 320) rangeBias = -0.15;// approach the win zone
-        else if (enemyDistance < 240) rangeBias = 0.75; // push OUT of the even-trade 0-300px zone
-        else if (enemyDistance < 300) rangeBias = 0.35; // hold ~320px
-        else                          rangeBias = 0.0;  // hold ~320px
+        // R2 vs berendbotje (this pass): the R1 ~320px target was NEVER reached
+        // (engagement still ~232px, we bled to 0 -- lost 197/250 sims). The enemy
+        // is a FAST HEAVY spinner (avgV 4.5, avgdh 0.12) with a LEAD gun that fires
+        // MOSTLY at 50-150px (1546 of ~2000 fires) and BARELY fires/hits beyond
+        // 350px (5 hits @350px, 1 @400px, 0 beyond). Our hit rate also collapses at
+        // range, but the KEY is SURVIVAL: at 350-400px the enemy does ~0 damage. We
+        // must FLEE HARD to ~380px and stay there. Strong outward bias whenever
+        // inside 350px so the spinner can't pin us in its 50-150px kill zone.
+        if (enemyDistance > 480)      rangeBias = -0.7; // charge inward only when very far
+        else if (enemyDistance > 420) rangeBias = -0.3;
+        else if (enemyDistance > 380) rangeBias = 0.0;  // hold ~380-420px
+        else if (enemyDistance < 200) rangeBias = 1.1;  // BOLT out of the point-blank kill zone
+        else if (enemyDistance < 300) rangeBias = 0.9;  // strong push out of the mid kill zone
+        else                          rangeBias = 0.55; // keep pushing toward ~380px
         double desiredDir = absBearing + (Math.PI / 2 + rangeBias) * moveDirection;
 
         // Wall smoothing: steer away from walls

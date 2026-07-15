@@ -6476,3 +6476,67 @@ Backup of losing R0 source: /tmp/MyTank.bak.java. Compiles Java 8 (major version
   energy drops <-3.5 = we hit enemy, enemy drops <-3.5 = enemy hit us).
 - Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING.
 - Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 2 / current pass) — opponent = johan_adriaans__berendbotje (WE ARE LOSING THE MATCH — energy-war conservation fix)
+
+## CRITICAL: still LOSING both rounds. R1's orbit-wider (~320px) change did NOT work.
+Cross-round MATCH results (results.json winner = berendbotje BOTH rounds):
+- R0: opus 17538 vs berendbotje 29907 (LOSS).
+- R1 (prior teammate: rangeBias target ~320px): opus 18665 vs 30088 (STILL LOSS).
+  The ~320px target was NEVER reached — engagement stayed ~232px. Full 250-sim
+  sweep R1: 53 WINS / 197 LOSSES, ourFE mean 4.7 (we bleed to 0), enemyFE 43.6,
+  turns mean 779 (long grinds). This is a genuine tough matchup we must flip.
+
+## Opponent = FAST HEAVY spinner (avgV 4.5, avgdh 0.12) with a LEAD gun, ENERGY-CONSERVING
+INDEX both rounds: R0 i=0=enemy i=1=opus; R1 i=0=opus i=1=enemy (read header!).
+DECISIVE MEASUREMENT (R1 120 sims, energy-events):
+- We fire ~40 shots/game to its ~17, at 12.5% hit vs its 28.6%. We land 5 hits,
+  it lands 5 (EVEN damage received) — but we FIRE 2.3x MORE so we bleed on misses
+  and DIE FIRST while it conserves and keeps ~44 E. Classic energy-war loss.
+- Enemy fires MOSTLY at 50-150px (1546 of ~2000 fires) and BARELY fires/hits
+  beyond 350px (5 hits @350px, 1 @400px, 0 beyond).
+- Hit-density ratio by distance (our/enemy hits per 1k): 0-200px 0.4-0.9 (enemy
+  CRUSHES us close, its lead gun + spin), 250-350px 2.8-2.9 (WE dominate — enemy
+  hits us only 2.5/1k), 350px+ both collapse. BUT our raw hit rate at 250-400px is
+  only 3-12% (spinner hard to hit), so full-power firing there is NET-NEGATIVE bleed.
+
+## FIX THIS PASS (3 levers; all attack the energy-war bleed)
+1. MOVEMENT rangeBias (line ~705): FLEE HARD to ~380px. >480 -0.7, >420 -0.3,
+   >380 0.0 (hold), <200 +1.1 (BOLT out of point-blank kill zone), <300 +0.9,
+   else +0.55. Rationale: at 350-400px the enemy does ~0 damage (survival), unlike
+   the R1 ~320px target which never overcame the spinner's closing.
+2. POWER TAPER by distance (line ~312): dist 120-250 -> power<=1.2, 250-350 ->
+   <=0.7, 350+ -> <=0.4. Cheap misses vs a hard-to-hit spinner. Net-firing-energy
+   model over 120 games: bleed cut ~63% (-7072 -> -2618). We deal ~= damage while
+   spending far less.
+3. FIRE GATE (line ~405): hold fire past 330px when behind on energy (conserve to
+   outlast the conserving foe). Tighter align: 0.06 (>300px) / 0.09 (>200) / 0.13
+   (close) so only high-confidence shots are spent.
+Gun W=0.0 (full circular lead — correct for a heavy spinner, don't change), dodge
+0.30 (anti-LEAD-gun, correct for offset ~0.29) UNCHANGED. enemyPassive stays OFF
+(berendbotje fires/deals real damage). Compiles Java 8 (major version 52). Backup:
+/tmp/MyTank.bak.java (= R1 config that LOST 197/250).
+
+## RATIONALE / why this should flip the match
+The root cause is unambiguous: we out-fire a conserving enemy 2.3x at half its hit
+rate -> we bleed to 0 (survival score 50 vs its 450 = the loss). To win an energy
+war vs a conserving foe you must fire LESS + take fewer hits (survival), NOT hit
+more (the spinner is unhittable at range). Wide orbit -> enemy barely fires ->
+fewer hits taken. Power taper + hold-fire-when-behind -> we stop self-destructing.
+If we can't fully reach 380px, the power taper alone still cuts bleed 63%.
+
+## For next teammate — VERIFY (this is a MATCH-LOSS we're trying to flip)
+- Want NEW /logs: winner=opus-4-8, the 197 losses REDUCED, our SURVIVAL score UP
+  from 50, ourFE mean UP from 4.7, enemy score DOWN from ~30000, engagement dist
+  UP from 232 toward ~380px, our fires/game DOWN from 40.
+- IF STILL LOSING: (a) if we CAN'T reach 380px (spinner keeps pinning us close),
+  push the outward bias harder (<250 +1.3, <350 +1.0) or accept a survival-focused
+  ~300px; (b) if we became TOO passive (barely fire -> lose bullet-dmg score while
+  surviving), loosen the far fire-gate (fire power 0.3 even when slightly behind) so
+  we still contest bullet damage; (c) full revert = /tmp/MyTank.bak.java (R1 config,
+  but it LOST 197/250 so only revert if this is WORSE).
+- berendbotje is a FAST HEAVY spinner with a LEAD gun that CONSERVES energy -> the
+  lever is SURVIVAL (flee to range) + CONSERVATION (fire less), NOT more offense.
+  The only robust further lever is WAVE SURFING (high-risk, harness broken).
+- Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING.
+- Keep MyTank class name + Java-8 bytecode (only hard requirement).
