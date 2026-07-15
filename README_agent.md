@@ -4882,3 +4882,97 @@ real data before touching that code path again.
    than usual — the rounds 34-37 saga in particular took 4 full rounds (each
    with only post-hoc log analysis available) to fully resolve what local
    battle-testing might have caught and fixed in a single sitting.
+
+## Round 39 update (this round) — confirmed escape-mode fix holding, new weak opponent, no changes
+
+### Context
+Only `/logs/rounds/0/` exists in this environment for me. Per `trace.md` /
+`results.json`, this round's opponent is a **new** one, `robo_code__fire`
+(different from every opponent documented in rounds 1-38 above, and
+importantly different from `andrekorol__oppswantmedead`, the opponent whose
+matches exposed the 4-round escape-mode saga in rounds 34-37). Result:
+**100% win rate (250/250)**, team score **45763 vs opponent's 2240**, 54%
+accuracy, avg speed 6.3, avg walls/game 1.8, avg rams/game 1.0, avg min
+energy 88. **Zero losses, zero ties.** Opponent is weak (0% win rate, 22%
+accuracy, avg speed 0.9, dies avg turn 245).
+
+### Validation performed
+1. `python3 tools/analyze_freezes.py /logs/rounds/0 --threshold 20 | grep -i
+   sonnet` -> **13 findings**, all short (20-48 ticks): a mix of benign
+   "radar heading settled" (4 findings, 22-27 ticks — same benign pattern
+   documented in rounds 15/29/32/33, not the round-4 freeze bug) and
+   `STUCK-RAMMING` (9 findings, 20-48 ticks). This is right in line with the
+   healthy historical baseline this bug class settled at in rounds 27-33
+   (0-5 short findings) and, critically, **NOT** a recurrence of the rounds
+   34-36 catastrophic pattern (hundreds-of-ticks, never-converging
+   oscillation, spanning to game-end) — every single finding this round is
+   well under 50 ticks and none of them correlate with a loss (there are no
+   losses at all this round). This is good real-match confirmation that
+   round 37's alignment-based fix (stuck-tick counter only advances once the
+   robot is roughly aligned with its escape target heading, not just once
+   per elapsed tick) is holding up against a *different* opponent than the
+   one that originally exposed/validated it, not just a fluke specific to
+   `andrekorol__oppswantmedead`.
+2. `python3 tools/analyze_power_accuracy.py /logs/rounds/0 --bucket-width
+   0.5` -> sanity check: 17.4 shots/game combined vs `trace.md`'s
+   13.7+4.6=18.3 (within ~5%, tool still trustworthy per round 28's fix). The
+   merged 2.5-3.0 power bucket (round 30's 2.9-cap change) shows the highest
+   shot volume (2595 shots) at 46.5% accuracy for `sonnet_5` — decent, not a
+   standout in either direction this round, consistent with round 32's
+   conclusion that per-power accuracy patterns are opponent-dependent and
+   shouldn't be over-generalized from any single sample. Overall
+   script-derived accuracy (45.3%) is somewhat lower than `trace.md`'s
+   reported 54% — a real but modest discrepancy (unlike the severe multi-x
+   overcounts rounds 22/27/28 chased down and fixed), not investigated
+   further this round since it doesn't materially change any tuning decision
+   (no code change was being considered either way, see below).
+3. `javac -Xlint:all -cp libs/robocode.jar -d robots robots/custom/MyTank.java`
+   compiles clean, no errors/warnings. `.class` up to date. `MyTank.java` is
+   unchanged from round 38 (1066 lines).
+
+### What I did this round (or rather, chose NOT to do)
+Given a fully healthy result (100% win, 0 losses, 0 ties, freeze findings
+back in the established healthy range with zero long/game-ending
+oscillations, tooling sanity checks green) against a new but weak opponent,
+and specifically given how costly the last several rounds' escape-mode
+iteration turned out to be (rounds 34-37, four consecutive rounds to fully
+stabilize one mechanism), I made **no changes to `MyTank.java`** this round
+— consistent with this file's long-established pattern (rounds 6, 13, 15,
+21, 22, 26, 27, 28, 29, 32, 33, 38) of not touching already-working code
+without a fresh, clear, actionable signal, and specifically continuing round
+38's stated intent to let the round-37 escape-mode fix "bake" for more real
+match data (now confirmed healthy against a second, different opponent)
+before touching that code path again.
+
+### Suggestions for next teammate
+1. **First step, as always**: check `/logs/rounds/<N>/trace.md` for the
+   actual opponent this round, and run
+   `python3 tools/analyze_freezes.py /logs/rounds/<N> --threshold 20 | grep -i
+   sonnet` as the standard regression check. Should show 0-15 SHORT (well
+   under 50-tick) findings if healthy, per the now twice-confirmed (rounds
+   38 and this round, against two different opponents) post-round-37
+   baseline. Any findings spanning 100+ ticks or running to game-end would
+   indicate a recurrence of the rounds 34-36 escape-mode regression — treat
+   as high priority if seen.
+2. If `andrekorol__oppswantmedead` (rounds 34-38's opponent) reappears,
+   compare directly against round 38's fully-healthy baseline (99% win, avg
+   speed 6.4, avg min energy 81, avg walls/game 2.0) for the cleanest
+   possible same-opponent regression check.
+3. `pez__gf1` (rounds 11-12, ~14% tie rate from mutual energy attrition)
+   remains the toughest opponent in this file's history and the single most
+   valuable target for directly re-testing the FULL accumulated stack of
+   fixes since round 12 (energy-math, ramming, dodge-on-fire, wall-margin,
+   and the now twice-validated-stable escape-mode mechanism) — still hasn't
+   reappeared after 27 rounds.
+4. If you want to dig into the modest (54% vs 45.3%) accuracy discrepancy
+   between `trace.md` and `analyze_power_accuracy.py` noted above (much
+   smaller than the multi-x overcounts rounds 22/27/28 found and fixed, but
+   not zero either), that could be a good next tooling investigation —
+   didn't have a strong signal to prioritize it this round given no combat
+   decision hinged on it.
+5. Local headless battle-runner: still unresolved after 38+ rounds of
+   attempts (see round 6's section for the most detailed known blocker,
+   `RepositoryManager.loadSelectedRobots` not seeing a freshly-reloaded
+   repository within the same call). Still the single highest-leverage infra
+   fix available if a future teammate has a larger step budget to spend on it
+   than usual.
