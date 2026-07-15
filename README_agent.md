@@ -5306,3 +5306,57 @@ Compiles Java 8 (major version 52), rc=0.
   remaining lever if losses persist is WAVE SURFING (high-risk, harness broken).
 - Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING.
 - Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 1 / current pass) — opponent = gjgomez__mb2
+
+## STATUS: PERFECT WIN (250/250, 0 losses), 88% share — NO CODE CHANGE (data-optimal)
+Opponent CHANGED to gjgomez__mb2. Verified /logs/rounds/0 (INDEX i=0=mb2, i=1=opus):
+- results.json: winner=opus-4-8, 43187 vs 6828.
+- results_0.txt: opus_4_8.MyTank 1749 (88%), 10/10 firsts; enemy 246 (12%, all bullet dmg).
+- Full 250-sim sweep: LOSSES=0/250, close(<20E)=0. ourFE mean 91.1, min 21.6.
+  killtick mean 310.6.
+
+## Opponent = MODERATE NEAR-STRAIGHT mover with a HEAD-ON gun
+Per-sim analysis (250 games): movefrac 0.836, avgV 3.31 (moderate), avg|dh| 0.035
+(NEAR-STRAIGHT, lightly curving), engages ~304px. Enemy gun offset when firing:
+median 0.141 rad, mean 0.127 -> a HEAD-ON gun (aims ~current pos, not a lead gun).
+Enemy deals us ~67 dmg/game (max 127) — a real gun, but we still win every game
+with 91 E mean to spare.
+
+## Gun aim W=0.0 CONFIRMED data-optimal (W-sweep, 2 independent 80-game slices)
+Per-tick interception over recorded paths (power 2.0):
+  slice A: W0.0 0.476 | W0.25 0.477 | W0.5 0.404 | W0.75 0.379 | W0.9 0.368 | W1.0 0.355
+  slice B: W0.0 0.473 | W0.25 0.478 | W0.5 0.415 | W0.75 0.393 | W0.9 0.380 | W1.0 0.365
+W=0.0 (full linear/circular lead) is at the top (tied w/ W=0.25 within noise; the
+replay is biased TOWARD W=0.0 since enemy path was reactive to our actual W=0.0
+shots, so W=0.25's tiny edge is not trustworthy). Head-on (W=1.0) is clearly WORSE
+(~0.36). A moderate near-straight mover is best hit with a lead. Current W=0.0
+(leftover from txeverson__crawler/smallpoet) is CORRECT here. KEEP W=0.0.
+
+## Dodge: considered lowering vs the HEAD-ON gun, but data does NOT support it -> LEFT UNCHANGED
+dodge-on-fire is 0.30 (tuned for the prior LEAD-gunner robrrrat/haikuwalls). The
+theory (README pikachu/dominatorx): vs a HEAD-ON gun, reversing on fire is
+counterproductive -> lower dodge. BUT the measured reversal-vs-hit correlation here
+is the OPPOSITE: hit rate 7.97/1k WITH a recent reversal vs 10.06/1k WITHOUT (i.e.
+reversing correlates with FEWER hits, though confounded by reactive timing). The
+enemy gun offset (0.14 rad) is only mildly head-on (vs pikachu 0.081, dominatorx
+0.018). With 0 losses / 88% share / mean E 91, and the dodge data ambiguous-to-
+favorable, lowering dodge has negligible expected upside and clear regression risk
+(README documents movement/dodge changes REPEATEDLY backfiring). Left at 0.30.
+
+## Decision: NO code change (deliberate)
+git diff on MyTank.java = empty. W=0.0 (line 349) is W-sweep-optimal. The 12% leak
+is unavoidable enemy bullet damage during the ~311 ticks before the kill (raising
+power to kill faster REGRESSES — longer cooldown -> more enemy hits, documented).
+Any edit only risks regression on a 250/250 sweep we win with 21+ E to spare.
+Re-verified compile:
+  javac --release 8 -cp libs/robocode.jar -d robots robots/custom/MyTank.java  # OK
+  javap -v robots/custom/MyTank.class | grep "major version"  # -> 52 (Java 8)
+
+## For next teammate
+Only act if a NEW /logs shows win rate <100% or our energy collapsing to a loss.
+mb2 is a MODERATE near-straight mover with a HEAD-ON gun -> KEEP W=0.0 full linear
+lead. If it becomes a HEAVY spinner (avg|dh|>0.06), circular (W=0.0 predictor
+already applies); if SLOW/near-stationary, raise W toward 1.0. Tool: /tmp/wsweep.py
+(rebuild from earlier notes). Always re-check `head -1 /logs/rounds/0/sim_0.jsonl`
+for opponent + INDEX MAPPING first. Keep MyTank class name + Java-8 bytecode.
