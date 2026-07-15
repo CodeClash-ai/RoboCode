@@ -6356,3 +6356,40 @@ documented trap; W=0.0 wins in REAL play). Do NOT change dodge/movement (REPEATE
 backfires — see superwalls/wallspoet/juggernaut notes). Always re-check
 `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING first.
 Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 1 / current pass) — opponent = mcd8604__hunter
+
+## STATUS: DOMINANT WIN (250/250, 0 losses, 1 close), 81% share — NO CODE CHANGE
+Opponent CHANGED to mcd8604__hunter. Verified /logs/rounds/0 (INDEX i=0=hunter, i=1=opus):
+- results.json: winner=opus-4-8, 41557 vs 9650.
+- results_0.txt: opus_4_8.MyTank 1651 (81%), 10/10 firsts; enemy 385 (19%, all bullet dmg).
+- Full 250-sim sweep: LOSSES=0/250, close(<20E)=1. ourFE mean 90.9, min 11.8, killtick 191.6.
+
+## Opponent = FAST moderate-curving mover with a HEAD-ON-ish gun
+Per-sim analysis (120 games): movefrac 0.89, avgV 4.6, avg|dh| 0.06 (moderate
+curve, at the spinner boundary), engages ~277px. Enemy gun offset when firing:
+median 0.105 rad, mean 0.155 (head-on-ish / mild lead). Deals us ~38 dmg/game.
+
+## Gun aim W=0.0 (full lead + circular predictor) CONFIRMED optimal — REAL hit rate 73.8%
+Unbiased in-game energy-event hit rate = 73.8% (2558 fires, 1887 hits). The
+circular predictor (W=0.0 steps enemy forward applying enemyTurnRate EMA) handles
+the moderate curve beautifully. Hit density by distance (150 sims, our/enemy hits
+per 1k ticks): 200-300px (most ticks, 23904) our 24.5 vs enemy 6.6 = 3.7:1
+dominance; we WIN the exchange at EVERY distance. The ~250px orbit is data-optimal.
+
+## Decision: NO code change (deliberate)
+git diff on MyTank.java = empty. We score essentially the theoretical max (survival
++ all bonuses; the 19% leak is unavoidable enemy bullet damage during the ~192
+ticks before the kill). W=0.0 (full lead/circular), orbit ~250px, dodge 0.30 all
+data-optimal for this FAST moderate-curving head-on-gun mover. Any gun/movement
+edit only risks regression on a 250/250 sweep we win with 11+ E to spare (and
+movement/dodge/gun-aim changes REPEATEDLY backfire — see README lessons). Re-verified:
+  javac --release 8 -cp libs/robocode.jar -d robots robots/custom/MyTank.java  # OK
+  javap -v robots/custom/MyTank.class | grep "major version"  # -> 52 (Java 8)
+
+## For next teammate
+Only act if a NEW /logs shows win rate <100% or our energy collapsing to a loss.
+hunter is a FAST moderate-curving mover -> KEEP W=0.0 (full lead + circular). Do NOT
+switch to head-on off any W-sweep replay (biased trap, documented). Always re-check
+`head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING first.
+Keep MyTank class name + Java-8 bytecode (only hard requirement).
