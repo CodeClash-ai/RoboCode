@@ -2424,3 +2424,104 @@ respect:
    repository within the same call). Still the single highest-leverage infra
    fix available if a future teammate has a larger step budget to spend on it
    than usual.
+
+## Round 21 update (this round) — validated round 20's escape-mode fix, no changes made
+
+### Context
+Only `/logs/rounds/0/` exists in this environment for me. Per `trace.md` /
+`results.json`, this round's opponent is a **new** one, `robo_code__crazy`
+(different from `pez__droidpoet` seen in rounds 19-20's notes above — that
+was the opponent for which round 20's event-priority "escape mode" fix was
+developed, so this round doesn't directly re-confirm the fix against the
+*same* opponent that exposed it, but it does confirm no regression against a
+fresh opponent). Result: **100% win rate (250/250)**, team score **40692 vs
+1174**, 55% accuracy, avg speed 6.6, avg walls/game 2.8, avg rams/game 1.1,
+avg min energy 90. **Zero losses, zero ties** across all 250 games (verified
+via `grep -v "sonnet_5" trace.md | grep sim_` — no output, i.e. every single
+game's winner column is `sonnet_5`). The opponent (`robo_code__crazy`) is weak
+(0% win rate, 20% accuracy, avg speed 6.8 — moves a lot but hits rarely, dies
+on average turn 387 out of avg-538-turn games) but not passive — it does move
+and fire non-trivially, more like `barriosnahuel__tirolio` (round 17-18) or
+`pez__droidpoet` (round 19-20) than the fully-stationary sentries from much
+earlier rounds.
+
+### Validation performed
+Ran `python3 tools/analyze_freezes.py /logs/rounds/0 --threshold 100 | grep -i
+sonnet` -> **zero matches** (confirmed by direct count, `wc -l` = 0). This is
+the key health check for round 20's fix: recall round 20's own regression
+(vs `pez__droidpoet`, 17 losses/4 ties out of 250) was caused by
+`onHitRobot()`'s stuck-ramming disengage command being silently overwritten
+by `onScannedRobot()` in the same tick (event priority: `HitRobotEvent`=40 runs
+before `ScannedRobotEvent`=10, but "last write wins" on movement commands
+means the *lower*-priority handler's later-executed command sticks) — the fix
+was a shared `escapeUntil`/`escapeHeadingRad`/`beginEscape()`/`reissueEscape()`
+mechanism so both handlers agree on the same escape command for a full 30-tick
+window. This round's zero-STUCK-RAMMING, zero-loss, zero-tie result against a
+genuinely mobile (not passive) new opponent is a good sign the fix generalizes
+beyond the one opponent it was built against, though a true apples-to-apples
+comparison would need `pez__droidpoet` to reappear directly (round 0's healthy
+48741-vs-1465/0-loss baseline vs round 1's broken 92%-win/17-loss regression,
+both documented in round 20's section above, remain the most relevant direct
+comparison points if that opponent shows up again).
+
+Also re-verified:
+- `javac -Xlint:all -cp libs/robocode.jar -d robots robots/custom/MyTank.java`
+  compiles clean (no errors/warnings), `.class` up to date.
+- Spot-checked (via `grep -n`) that round 18's `maxUsablePower` fix (velocity-
+  aware cap applied inside the "finishing"/"press advantage" bullet-power
+  overrides, not just the base `bulletPowerForDistance()`) is still present
+  and wired up as described in that round's notes — no accidental reversion.
+
+### What I did this round (or rather, chose NOT to do)
+Given a clean, fully healthy result (100% win, 0 losses, 0 ties, 0 freeze
+findings on our own bot, accuracy/energy numbers in a normal healthy range)
+against a moderately-capable but not top-tier opponent, and no direct
+opportunity to stress-test the specific round-20 fix against the exact
+opponent (`pez__droidpoet`) that originally exposed the bug it fixes, I chose
+**not** to make any further speculative code changes this round — consistent
+with this file's repeated pattern (rounds 6, 13, 15) of not changing
+already-working code purely for the sake of activity when there's no clear
+signal of underperformance. The main risk left un-addressed by any round so
+far remains `pez__gf1` (the toughest opponent documented in this file's
+history, rounds 11-12, ~14% tie rate from mutual energy attrition) — if it
+reappears, that's still the highest-value real stress test for both the
+round-12 energy-math/ramming logic AND the round-16 dodge-on-fire evasion,
+neither of which has had a clean before/after comparison against a genuinely
+competitive opponent since being introduced.
+
+### Suggestions for next teammate
+1. **First step, as always**: check `/logs/rounds/<N>/trace.md` for the
+   actual opponent this round.
+   - If it's `pez__droidpoet` again, do a direct three-way comparison against
+     round 20's two data points documented in that round's section (round 0:
+     100% win/0 losses baseline; round 1: 92% win/17 losses/4 ties, the
+     regression the escape-mode fix targets) to see if the fix is now fully
+     validated (should be back near round 0's numbers or better).
+   - If it's `pez__gf1`, this is the single most valuable comparison point
+     available across this whole file's history — check tie rate specifically
+     against the ~14% baseline from rounds 11-12, since several rounds of
+     energy-management/ramming/dodge-on-fire changes have accumulated since
+     then with no direct re-test against this specific opponent.
+   - Otherwise, a similar 100%-win/0-loss/0-freeze result to this round is a
+     healthy generalization signal but not a strong validation of any one
+     specific mechanism.
+2. Run `python3 tools/analyze_freezes.py /logs/rounds/<N> --threshold 100 |
+   grep -i sonnet` as the standard regression check — should print nothing if
+   healthy (now correctly excludes DEAD-robot end-of-life freezes since round
+   11's fix, and labels `STUCK-RAMMING` explicitly since round 15's addition).
+3. **General reminder for future combat-logic changes** (from round 20's
+   hard-won lesson): if you touch `onHitRobot()`, `onHitWall()`,
+   `onScannedRobot()`, or `onHitByBullet()`'s movement commands, remember
+   Robocode dispatches same-tick events in descending priority order
+   (`HitRobotEvent`=40, `HitWallEvent`=30, `ScannedRobotEvent`=10 — lowest,
+   so it runs last and "wins" any same-tick movement-command conflict via
+   simple overwrite). Either use the existing shared `escapeUntil`/
+   `beginEscape()`/`reissueEscape()` mechanism (round 20) when coordinating a
+   multi-tick maneuver across handlers, or be very deliberate about which
+   handler's command is allowed to be the "last word" for a given tick.
+4. Local headless battle-runner: still unresolved after 20+ rounds of
+   attempts (see round 6's section above for the most detailed known
+   blocker, `RepositoryManager.loadSelectedRobots` not seeing a
+   freshly-reloaded repository within the same call). Still the single
+   highest-leverage infra fix available if a future teammate has a larger
+   step budget to spend on it than usual.
