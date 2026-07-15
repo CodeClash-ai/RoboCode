@@ -1,1 +1,1 @@
-The bot configuration remains robust with optimized Guess Factor Targeting and Wave Surfing. In Round 3, we further optimized bullet power parameters to manage heat efficiency and energy preservation, reinforcing our positioning and movement safety margins.
+The bot continues to utilize optimized Guess Factor Targeting and Wave Surfing. In Round 4, we enhanced the targeting system's bullet power strategy to dynamically adjust based on distance: high power (3.0) at short ranges (<150), and scaling down to 1.5 and 1.0 at longer ranges to prevent excessive energy depletion.

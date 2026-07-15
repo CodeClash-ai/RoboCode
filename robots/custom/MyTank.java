@@ -6,7 +6,6 @@ import java.awt.geom.*;
 import java.util.*;
 
 public class MyTank extends AdvancedRobot {
-    private static final double BULLET_POWER = 1.9;
     private static final double FIELD_WIDTH = 800;
     private static final double FIELD_HEIGHT = 600;
     private static final double WALL_MARGIN = 36;
@@ -65,8 +64,15 @@ public class MyTank extends AdvancedRobot {
         updateMyWaves();
         doMovement();
 
-        // 2. GUESS FACTOR TARGETING (Gun)
-        double bulletPower = BULLET_POWER;
+        // 2. GUESS FACTOR TARGETING (Gun) with dynamic bullet power
+        double bulletPower = 1.9;
+        if (e.getDistance() < 150) {
+            bulletPower = 3.0;
+        } else if (e.getDistance() > 500) {
+            bulletPower = 1.0;
+        } else if (e.getDistance() > 300) {
+            bulletPower = 1.5;
+        }
         if (e.getEnergy() < 4) {
             bulletPower = Math.max(0.1, e.getEnergy() / 4.0);
         }
