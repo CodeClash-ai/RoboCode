@@ -11288,3 +11288,149 @@ situation has been handled every previous time it's come up.
    repository within the same call). Still the single highest-leverage infra
    fix available if a future teammate has a larger step budget to spend on
    it than usual.
+
+## Round 102 update (this round) — 2nd consecutive round vs alexbay218__shreker, confirmed stable moderately-tougher matchup, no changes
+
+### Context
+Both `/logs/rounds/0/` and `/logs/rounds/1/` exist this round, both real
+combat against `alexbay218__shreker` — same opponent round 101's notes
+describe (no code change happened between round 101 and this round). Round 0
+here matches round 101's own baseline closely (87% win, 217/250, 1 draw, 48%
+accuracy, avg speed 5.9, avg walls/game 0.4, avg rams/game 2.2, avg min
+energy 47). Round 1 (2nd independent sample): **83% win rate (208/250)**,
+**38 losses + 4 ties**, 47% accuracy, avg speed 5.9, avg walls/game 0.3, avg
+rams/game 2.5, avg min energy 45 — a slightly worse but broadly consistent
+result with the same code, confirming (as round 101 already suspected on a
+single sample) that this is a genuinely moderately-tougher opponent than the
+long streak of very-weak opponents seen in rounds 48-98, not a fluke or a
+regression. Team score still favors us decisively (39440 vs 18056 in round
+1) — we remain the clear favorite, just not at the ~95-100% dominance level
+of recent rounds.
+
+### Validation performed
+1. `python3 tools/analyze_freezes.py /logs/rounds/1 --threshold 20 | grep -i
+   sonnet` -> **1 finding**: a short (29-tick) benign "radar heading frozen"
+   pattern (documented benign since round 15, most recently rounds 48-101,
+   not the round-4 freeze bug). **Zero `STUCK-RAMMING` findings.** Round 0
+   likewise showed only 2 short benign radar-settle findings. Confirms the
+   escape-mode mechanism (rounds 20/23/25/34-37/40) and round 47/48's
+   radial-blend movement fix are both still fully healthy — the loss/tie
+   count against this opponent is NOT a freeze/deadlock regression, matching
+   round 101's own conclusion.
+2. `python3 tools/analyze_power_accuracy.py /logs/rounds/1 --bucket-width
+   0.5` -> sanity check 27.9 shots/game combined vs `trace.md`'s
+   16.1+12.7=28.8 (within ~3%, tool still trustworthy per round 28's
+   tick-step fix). `sonnet_5`'s dominant buckets (1.5-2.0: 37.0%, 2.5-3.0:
+   39.6%) are healthy; the opponent fires almost exclusively at max power
+   3.0 (2899/2968 shots) at a consistent **26.3%** accuracy — essentially
+   identical to round 101's own finding for this same opponent (26.1%),
+   confirming this opponent's "commit to max power, land a real, non-trivial
+   ~26% of the time" strategy is a stable, repeatable trait, not a one-off.
+   Re-applied round 12's `swing(P,p) = p*(9P-2) - P` formula at these
+   observed accuracies: our own per-shot swing (~+3.3 to +6.3 across our
+   dominant buckets) remains comfortably higher than the opponent's
+   (~+3.6 at their P=3.0/p=0.263) — consistent with us still being the
+   favorite on average, and consistent with round 101's conclusion that
+   current bullet-power tuning does NOT need a throttle-style adjustment
+   (per the long-standing round-11-vs-12 cautionary lesson repeated
+   throughout this file).
+3. **Went further than round 101 and checked whether HIT_ROBOT-tagged
+   energy losses were asymmetric** (us losing much more than the opponent
+   in several losses, e.g. `sim_15`: -29.2 us vs -3.6 opponent from
+   HIT_ROBOT-status ticks). Traced the individual per-tick deltas behind
+   this (`sim_10`, `sim_15`, `sim_23`) and found **this is a red herring,
+   not a real ramming-asymmetry bug**: the large outlier deltas (-16.6,
+   -17.2) are clearly simultaneous bullet hits (power-3 damage = `6*3-2=16`,
+   matches almost exactly) that happen to land on the SAME tick the log
+   labels `HIT_ROBOT` (i.e., contact and a bullet impact occurring in the
+   same tick, with the log's single `s` field only able to record one status
+   per tick) — NOT evidence that we're disproportionately eating the more
+   expensive "rammed" side (1.8 damage) of collisions vs. the cheaper
+   "ramming" side (0.6 damage) per round 12's documented mechanic. The
+   small, clean deltas we DO see on pure-contact ticks are consistently
+   `-0.6` (occasionally `-1.2`/`-2.5`/`-4.1` from multiple close-together
+   contact ticks), essentially never a clean `-1.8`, meaning we are mostly
+   on the cheap "initiator" side of collisions (consistent with round 12's
+   opportunistic-ramming logic working as intended) — this is a **tooling
+   caveat worth flagging for future teammates**: naively summing
+   HIT_ROBOT-status-tick energy deltas to measure "ramming damage" is
+   unreliable whenever bullet hits and robot contact can coincide in the
+   same tick (plausible in close-quarters exchanges, exactly what this
+   opponent's aggressive max-power/close-range style produces) — don't
+   draw conclusions from that metric alone without also checking whether the
+   large outliers match a bullet-damage formula, as done here.
+4. `javac -Xlint:all -cp libs/robocode.jar -d robots robots/custom/MyTank.java`
+   compiles clean (exit 0, no errors/warnings). `.class` up to date.
+5. `diff archive/round1_backups/MyTank.java.before_round47_radial_fix
+   robots/custom/MyTank.java` — confirmed round 47's radial-blend fix (and
+   nothing else since) is exactly what's currently live (32-line diff,
+   exactly the expected radial-blend block); `MyTank.java` is 1232 lines,
+   unchanged from round 47 onward through round 101.
+
+### What I did this round (or rather, chose NOT to do)
+Given (a) a 2nd consecutive sample confirming a stable, moderately-tougher
+(but still clearly winning, 83-87% across two samples) matchup rather than a
+regression, (b) zero STUCK-RAMMING freeze findings in either sample
+(escape-mode mechanism fully healthy), (c) the apparent "ramming asymmetry"
+signal debunked as a bullet/contact-tick-coincidence tooling artifact rather
+than a real bug, (d) round 12's swing-math confirming our current
+bullet-power tuning remains net-favorable against this opponent's actual
+observed accuracy, and (e) no local battle-testing available to validate
+any speculative change before a full future round's real match anyway, I
+made **no changes to `MyTank.java`** this round — consistent with this
+file's very long-established pattern (rounds 6, 13, 15, 21, 22, 26, 27, 28,
+29, 32, 33, 38, 39, 41, 42, 48-101) of not touching already-working code
+without a clear, actionable signal of underperformance. This mirrors exactly
+how rounds 96/100 handled the analogous "harder-than-usual-on-first-
+appearance" situations for `admiralrasmussen__wavesurfing` and
+`vikdov__dominatorx` respectively — both turned out to be stable,
+moderately-tougher (not regressing, not exploitable via an obvious fix)
+matchups on a 2nd sample, and this round's data suggests `alexbay218__
+shreker` is the same story.
+
+### Suggestions for next teammate
+1. **First step, as always**: check `/logs/rounds/<N>/trace.md` (or
+   `results.json` + per-`sim_*.jsonl` `winner` fields if `trace.md` is
+   missing, per round 68's note) for the actual opponent this round, and run
+   `python3 tools/analyze_freezes.py /logs/rounds/<N> --threshold 20 | grep -i
+   sonnet` as the standard regression check.
+2. If `alexbay218__shreker` reappears a 3rd time, treat ~83-87% win rate /
+   ~47-48% accuracy / avg min energy 45-47 / opponent max-power accuracy
+   ~26% as the stable baseline for this matchup — no urgent action needed
+   unless win rate drops meaningfully below ~75% in a future sample, or
+   unless `analyze_freezes.py` starts showing real (non-benign)
+   STUCK-RAMMING findings that correlate with losses.
+3. If you want to dig further into this matchup specifically, a genuinely
+   useful next step (not attempted this round due to step budget) would be
+   to build a more careful "true ramming damage" metric that specifically
+   distinguishes clean contact-only ticks (delta close to -0.6 or -1.8, no
+   coincident bullet-damage-formula match) from bullet-hit ticks that happen
+   to also show `HIT_ROBOT` status, to get a trustworthy read on whether
+   ramming trades are net-favorable or unfavorable against this specific
+   opponent (this round's quick check suggests favorable/mostly-cheap-side,
+   but wasn't done with full rigor).
+4. `admiralrasmussen__wavesurfing` (rounds 95-96, ~99% win/24-29% accuracy,
+   very long games, likely a genuine wave-surfer), `vikdov__dominatorx`
+   (rounds 99-100, ~94-96% win/43-44% accuracy), and the historically
+   toughest opponents in this file (`alpian__ianstank`/`pez__gf1`, rounds
+   43-44/11-12) all remain valuable comparison points if any of them
+   resurface.
+5. If a genuinely different/tougher opponent shows up with new symptoms, the
+   diagnostic playbook accumulated across rounds 18/25/31/33/38/43-101 is
+   well-documented above: check (a) freeze/escape-mode health via
+   `analyze_freezes.py`, (b) opponent's position-range vs. our own
+   (corner-camper detection), (c) whether our distance-to-enemy converges
+   toward `effectivePreferredDistance` over time (round 47's radial-blend fix
+   should now handle this generally), (d) energy-delta tracing for the
+   self-inflicted-attrition signature (being careful about the
+   bullet/contact-tick-coincidence caveat noted above if using HIT_ROBOT
+   status as a proxy for ramming damage specifically), and (e) round 12's
+   `swing(P,p)` formula to sanity-check whether current bullet-power tuning
+   is still net-positive at the observed accuracy before considering any
+   throttle-based change (per the round-11-vs-12 cautionary history).
+6. Local headless battle-runner: still unresolved after 101+ rounds of
+   attempts (see round 6's section for the most detailed known blocker,
+   `RepositoryManager.loadSelectedRobots` not seeing a freshly-reloaded
+   repository within the same call). Still the single highest-leverage infra
+   fix available if a future teammate has a larger step budget to spend on
+   it than usual.
