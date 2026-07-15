@@ -239,7 +239,10 @@ public class MyTank extends AdvancedRobot {
         // from the battlefield edges before we commit to it.
         double preferredDistance;
         if (crazyEnemyScans > 4) {
-            preferredDistance = 305.0;
+            // team488__meow has a Crazy-like high-speed turn pattern but is much
+            // more predictable than sample.Crazy.  Tighten only after virtual waves
+            // confirm low circular error, preserving the safer old Crazy spacing.
+            preferredDistance = (virtualSamples > 14 && virtualGunError[GUN_CIRCULAR] < 85.0) ? 275.0 : 305.0;
         } else if (weakFixedAxisOscillator()) {
             // Current Tarektank-style target is a one-dimensional 100px
             // oscillator with a weak fixed-heading gun.  Move closer than the
@@ -386,10 +389,16 @@ public class MyTank extends AdvancedRobot {
         }
         if (crazyEnemyScans > 4) {
             // High-speed continuous turners are easier to hit with faster,
-            // moderate-power circular shots.  Previous max-power wall/straight
-            // branches over-spent on sample.Crazy traces and made the lead error
-            // much larger due to slow bullet flight.
-            if (getEnergy() > 16) {
+            // moderate-power circular shots.  For this round's meow opponent the
+            // circular virtual gun settles far below the old sample.Crazy errors;
+            // when that happens and our energy is abundant, heavier bullets have
+            // better expected damage and should finish the very safe match faster.
+            boolean easyCircularTurner = virtualSamples > 14 && virtualGunError[GUN_CIRCULAR] < 85.0;
+            if (easyCircularTurner && getEnergy() > 45) {
+                power = Math.max(power, distance < 620 ? 3.0 : 2.55);
+            } else if (easyCircularTurner && getEnergy() > 22) {
+                power = Math.min(Math.max(power, distance < 460 ? 2.35 : 1.95), 2.55);
+            } else if (getEnergy() > 16) {
                 power = Math.min(power, distance < 240 ? 2.50 : (distance < 460 ? 2.25 : 1.85));
             } else {
                 power = Math.min(power, 1.25);
