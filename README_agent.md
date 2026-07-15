@@ -397,3 +397,45 @@ Changed reversal logic to avoid becoming a learnable alternation at the enemy's
 fire cadence: (a) reverse only 50% on enemy-fire (>=6 ticks apart); (b) random
 6% periodic reversal (>=8 ticks apart, avg segment ~16 ticks). Keeps setAhead=150.
 Final compile: Java 8 major version 52, clean. This is the version submitted.
+
+# Agent Notes (Round 2 / this pass) — opponent = pez__gf1 (GuessFactor gun)
+
+## STATUS this match: winning ~93% (round1: 25200 vs 2156; 9/1 firsts in results_0)
+Opponent = strong MOBILE dodger with a GuessFactor gun. We win the trade because
+enemy accuracy ~2% vs our ~12%, but we still LOSE ~16/250 games (variance: in
+losses the enemy moves faster avg|v|~5 and profiles our orbit; we take 35-49
+hits vs 18-31 in wins). Wall-proximity is NOT the cause (losses have LESS wall
+time). Losses are GF-gun learning variance in fast-mover games.
+
+## CHANGE THIS PASS: gun -> pure head-on (W 0.90 -> 1.00)
+Rebuilt /tmp/replay.py (per-tick interception over recorded enemy paths, ALL
+250 sims of round 1). CORRECTED earlier bug: field is 800x600 (not 1000) and
+enemy heading field is 'bh' (radians), velocity 'v'. Results (power 3.0):
+  headon(W1.0)=27.1%  W0.9=22.9%  W0.7=20.0%  W0.5=19.5%  W0.0(lin)=18.0%  circ=18.5%
+Head-on is MONOTONICALLY best — enemy dodges reactively so ANY lead overshoots.
+Power sweep (head-on) dmg/round: p1.0=54, p1.9=113, p2.4=136, p3.0=159 -> keep 3.0.
+So: W=1.0, power=3.0. This raises hit rate ~4pts -> more bullet dmg + faster
+kills -> less exposure -> should convert some marginal losses.
+Compiles Java 8 (major version 52). Backup of prior version: /tmp/MyTank.bak.java.
+
+## Movement: LEFT UNCHANGED (deliberate)
+Considered periodic sin-wobble on orbit angle but REJECTED it — a periodic
+signal is itself learnable by a GF gun (counterproductive). Considered stop-and-go
+but it lowers survival speed/bonus and adds a learnable low-velocity bin; can't
+validate locally so too risky. Current orbit + randomized wave-reversal already
+wins 93%. If a next pass wants the real fix it's WAVE SURFING (track enemy
+bullet waves, move to min-danger GF) — the only robust anti-GF movement, but
+needs careful implementation + local validation (harness is broken here).
+
+## Replay tool: /tmp/replay.py (NOT persistent across rounds — rebuild from this note)
+Loads /logs/rounds/1/sim_*.jsonl; per-file header maps index->name (enemy = the
+non-'opus' one). For each tick fires a bullet from OUR recorded (x,y) along an aim
+strategy, steps at speed 20-3*power, hit if dist<18 to enemy's recorded future pos,
+respects 800x600 bounds + gunheat cooldown. Use it to retune W/power per opponent.
+CAVEAT: biased (enemy path was reactive to our ACTUAL shots) but head-on's large
+consistent lead over blends is trustworthy.
+
+## Hard requirement reminder
+Keep class name MyTank + compile to Java 8:
+  javac --release 8 -cp libs/robocode.jar -d robots robots/custom/MyTank.java
+  javap -v robots/custom/MyTank.class | grep "major version"  # -> 52

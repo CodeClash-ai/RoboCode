@@ -122,7 +122,7 @@ public class MyTank extends AdvancedRobot {
 
         // Blend: heavy weight on current pos (enemy stops ~40% of ticks and its
         // bursts are reactive/unpredictable, so lead over-shoots).
-        double W = 0.90;
+        double W = 1.0;  // pure head-on: replay sim shows 27.1% hit vs 22.9% for 0.90 (enemy reactive dodge -> lead overshoots)
         double predX = W * enemyX + (1 - W) * leadX;
         double predY = W * enemyY + (1 - W) * leadY;
 
