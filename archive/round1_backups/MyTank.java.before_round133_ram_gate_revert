@@ -763,37 +763,33 @@ public class MyTank extends AdvancedRobot {
         // above, which always takes precedence via the early return) and we're not
         // critically low on energy ourselves (a collision still costs us 0.6, so
         // don't risk it if we're down to fumes).
-        // Round 133 update: REVERTED round 131's enemyHeadingRate ramming
-        // gate. Round 130/131 found (via a flawed metric -- see below) what
-        // looked like a ~2x energy-loss asymmetry against us from
-        // robot-robot contact vs `logancsc__dodgebot2` (the first opponent
-        // in this file's history to hand us an outright match LOSS), and
-        // round 131 added a gate skipping the opportunistic-ramming charge
-        // whenever the enemy's smoothed heading-rate was large (assumed
-        // "mid-juke"). Round 132 found this gate barely changed anything in
-        // a real match (avg rams/game and the same asymmetry metric were
-        // essentially unchanged pre/post-fix). Round 133 root-caused why:
-        // the original measurement only summed energy deltas on ticks where
-        // *our own* robot's logged status was "HIT_ROBOT" -- but direct
-        // inspection of raw sim logs shows Robocode's per-tick status field
-        // only reports "HIT_ROBOT" for ONE side of a mutual collision in a
-        // given tick (the other side's energy still visibly drops by the
-        // same ~0.6 that tick, but its status stays "ACTIVE"). That means
-        // the original metric systematically UNDER-counted the opponent's
-        // own contact losses, manufacturing a fake "we're the disadvantaged
-        // side" signal. Recomputing correctly (treat a tick as a "contact
-        // tick" if EITHER robot's status shows HIT_ROBOT that tick, then sum
-        // BOTH robots' actual energy deltas for that tick) across all 4
-        // available 250-game samples of this matchup shows the OPPOSITE:
-        // the opponent consistently loses MORE energy from contact than we
-        // do (~-3.2 to -3.4/game for them vs ~-2.7 to -3.0/game for us, in
-        // every single sample, pre- and post- the round-131 gate). Ramming
-        // is mildly FAVORABLE to us here, not a liability -- round 131's fix
-        // was solving a problem that didn't actually exist. Reverted back to
-        // the original, unconditional round-12 trigger (still gated on
-        // distance/energy/ramming-cooldown only) so we don't leave any of
-        // this already-favorable contact-damage source on the table.
-        if (enemyDistance < 60 && getEnergy() > 3 && getTime() > rammingCooldownUntil) {
+        // Round 131 addition: gate opportunistic ramming on the enemy NOT
+        // currently juking hard (small |enemyHeadingRate|). Motivation (see
+        // README_agent.md round 130/131 notes): against `logancsc__dodgebot2`
+        // (an evasive/dodging opponent, per its name and behavior -- the
+        // first opponent in this file's history to hand us an outright
+        // overall match LOSS), a full-sample energy-delta trace of
+        // HIT_ROBOT-status ticks showed we lose roughly 2x as much energy
+        // from robot-robot contact as the opponent does (~-2.5/game for us
+        // vs ~-1.25/game for them, confirmed across two independent
+        // 250-game samples) -- the OPPOSITE of what round 12's ramming math
+        // predicts for whoever initiates contact (initiator should net only
+        // -0.6, victim -1.8, per Rules.ROBOT_HIT_DAMAGE/ROBOT_HIT_BONUS).
+        // The most likely mechanism: by the time our "turn toward + charge"
+        // command actually results in contact several ticks later, a
+        // sharply-juking enemy may have already turned such that WE are no
+        // longer the one "moving toward" it at the actual moment of
+        // collision, flipping which side is "at fault" (and therefore which
+        // side eats the cheap 0.6-only cost vs the expensive 1.8 cost)
+        // against us. Skipping the charge specifically while the enemy is
+        // mid-juke (i.e. enemyHeadingRate, already tracked for gun
+        // prediction, is large) avoids committing to a multi-tick charge
+        // right when it's most likely to go stale/misaligned by the time
+        // contact happens, while leaving ramming fully active against the
+        // straight-moving/typical-weak-opponent case where round 107's
+        // analysis found it correlates with winning, not losing.
+        if (enemyDistance < 60 && getEnergy() > 3 && getTime() > rammingCooldownUntil
+                && Math.abs(enemyHeadingRate) < 0.05) {
             double turnToEnemy = robocode.util.Utils.normalRelativeAngle(
                     absBearing - getHeadingRadians());
             setTurnRightRadians(turnToEnemy);

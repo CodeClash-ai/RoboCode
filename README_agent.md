@@ -15195,3 +15195,153 @@ ambiguous sample), I'm leaving it in place and flagging for more data.
    of `enemyHeadingRate` at ramming decisions) instead of needing a full
    round's real-match turnaround per experiment, which is especially costly
    for this specific investigation.
+
+## Round 133 update (this round) — found round 130/131's ramming-asymmetry finding was a MEASUREMENT BUG; reverted round 131's gate
+
+### Context
+Four log directories exist this round (`/logs/rounds/0-3`), all real combat
+against `logancsc__dodgebot2` — the evasive opponent from rounds 130-132
+that handed us this file's first-ever outright match loss. Rounds 0/1 match
+round 130's own pre-round-131-fix baseline exactly (46%/44% win for us,
+score deficits of ~2370/2354). Rounds 2/3 are two independent samples of
+round 131's fix (gating opportunistic ramming on `|enemyHeadingRate| < 0.05`):
+47%/43% win for us, score deficits of ~895/4298 — i.e. **round 131's fix
+shows no consistent improvement across its own two post-fix samples**
+(round 132 already flagged this as inconclusive; this round's 4th sample
+—round 3, 43% win, the *widest* deficit of all four samples—confirms it).
+
+### Root cause found: the ramming-asymmetry metric that motivated round 131's fix was measuring the wrong thing
+Round 130/131's original analysis computed "energy lost to ramming" by
+summing energy deltas ONLY on ticks where **our own robot's** logged
+`status` field read `"HIT_ROBOT"`, separately for each robot using its own
+status flag. This looked like a ~2x disadvantage for us (~-2.5/game vs
+~-1.25/game for the opponent), which round 131 tried to fix by gating our
+ramming trigger.
+
+This round, direct inspection of raw tick data (`sim_0.jsonl` in
+`/logs/rounds/3`, ticks 72-73) revealed the actual mechanism: **when two
+robots are in mutual contact, Robocode's per-tick log only reports
+`status="HIT_ROBOT"` for ONE of the two robots that tick — the other robot's
+energy still visibly drops by the same ~0.6 that same tick, but its own
+status field stays `"ACTIVE"`.** E.g. at tick 72: robot 0 shows
+`("ACTIVE", 100.8)`, robot 1 shows `("HIT_ROBOT", 79.8)`; at tick 73: robot 0
+`("ACTIVE", 100.2)` — a real `-0.6` drop despite `status` staying `ACTIVE`
+the whole time. This means the original per-robot-status-filtered metric
+**systematically undercounts the opponent's own contact losses**,
+manufacturing a fake "we're disproportionately the victim" signal that was
+never really there.
+
+Recomputed correctly: define a tick as a "contact tick" if **either**
+robot's status shows `HIT_ROBOT` that tick, then sum **both** robots' actual
+energy deltas for all such ticks (regardless of which one's status flag
+happened to be set). Result, across all 4 available 250-game samples of
+this exact matchup (pre- and post- round 131's gate):
+```
+round 0 (pre-fix):  us -2.74/game  vs  them -3.24/game
+round 1 (pre-fix):  us -2.90/game  vs  them -3.30/game
+round 2 (post-fix): us -2.92/game  vs  them -3.22/game
+round 3 (post-fix): us -2.96/game  vs  them -3.43/game
+```
+**The opponent consistently loses MORE energy from contact than we do, in
+every single sample** — the exact opposite of round 130/131's conclusion.
+Ramming is (mildly) FAVORABLE to us in this matchup, not a liability. Round
+131's fix was solving a problem that didn't actually exist, which also
+explains round 132's own finding that the fix barely moved the (flawed)
+asymmetry metric or `avg rams/game` at all — there was nothing real to fix.
+
+### Fix applied (`robots/custom/MyTank.java`)
+Reverted round 131's `enemyHeadingRate` ramming gate: the opportunistic-
+ramming trigger in `onScannedRobot()` is back to its original round-12 form
+(`enemyDistance < 60 && getEnergy() > 3 && getTime() > rammingCooldownUntil`,
+no heading-rate condition). Replaced the round-131 comment block with a
+detailed explanation of this round's finding (see code) so a future
+teammate doesn't rediscover the same false signal from the same flawed
+metric. Verified `javac -Xlint:all -cp libs/robocode.jar -d robots
+robots/custom/MyTank.java` compiles clean (no errors/warnings), `.class`
+file up to date. Pre-this-round version (round 131's gate, still in place)
+preserved at `archive/round1_backups/MyTank.java.before_round133_ram_gate_revert`
+for a quick diff/revert if needed.
+
+### What I did NOT get to
+- **Not validated by a real match** (same long-standing limitation as every
+  previous round — no working local headless battle runner in this
+  sandbox). This revert is grounded in a very concrete, directly-verified
+  measurement bug (not speculation), so confidence in the DIAGNOSIS is high
+  — but whether removing the gate meaningfully improves the overall
+  win rate against `logancsc__dodgebot2` (currently 43-47% across 4
+  samples) is still unknown, since the gate's real-world effect was itself
+  shown to be negligible either way (round 132's finding, reconfirmed this
+  round: `avg rams/game` barely moves between pre/post-fix samples,
+  ~2.8-2.9 throughout). This revert is best understood as "undoing a
+  change that wasn't helping and was based on a bug" rather than "a fix
+  expected to meaningfully close the win-rate gap" — the overall matchup
+  may still just be a genuinely close, moderately-losing one (per round
+  130's own bucket-level swing(P,p) analysis showing bullet-power tuning is
+  roughly EV-neutral here) that doesn't have an easy single-lever fix.
+- Did not investigate other possible causes of the persistent ~43-47%
+  win rate against this opponent further this round (limited remaining
+  steps) — the swing(P,p) bullet-power analysis from round 130/132 already
+  found no large single-bucket inefficiency the way `kcanida__pikachu`
+  (rounds 107-109) had; with the ramming asymmetry now debunked as well,
+  there isn't an obvious remaining lever identified yet. A future teammate
+  with more time could look at: (a) whether our own accuracy specifically
+  degrades over the course of a long game (this opponent's games run very
+  long, avg 664-683 turns) e.g. due to some accumulating state bug, (b)
+  whether the round-16 "dodge on fire" reactive juke or round-47/48 radial-
+  blend orbit distance logic interact poorly with this specific opponent's
+  evasion pattern, or (c) whether the sheer game length itself (more total
+  ticks = more total variance in a roughly-50/50 EV fight) is naturally
+  producing a wide, noisy win-rate distribution around 50% without there
+  being a real, fixable asymmetry at all.
+- Did not build a reusable "contact-tick net energy swing" script (still
+  ad-hoc each time, now for the 3rd round running) — given this round found
+  the naive per-robot-status version of this metric was actively
+  misleading, a committed `tools/` script implementing the corrected
+  "either-robot-HIT_ROBOT-tick, sum-both-deltas" approach (as used in this
+  round's analysis) would be valuable so this mistake doesn't get made
+  again, and so future ramming-asymmetry questions can be answered quickly
+  and correctly. Flagging as a good next step for a future teammate with
+  spare budget.
+
+### Suggestions for next teammate
+1. **First step, as always**: check `/logs/rounds/<N>/trace.md` for this
+   round's actual opponent/result, and run
+   `python3 tools/analyze_freezes.py /logs/rounds/<N> --threshold 20 | grep -i
+   sonnet` as the standard regression check (watch for LONG radar/position
+   freezes specifically in TIE/very-long games — per rounds 11/95/130/131/132,
+   that's the known benign mutual-exhaustion pattern, not a bug).
+2. **If `logancsc__dodgebot2` reappears**, this is still the highest-value
+   comparison outstanding: check whether win rate moves meaningfully from
+   the ~43-47% range seen across all 4 samples so far (2 pre-round-131-gate,
+   2 post-). If it's still stuck around 43-47% even after this round's
+   revert, that's good evidence the ramming lever (in either direction)
+   was never the real story here, and the "what I did NOT get to" list
+   above has some ideas for where else to look. **IMPORTANT**: if you want
+   to re-check the contact-energy-swing metric yourself, use the CORRECTED
+   method described in this round's notes (treat a tick as "contact" if
+   EITHER robot's status shows HIT_ROBOT, then sum BOTH robots' deltas) —
+   do NOT reuse the old per-robot-status-only filtering approach from
+   rounds 130/131, which this round showed produces a systematically wrong,
+   misleading result.
+3. `kcanida__pikachu` (rounds 107-109, the fast-mover-cap fix still
+   awaiting its first real re-test after 24+ consecutive rounds of not
+   reappearing) and `pez__gf1`/`alpian__ianstank` (rounds 11-12/43-44)
+   remain the other historically-toughest opponents in this file.
+4. **General lesson from this round**: when computing per-robot energy-
+   attribution metrics from these sim logs, be skeptical of any analysis
+   that filters strictly by one robot's own `status` field for a
+   *shared/mutual* event type (robot-robot collision) — this round found
+   the log's status field is NOT reliably set on both sides of a mutual
+   event in the same tick, even though the underlying game-state effect
+   (energy loss) clearly affects both sides. Prefer detecting the event
+   from either side's status and then attributing effects by looking at
+   both robots' actual deltas directly, not by re-filtering per-robot on a
+   potentially-incomplete status flag.
+5. Local headless battle-runner: still unresolved after 132+ rounds of
+   attempts (see round 6's section for the most detailed known blocker,
+   `RepositoryManager.loadSelectedRobots` not seeing a freshly-reloaded
+   repository within the same call). Still the single highest-leverage
+   infra fix available — would have let this round's finding (and round
+   131's original mistake) be caught and corrected within a single round
+   instead of costing 3 rounds of real-match iteration on a fix that turned
+   out to be unnecessary.
