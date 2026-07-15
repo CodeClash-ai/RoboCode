@@ -354,6 +354,12 @@ public class MyTank extends AdvancedRobot {
             // before its random spinning gun can leak stray hits.  Keep the wider
             // cold-start range for awkward spawn/wall approaches.
             preferredDistance = (virtualSamples > 10 && virtualGunError[GUN_CIRCULAR] < 55.0) ? 305.0 : 340.0;
+        } else if (npcSniperEnemy()) {
+            // iagomonteiro13579__npcsniper: medium-fast straight/wall bursts with
+            // lots of medium shots.  It is harder to hit than the simple wall
+            // cruisers, and max-power shots self-deplete in the loss traces; keep a
+            // wider, safer band and rely on faster damped bullets.
+            preferredDistance = getEnergy() < 28.0 ? 485.0 : 405.0;
         } else if (velociRobotEnemy()) {
             // VelociRobot-style target in the current logs: medium-fast low-turn
             // straight runs with frequent weak fire.  It is not a continuous Crazy
@@ -599,6 +605,21 @@ public class MyTank extends AdvancedRobot {
             // The approach is highly predictable; max-power linear shots shorten
             // the round and reduce the time available for close-range Tracker fire.
             power = Math.max(power, distance < 640 ? 3.0 : 2.55);
+        }
+        if (npcSniperEnemy()) {
+            // NPCSniper lands enough medium bullets that long max-power miss streaks
+            // are the only real losing mode.  Use faster medium/cheap bullets with a
+            // strict low-energy cap; the damped predictor gains more from speed than
+            // from raw damage here.
+            if (getEnergy() > 42.0) {
+                power = Math.min(Math.max(power, distance < 360 ? 2.20 : (distance < 560 ? 1.85 : 1.45)), 2.20);
+            } else if (getEnergy() > 24.0) {
+                power = Math.min(Math.max(power, distance < 360 ? 1.35 : 1.05), 1.45);
+            } else if (getEnergy() > 12.0) {
+                power = Math.min(power, distance < 330 ? 0.65 : 0.45);
+            } else {
+                power = Math.min(power, getEnergy() < 7.0 ? 0.15 : 0.30);
+            }
         }
         if (velociRobotEnemy()) {
             // VelociRobot fires many weak bullets but is not dangerous enough to justify
@@ -859,6 +880,11 @@ public class MyTank extends AdvancedRobot {
             // advantage from round 1 remains intact.
             gun = (virtualSamples > 20 && virtualGunError[GUN_AVERAGED] + 6.0 < virtualGunError[GUN_CIRCULAR])
                     ? GUN_AVERAGED : GUN_CIRCULAR;
+        } else if (npcSniperEnemy()) {
+            // Replay for NPCSniper favors a wall/stop damped velocity predictor over
+            // full linear/circular lead or pure head-on.  Keep it forced so the generic
+            // dangerous-wall branch does not use the less-damped averaged predictor.
+            gun = GUN_AVERAGED;
         } else if (velociRobotEnemy()) {
             // For this medium-speed weak shooter, damped averaged prediction is usually
             // best, but trace replay shows pure head-on is competitive and sometimes
@@ -1019,6 +1045,9 @@ public class MyTank extends AdvancedRobot {
             // a tick for a cleaner gun angle saves energy and raises hit rate.
             tolerance = Math.min(tolerance, Math.atan2(17.0, distance));
         }
+        if (npcSniperEnemy()) {
+            tolerance = Math.min(tolerance, Math.atan2(15.0, distance));
+        }
         if (velociRobotEnemy()) {
             tolerance = Math.min(tolerance, Math.atan2(18.0, distance));
         }
@@ -1066,6 +1095,29 @@ public class MyTank extends AdvancedRobot {
         return best;
     }
 
+
+    private boolean npcSniperEnemy() {
+        // Current opponent iagomonteiro13579__npcsniper: medium-fast low-turn
+        // straight/wall runner, repeated medium bullets (roughly power 1.2-1.8), and
+        // enough stop/go pauses that full linear/circular over-leads.  This is more
+        // active than daCruzer/Antiwalls (so do not use fastWallCruiser max power),
+        // but not a power-3 stop/go duelist.
+        return enemyFireCount > 3
+                && enemyFirePowerSamples > 2
+                && enemyFirePowerAvg > 1.15
+                && enemyFirePowerAvg <= 2.10
+                && enemySpeedAvg > 3.55
+                && enemySpeedAvg < 5.35
+                && straightEnemyScans > 5
+                && wallEnemyScans > 2
+                && enemyAbsTurnRateAvg < 0.095
+                && crazyEnemyScans <= 4
+                && !spinBotEnemy()
+                && !fixedHeadingStopGoEnemy()
+                && !fixedHeadingLineEnemy()
+                && !fixedHeadingMediumShooter()
+                && !highPowerStopGoDodger();
+    }
 
     private boolean spinBotEnemy() {
         return spinEnemyScans > 4
@@ -1424,7 +1476,7 @@ public class MyTank extends AdvancedRobot {
         // of the old "harmless wall target" max-power close-orbit mode.
         return wallEnemyScans > 4 && enemyFireCount > 3 && stopGoEnemyScans <= 12
                 && !highPowerStopGoDodger()
-                && !heavyStopGoShooter() && !mediumStopGoShooter() && !fastWallCruiser();
+                && !heavyStopGoShooter() && !mediumStopGoShooter() && !fastWallCruiser() && !npcSniperEnemy();
     }
 
     private double bestGunError() {
@@ -1526,8 +1578,9 @@ public class MyTank extends AdvancedRobot {
             double drift = limit(-0.80, driftScale * velocity, 0.80);
             return projectClamped(enemyX, enemyY, heading, drift, bulletSpeed, 70);
         }
-        if (gunType == GUN_AVERAGED && !dangerousWallEnemy()
-                && (velociRobotEnemy()
+        if (gunType == GUN_AVERAGED && (!dangerousWallEnemy() || npcSniperEnemy())
+                && (npcSniperEnemy()
+                        || velociRobotEnemy()
                         || ((wallEnemyScans > 4 || (stopGoEnemyScans > 8
                                 && (harmlessLowFireEnemy() || activeStopGoEnemy() || heavyStopGoShooter() || mediumStopGoShooter())))
                             && !(stopGoEnemyScans <= 8 && straightEnemyScans > 12 && harmlessLowFireEnemy()
@@ -1540,7 +1593,11 @@ public class MyTank extends AdvancedRobot {
             // style clean edge runs can need less damping; the exception above and
             // the linear virtual-gun override still let fast straight low-fire runs
             // use fuller prediction when there have not been recent stops.
-            if (mediumStopGoShooter()) {
+            if (npcSniperEnemy()) {
+                // NPCSniper traces prefer a little more velocity carry than old
+                // wallavg, but far less than full averaged/linear prediction.
+                velocity = limit(-2.6, 0.30 * velocity + 0.45 * enemyVelocityAvg, 2.6);
+            } else if (mediumStopGoShooter()) {
                 // Gruffalo's medium-power stop/go pattern usually continues a little
                 // farther than CTBot/Terminator-style wall stutters.  Round-1 replay
                 // showed the old 0.25/0.35 damping under-led it; keep turn damping but
