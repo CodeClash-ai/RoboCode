@@ -347,3 +347,47 @@ See the python snippets in this file's git history / the commands used this roun
   high. If enemy becomes a genuine constant-velocity mover, RAISE the linear
   weight (lower W toward 0.5-0.6); re-run the replay sim to retune W & power.
 - Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 1 / current pass) — opponent = pez__gf1 (FIRST STRONG FOE)
+
+## KEY FINDING: opponent is a strong MOBILE dodger with a GuessFactor gun ("gf1")
+Analyzed /logs/rounds/0 (opponent pez__gf1). This is our first genuinely tough
+opponent. Prior result BEFORE my change: opus-4-8 24924 vs pez__gf1 2574.
+results_0.txt: opus 1027 (96%) vs pez 41 (4%), 10/10 firsts BUT:
+- trace.md: our win rate 90% (226/250), enemy 8%. Our accuracy only 12%,
+  enemy 3%. Avg speed us 5.5, enemy 4.8. We LOSE 19 games.
+- Enemy movement: avg |v|=4.75 (max 8), stopped only 25% of ticks, curves
+  (avg |dh|=0.028 rad/tick). A real orbiter/oscillator — NOT stationary.
+- In losses (e.g. sim_112) we deal only ~37 dmg while taking ~100: enemy's GF
+  gun profiles our steady orbit and out-trades us. Our min energy avg = 32.8.
+
+## Replay-sim results (per-tick interception over recorded enemy paths, 60 sims)
+Tool: /tmp/replay.py (rebuild from README if lost). All aim strategies cap
+~11-13% hit vs this dodger; head-on = 13.0% = BEST (blend0.9 ties it).
+Power sweep: power 3.0 head-on maximizes total damage (56k) — dmg/hit dominates.
+Distance-adaptive power measured WORSE. => GUN LEFT as-is (blend W=0.90 ~= head-on,
+power 3.0). Accuracy is capped by enemy evasion, not our aim; don't over-tune gun.
+
+## CHANGE THIS PASS: MOVEMENT (the real lever vs a GF gun)
+Rewrote doMovement to be less profileable:
+1. Reverse orbit direction 75% of the time whenever we detect enemy FIRED
+   (energy drop 0.09..3.05), min 4 ticks between reversals — classic anti-GF
+   "reverse at wave-fire" dodge, randomized so it's not itself a pattern.
+2. Periodic random reversal (10% chance, >=12 ticks apart) to break steady orbit.
+3. setAhead 100 -> 150 (keep higher lateral speed between reversals).
+4. Range control widened (pull in >500px, push out <300px).
+Rationale: our steady 3.3%/tick direction-change orbit was being learned by the
+GF gun (that's why we lost the trade in losses). More unpredictable lateral
+motion should cut enemy hits and reduce our 19 losses / raise survival energy.
+Compiles Java 8 (major version 52). Backup: /tmp/MyTank.bak.java (also git).
+
+## CAVEAT: cannot verify locally (harness broken per prior notes). This is a
+## reasoned anti-GF movement change. If NEW /logs shows our win rate DROP below
+## 90% or min-energy fall, REVERT to /tmp/MyTank.bak.java (git prior version) —
+## the old movement still wins 90%. If win rate improves, keep tuning reversal
+## probability (0.75) and periodic reversal rate (0.10).
+
+## Replay tool rebuild (analysis) — head-on interception hit-rate per opponent:
+See /tmp/replay.py this pass; core loop: load sim (per-file header maps
+index->name, enemy = non-'opus'), for each tick fire bullet from our recorded
+(x,y) along aim, step at 20-3*power, hit if dist<18 to enemy's recorded future pos.

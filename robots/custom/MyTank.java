@@ -140,6 +140,10 @@ public class MyTank extends AdvancedRobot {
         }
     }
 
+    // Movement oscillation state
+    private long lastReverseTime = 0;
+    private double moveTimer = 0;
+
     private void doMovement() {
         if (!enemyScanned) {
             return;
@@ -147,18 +151,16 @@ public class MyTank extends AdvancedRobot {
 
         // Detect enemy firing: energy drop between 0.1 and 3.0
         double energyDrop = lastEnemyEnergy - enemyEnergy;
-        boolean enemyFired = energyDrop >= 0.09 && energyDrop <= 3.0;
+        boolean enemyFired = energyDrop >= 0.09 && energyDrop <= 3.05;
 
-        // Orbit: move perpendicular to enemy, biased to hold a good range.
         double absBearing = enemyBearing;
-        // Range control: if too far, angle inward to close; if too close, angle
-        // outward to open. Keeps us in the sweet spot (~450px) where our gun is
-        // accurate but we're hard to ram and enemy bullets take longer to arrive.
-        // Target ~400px: replay analysis shows hit rate rises from ~36% at
-        // 500-600px to ~49% at 300-400px, so orbit a bit closer than before.
+
+        // Range control: hold a good orbit distance (~400px) but jitter the
+        // target so a statistical/GF gun can't fix on a constant orbit radius.
         double rangeBias = 0.0;
-        if (enemyDistance > 450) rangeBias = -0.35;      // pull in
-        else if (enemyDistance < 250) rangeBias = 0.50;  // push out
+        if (enemyDistance > 500) rangeBias = -0.40;      // pull in
+        else if (enemyDistance < 300) rangeBias = 0.45;  // push out
+
         double desiredDir = absBearing + (Math.PI / 2 + rangeBias) * moveDirection;
 
         // Wall smoothing: steer away from walls
@@ -167,7 +169,7 @@ public class MyTank extends AdvancedRobot {
         double turn = Utils.normalRelativeAngle(desiredDir - getHeadingRadians());
 
         // If turn is > 90deg, drive backwards instead (smoother)
-        double moveAmount = 100;
+        double moveAmount = 150;
         if (Math.abs(turn) > Math.PI / 2) {
             turn = Utils.normalRelativeAngle(turn + Math.PI);
             moveAmount = -moveAmount;
@@ -176,13 +178,19 @@ public class MyTank extends AdvancedRobot {
         setTurnRightRadians(turn);
         setAhead(moveAmount);
 
-        // Reverse direction periodically or when enemy fires (dodge)
-        if (enemyFired) {
-            if (Math.random() < 0.6) {
+        // --- Unpredictable reversals to defeat GuessFactor / pattern targeting ---
+        // When we detect the enemy fired, jump-dodge: reverse most of the time so
+        // the bullet (aimed at our predicted path) misses.
+        long now = getTime();
+        if (enemyFired && now - lastReverseTime > 4) {
+            if (Math.random() < 0.75) {
                 moveDirection = -moveDirection;
+                lastReverseTime = now;
             }
-        } else if (Math.random() < 0.03) {
+        } else if (now - lastReverseTime > 12 && Math.random() < 0.10) {
+            // Periodic random reversal so steady orbiting doesn't get profiled.
             moveDirection = -moveDirection;
+            lastReverseTime = now;
         }
     }
 
