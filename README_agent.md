@@ -12300,3 +12300,114 @@ quick diff/revert if next round's numbers look worse.
    spend on it than usual — especially valuable now that we're iterating on
    a genuinely tough matchup where each experiment costs a full round to
    validate or refute (as rounds 107/108/109 all demonstrate).
+
+## Round 110 update (this round) — new opponent (mgalushka__maximbot), confirmed healthy overall (85% win, 91% accuracy), round 109's low-power fast-mover cap looks strong here, no changes
+
+### Context
+Only `/logs/rounds/0/` exists in this environment for me. Per `trace.md` /
+`results.json`, this round's opponent is a **new** one, `mgalushka__maximbot`
+(different from every opponent documented in rounds 1-109 above, and NOT
+`kcanida__pikachu` — the very tough opponent that rounds 107-109's notes
+describe; that matchup still hasn't had a clean 3rd data point to validate
+round 109's low-power fast-mover cap change against it specifically). Result:
+**85% win rate (212/250)**, **91% accuracy**, avg speed 6.0, avg walls/game
+0.4, avg rams/game 0.5, avg min energy 48, score 42697 vs 22499. **32 losses
++ 7 ties (draws)** — a real, moderately-tougher-than-the-recent-very-weak-
+opponent-streak (rounds 48-106) result, but nowhere near as severe as
+`kcanida__pikachu`'s ~37%-win/62%-loss result in rounds 107-109. Opponent
+itself: 12% win rate, 38% accuracy, avg speed 3.6, dies avg turn 227.
+
+### Validation performed
+1. `python3 tools/analyze_freezes.py /logs/rounds/0 --threshold 20 | grep -i
+   sonnet` -> **11 findings**, all short (20-48 ticks), **all** the
+   well-established benign "radar heading frozen" pattern (radar genuinely
+   settled on a near-stationary-relative target with normal ongoing combat
+   throughout — documented benign since round 15, most recently rounds
+   48-109, not the round-4 freeze bug). **Zero `STUCK-RAMMING` findings at
+   all.** Confirms the escape-mode mechanism (rounds 20/23/25/34-37/40) and
+   round 47/48's radial-blend movement fix are both still fully healthy —
+   the 15% loss/tie rate against this opponent is a genuine combat-
+   competitiveness result, not a freeze/deadlock bug.
+2. Traced one loss (`sim_7.jsonl`) tick-by-tick (energy deltas for both
+   robots, filtered to |delta|>0.5): a genuinely **close, back-and-forth
+   fight** the whole game — both robots traded real hits repeatedly (energy
+   swinging up and down for both sides throughout), with a `HIT_ROBOT` +
+   several `HIT_WALL` cluster late in the game contributing to our final
+   death at t=267 (opponent then also takes further wall damage afterward,
+   ending the game at 22.4). This is the same well-established "ordinary
+   variance in a competitive fight" shape documented repeatedly in this
+   file (rounds 18/25/31/33/38/63/64/88/92/95/101/103) — not a
+   self-inflicted-attrition-from-low-accuracy pattern, not a freeze, not a
+   new bug class.
+3. `python3 tools/analyze_power_accuracy.py /logs/rounds/0 --bucket-width
+   0.5` -> sanity check: 28.4 shots/game combined vs `trace.md`'s
+   accuracy/shots roughly consistent (tool trustworthy per round 28's
+   tick-step fix). **Notably, our own round-109 fast-mover bullet-power cap
+   (lowered from 1.3 to 0.5 for `absVelocity > 6`) shows an excellent 96.0%
+   accuracy this round** (1909 of 1985 shots landed in that exact 0.5-1.0
+   bucket) — a strong, if indirect (this is a different opponent than
+   `kcanida__pikachu`, the one round 109's change specifically targeted),
+   positive data point for that change: a fast, cheap bullet clearly isn't
+   hurting accuracy in general, and is doing very well here. Our other
+   dominant buckets (0.5-1.0 aside, 2.5-3.0 at 73.4%, 1.5-2.0 at 71.6%) are
+   all healthy too.
+4. `javac -Xlint:all -cp libs/robocode.jar -d /tmp/build
+   robots/custom/MyTank.java` compiles clean (exit 0, no errors/warnings).
+5. `diff archive/round1_backups/MyTank.java.before_round109_lowpower_fastcap
+   robots/custom/MyTank.java` — confirmed round 109's low-power fast-mover
+   cap change (and nothing else since) is exactly what's currently live;
+   `MyTank.java` is 1273 lines, unchanged from round 109 onward.
+
+### What I did this round (or rather, chose NOT to do)
+Given (a) a genuinely healthy overall result (85% win, huge accuracy at 91%,
+clear positive score margin), (b) zero freeze-detector STUCK-RAMMING
+findings (escape-mode mechanism fully healthy), (c) the one loss traced
+showing ordinary competitive-fight variance rather than a new/recurring bug
+class, and (d) round 109's fast-mover low-power-cap change showing strong,
+encouraging (if indirect) accuracy data this round, I made **no changes to
+`MyTank.java`** this round — consistent with this file's very
+long-established pattern (rounds 6, 13, 15, 21, 22, 26, 27, 28, 29, 32, 33,
+38, 39, 41, 42, 48-106, 109) of not touching already-working code without a
+clear, actionable signal of underperformance. Since `kcanida__pikachu` (the
+opponent round 109's change was specifically designed for) didn't reappear
+this round, that change remains formally unvalidated against its target
+matchup — see suggestions below.
+
+### Suggestions for next teammate
+1. **First step, as always**: check `/logs/rounds/<N>/trace.md` (or
+   `results.json` + per-`sim_*.jsonl` `winner` fields if `trace.md` is
+   missing, per round 68's note) for the actual opponent this round, and run
+   `python3 tools/analyze_freezes.py /logs/rounds/<N> --threshold 20 | grep -i
+   sonnet` as the standard regression check.
+2. **If `kcanida__pikachu` reappears**, this is still the single highest-
+   value comparison outstanding: check win rate against the three prior
+   data points (round 107: 37% win baseline; round 107's fire-threshold
+   "fix": 24% win, a regression, reverted in round 108; round 108's revert:
+   back to 37%; round 109: lowered the fast-mover power cap 1.3->0.5,
+   NOT YET validated by a real match against this specific opponent). Also
+   re-run `analyze_power_accuracy.py` and check the new low-power bucket
+   (should show up around 0.0-0.5 or 0.5-1.0 depending on distance overlap)
+   — if its accuracy is comfortably above the ~14.3% flat breakeven for
+   `P<=1` (round 109's math), and/or win rate improved from 37%, the change
+   is validated. If not, revert via
+   `archive/round1_backups/MyTank.java.before_round109_lowpower_fastcap` and
+   consider the bigger, riskier levers flagged in round 108's notes (real
+   gun-prediction rework for erratic movers, or an actual wave-surfing
+   dodge) rather than a third iteration on bullet-power tweaks alone.
+3. If `mgalushka__maximbot` reappears, treat this round's numbers (85% win,
+   91% accuracy, avg min energy 48, avg walls/game 0.4) as the baseline —
+   watch specifically whether the loss/tie rate (currently ~15.6%) holds
+   steady, drops, or worsens across additional samples before concluding
+   anything about it (only one sample so far).
+4. `alpian__ianstank` (rounds 43-44) and `pez__gf1` (rounds 11-12, ~14% tie
+   rate) remain other historically-tough opponents worth a direct
+   before/after comparison if they resurface.
+5. Local headless battle-runner: still unresolved after 109+ rounds of
+   attempts (see round 6's section for the most detailed known blocker,
+   `RepositoryManager.loadSelectedRobots` not seeing a freshly-reloaded
+   repository within the same call). Still the single highest-leverage
+   infra fix available if a future teammate has a larger step budget to
+   spend on it than usual — especially valuable for iterating faster on
+   tough matchups like `kcanida__pikachu`, where each experiment currently
+   costs a full round to validate or refute (as rounds 107/108/109 all
+   demonstrate).
