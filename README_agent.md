@@ -5446,3 +5446,52 @@ Enemy hit density vs OUR hit density by distance (150 sims, from the OLD W=0.0 g
   walks into head-on bullets). Test carefully — movement changes are high-risk.
 - Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING.
 - Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 2 / current pass) — opponent = miradoconsulting__roleksii
+
+## STATUS: R1's W=0.5 gun change WORKED BIG (52 losses -> 16, enemy 17275 -> 12069).
+## THIS pass: lowered dodge-on-fire 0.30 -> 0.12 (HEAD-ON gun -> reversing is counterproductive).
+Opponent = miradoconsulting__roleksii (MODERATE near-straight mover, movefrac 0.63,
+avgV 3.41, avg|dh| 0.011, engages ~312px, with a HEAD-ON gun). INDEX both rounds
+i=0=roleksii, i=1=opus. Cross-round MATCH results (results.json winner = opus both):
+- R0 (W=0.0 full-lead leftover from smallpoet): opus 28648 vs 17275 (63% share).
+  52 losses/250 (net-energy-negative firing at head-on-gun mover).
+- R1 (prior teammate: gun aim W=0.0 -> W=0.5 HALF LEAD): opus 34567 vs 12069
+  (74% share). results_0.txt 1423 (75%), 10/10 firsts. Full 250-sim sweep:
+  16 LOSSES (down from 52!), 12 close, ourFE mean 65.0, killtick 302.8. The W=0.5
+  half-lead is confirmed optimal for this moderate near-straight HEAD-ON-gun mover.
+
+## THE 16 losses: energy-war VARIANCE (losses at 340px behind-on-energy 70pct of
+## ticks, vs wins 308px behind 9pct). Not a gun problem -- W=0.5 is confirmed best.
+
+## KEY MEASUREMENT (unbiased): enemy gun is HEAD-ON + reversing correlates with MORE hits
+- Enemy gun offset when firing: median 0.042-0.043 rad on BOTH 80-game slices
+  (aims at our CURRENT position = HEAD-ON gun, NOT a lead gun).
+- Reversal-vs-hit correlation (150 R1 games): WITH a recent (<=5 tick) reversal we
+  get hit 9.62/1k vs 6.32/1k WITHOUT (+52pct). Reversing on a head-on gun walks us
+  BACK toward the bullet path (aimed at our old pos) AND kills lateral velocity
+  (the thing that beats a head-on gun). Same mechanism the README documents winning
+  vs pikachu (offset 0.081) and dominatorx (offset 0.018).
+
+## CHANGE THIS PASS (movement only): dodge-on-fire 0.30 -> 0.12 (rate-limit 8 -> 10)
+The 0.30 was a LEAD-gun value (robrrrat/wallspoet leftover) -- WRONG for a head-on
+gun. Lowered to 0.12 (matches the pikachu/dominatorx head-on-gun WINS). Kept the
+rare uncorrelated reversal (0.05 / >=14 ticks) so we don't become a fixed pattern.
+Gun aim W=0.5 (confirmed optimal), power tiers, orbit (~270-290px), enemyPassive
+mode ALL UNCHANGED. Only ONE functional line changed (line 731). Backup of R1
+source: /tmp/MyTank.bak.java. Compiles Java 8 (major version 52), rc=0.
+
+## For next teammate — VERIFY
+- Want NEW /logs: the 16 losses REDUCED, enemy hit density on us DOWN, ourFE mean
+  UP from 65, share UP from 74pct, enemy score DOWN from 12069. If it REGRESSED
+  (new losses / share drop -- possible: movement/dodge changes have historically
+  backfired, e.g. wallspoet conservation LOST, wallspoet/juggernaut dodge-UP
+  REGRESSED), REVERT to /tmp/MyTank.bak.java (git prior = R1 config, W=0.5, dodge
+  0.30, 16 losses / 74pct WIN). NOTE: this is a dodge-DOWN change (the WINNING
+  direction vs head-on guns per pikachu/dominatorx), unlike the dodge-UP changes
+  that regressed -- so it should be safe, but verify.
+- roleksii is a MODERATE near-straight HEAD-ON-gun mover -> KEEP W=0.5 half-lead
+  + LOW dodge (0.12). If it becomes a LEAD gun (offset >0.3 rad), raise dodge back
+  to 0.30; if a HEAVY spinner (avg|dh|>0.06), set W=0.0 (circular). Always re-check
+  `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING first.
+- Keep MyTank class name + Java-8 bytecode (only hard requirement).
