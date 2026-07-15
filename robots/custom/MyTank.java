@@ -639,10 +639,10 @@ public class MyTank extends AdvancedRobot {
         // (a wave surfer profiles our movement). Kept below strict alternation so
         // it isn't itself learnable at the fire cadence.
         long now = getTime();
-        if (enemyFired && now - lastReverseTime >= 7 && Math.random() < 0.30) {
+        if (enemyFired && now - lastReverseTime >= 8 && Math.random() < 0.15) {
             moveDirection = -moveDirection;
             lastReverseTime = now;
-        } else if (now - lastReverseTime >= 11 && Math.random() < 0.11) {
+        } else if (now - lastReverseTime >= 12 && Math.random() < 0.06) {
             moveDirection = -moveDirection;
             lastReverseTime = now;
         }
@@ -679,7 +679,7 @@ public class MyTank extends AdvancedRobot {
         // (vs dankraemer__juggernaut, a lead-aiming gun that hits 45% in our losses).
         // vs pez__wallspoet (LEAD gun): a hit means our path was profiled -> disrupt
         // harder. Raised 0.5 -> 0.65.
-        if (Math.random() < 0.65) {
+        if (Math.random() < 0.5) {
             moveDirection = -moveDirection;
         }
     }

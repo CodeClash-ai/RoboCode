@@ -4325,3 +4325,47 @@ enemyPassive mode ALL UNCHANGED. Compiles Java 8 (major version 52). Backup:
   harness broken (can't validate) -> trust /logs only. That's the real untapped lever.
 - Opponent is FIXED = pez__wallspoet. Always re-check `head -1 /logs/rounds/0/sim_0.jsonl`.
 - Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 4 / current pass) — opponent = pez__wallspoet — REVERTED R3 DODGE REGRESSION
+
+## CRITICAL: R3's higher-dodge change LOST the match — reverted to R2 (winning) config
+Opponent still = pez__wallspoet (LEAD-gun ACTIVE WAVE SURFER). Cross-round MATCH
+results (results.json winner — decisive):
+- R0 (aggressive gun, power 3.0/<400 2.0/<500, dodge 0.15/0.06/0.5): WON 26470 vs
+  19617 (biggest margin +6853; 161 firsts).
+- R1 (CONSERVATION power 2.0/1.2/0.6, hold-fire >450px, W=0.5): LOST 23183 vs
+  23824 (under-fired -> conceded bullet dmg despite 164 firsts).
+- R2 (reverted aggressive + 400-500px power bump 2.0->2.5): WON 25436 vs 21164
+  (+4272; 152 firsts).
+- R3 (prior teammate RAISED dodge-on-fire 0.15->0.30, random reversal 0.06->0.11,
+  onHitByBullet 0.5->0.65): LOST 23973 vs 24141. firsts CRASHED 152->129 (enemy
+  100->122). The "reverse more vs its lead gun" theory BACKFIRED — reversing kills
+  our lateral speed / became learnable, so we got hit MORE and lost survival (our
+  biggest score component). One battle showed us at only 25% (1/10 firsts).
+
+## THIS PASS: reverted the 3 dodge params to R2 values (code-verified identical to R2)
+- dodge-on-fire 0.30 -> 0.15 (rate-limit 7 -> 8)
+- uncorrelated random reversal 0.11 -> 0.06 (rate-limit 11 -> 12)
+- onHitByBullet reversal 0.65 -> 0.5
+Verified `diff` (ignoring comments) of MyTank.java vs git 4e7a778 (R2 winning
+commit) = IDENTICAL. Gun (W=1.0 head-on), power tiers (3.0/<400 2.5/<500 0.8/<580
+0.3/else), orbit ~370px, fire gates, enemyPassive mode ALL unchanged.
+Compiles Java 8 (major version 52). rc=0. R3 (bad) backup at /tmp/r3_backup.java.
+
+## KEY LESSON (reinforces the whole README): movement/dodge changes REPEATEDLY backfire
+R3 (dodge up) LOST, just like R1 (conservation) LOST and the earlier juggernaut
+R1 (dodge up 0.45->0.70) REGRESSED 15->26 losses. Vs this wave surfer the proven
+winning play is the R0/R2 AGGRESSIVE gun (out-fire it on bullet damage) with the
+R2 dodge params (0.15). Do NOT raise dodge, do NOT conserve. Both lose the match.
+
+## For next teammate
+- Opponent is FIXED = pez__wallspoet (all rounds). We WIN with the R2 config (now
+  restored). If a future pass wants MORE margin, the ONLY safe lever tried so far
+  is bullet-damage aggression (R0->R2 power bump was neutral-to-positive). Do NOT
+  touch movement/dodge (R3 proved it LOSES). Do NOT conserve (R1 proved it LOSES).
+- The only robust way to truly BEAT (not just out-trade) a wave surfer is WAVE
+  SURFING our own movement — high-risk, local harness broken (trust /logs only).
+  If attempted, validate carefully and be ready to revert to the R2 config.
+- Verify NEW /logs: want winner=opus-4-8, ~55% share like R2, firsts ~152.
+- Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING.
+- Keep MyTank class name + Java-8 bytecode (only hard requirement).
