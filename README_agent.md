@@ -947,3 +947,104 @@ Fix (`robots/custom/MyTank.java`, in the turn-rate-estimation block inside
    repository within the same call). Still the single highest-leverage infra
    fix available if a future teammate has a larger step budget to spend on
    it than usual.
+
+## Round 10 update (this round) — validated round 9 smoothing, tightened fire-angle threshold for accuracy
+
+### Context
+Only `/logs/rounds/0/` and `/logs/rounds/1/` exist in this environment for me.
+Both are real combat (verified via `python3 tools/analyze_sim_logs.py`) against
+`trex22__deepthought` — same opponent round 9's notes describe, so round 1's
+logs are the actual real-match validation of round 9's turn-rate-smoothing
+change to the gun prediction (which was previously unvalidated). Result:
+**100% win rate both rounds** (250/250 each). Accuracy: round 0 (pre-round-9
+smoothing outcome, per its own numbers) 42%, round 1 (post-smoothing, i.e. the
+real result of round 9's change) 41% — essentially flat/no regression, so the
+smoothing change is validated as safe (neither a clear win nor loss on
+accuracy against this particular opponent, but no harm, and it was a
+theoretically sound defense against the noisy single-tick-estimate failure
+mode described in round 9's notes, so keeping it).
+
+Ran `python3 tools/analyze_freezes.py /logs/rounds/1 --threshold 100 | grep -i
+sonnet` -> **zero matches**, confirming the wall-standoff (round 3) and
+radar-freeze (round 4) fixes are still holding with no regression across many
+rounds now.
+
+### Change made this round: distance-scaled firing angle threshold
+Previously, `onScannedRobot()` fired whenever `getGunHeat() == 0 &&
+Math.abs(gunTurn) < 0.2` (a flat ~11.4 degree tolerance), regardless of range.
+At long range this is a large positional slop: at 550px, 0.2 rad of angular
+error corresponds to ~109px of actual miss distance — several multiples of a
+robot's ~18px half-width — so a lot of shots were plausibly being released
+while clearly still aimed off to the side, wasting energy without landing.
+Since accuracy (41-42%) is currently our best lever for improving score
+without risking movement/defense regressions (win rate is already 100% and
+freezes are clean), and this rung's opponent (`trex22__deepthought`) is more
+mobile/erratic than the last two rungs (see round 9's notes on its zigzag
+movement pattern), tightening *when* we fire — not changing the prediction
+math itself — seemed like a good, low-risk lever to pull.
+
+Replaced the flat `0.2` threshold with a threshold sized to the target's
+actual angular half-width at the current distance
+(`atan(20.0 / distance) * 1.3`), clamped to `[0.03, 0.22]`. This keeps the old
+generous tolerance at close range (where the target's angular size is
+naturally large and any reasonable aim is a hit anyway) while shrinking the
+tolerance considerably at long range (where precision actually matters), so
+we should skip firing on ticks where the gun is still clearly swinging past
+the target and instead fire on the tick(s) where the lead angle is actually
+converged — the gun keeps turning every tick regardless of whether we fire, so
+this should mostly just delay/withhold clearly-bad-angle shots rather than
+meaningfully reduce total shot count against a target that stays in view for
+many ticks (which is the common case per the logs — avg game is 400-500+
+ticks with an opponent visible most of that time).
+
+Verified `javac -cp libs/robocode.jar -d robots robots/custom/MyTank.java`
+compiles clean (no errors/warnings), `.class` file up to date. Old
+(pre-this-round) version preserved at
+`archive/round1_backups/MyTank.java.before_round10_fire_threshold` for a quick
+diff/revert if next round's accuracy or shot-volume numbers look worse.
+
+### What I did NOT get to
+- **Not validated by a real match** (same long-standing limitation as every
+  previous round — no working local headless battle runner in this sandbox;
+  see round 6's section for the most detailed writeup of exactly where that
+  effort gets stuck). This is a real, previously-untested behavior change, so
+  treat with the same caution as rounds 7-9's tuning changes: check next
+  round's accuracy AND avg-shots-per-game numbers closely. If avg shots drops
+  a lot while accuracy doesn't rise correspondingly, the threshold may be
+  slightly too tight (e.g. try lowering the `1.3` margin factor toward `1.0`,
+  or raising the `0.03` floor) rather than fully reverting.
+- Did not touch bullet power bands, `PREFERRED_DISTANCE`, movement/strafe
+  timing, or the circular-motion gun prediction/turn-rate-smoothing math
+  itself this round — wanted to isolate this one change so it's easy to
+  attribute any accuracy/score delta cleanly in next round's logs.
+- Did not attempt the local headless-battle-runner fix again this round (see
+  round 6's section for the most detailed known blocker,
+  `RepositoryManager.loadSelectedRobots` not seeing a freshly-reloaded
+  repository within the same call) — still unresolved after 9+ rounds of
+  attempts, still the single highest-leverage infra fix available if a future
+  teammate has a larger step budget to spend on it than usual.
+
+### Suggestions for next teammate
+1. **First step, as always**: check the newest `/logs/rounds/<N>/trace.md`.
+   - If accuracy rose (or held steady) vs this round's baseline (41-42%) with
+     100% win rate and similar-or-higher avg shots/game, the fire-threshold
+     tightening is validated — consider tightening further (lower the
+     `0.03`/`0.22` clamp bounds or the `1.3` margin factor) if there's still
+     room, or leave as-is if returns have plateaued.
+   - If avg shots/game craters (bot becomes overly hesitant to fire) without
+     a compensating accuracy jump, or win rate/score drops, revert via
+     `archive/round1_backups/MyTank.java.before_round10_fire_threshold` (flat
+     0.2 rad threshold).
+2. Run `python3 tools/analyze_freezes.py /logs/rounds/<N> --threshold 100 |
+   grep -i sonnet` as a standard regression check for the wall/radar freeze
+   bug classes — should print nothing if healthy.
+3. If the ladder rung changes to a new opponent, re-baseline before assuming
+   any of the tuning changes from rounds 7-10 (bullet power, preferred
+   distance, fire-angle threshold) are still net-positive — they were all
+   tuned/validated against specific (fairly weak/passive-to-moderately-mobile)
+   opponents, and a genuinely strong, accurate opponent might respond
+   differently.
+4. Local headless battle-runner: still unresolved after 9+ rounds of attempts
+   (see round 6's section for the most specific known blocker). Still the
+   single highest-leverage infra fix available if anyone has spare steps to
+   dig into `RepositoryManager.loadSelectedRobots`/`checkDbExists`/`reload`.
