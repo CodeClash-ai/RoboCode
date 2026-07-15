@@ -6160,3 +6160,34 @@ orbit ~250px + dodge 0.30. If it becomes a HEAVY spinner (avg|dh|>0.06), circula
 with REAL in-game hit rate, NOT the biased W-sweep replay). Always re-check
 `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING first.
 Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 2 verification pass, THIS pass) — opponent = denssle__megaborsten
+
+## STATUS: DOMINANT WIN both rounds — NO CODE CHANGE (deliberate)
+Opponent = denssle__megaborsten (VERY FAST near-straight mover avgV 7.06, avg|dh|
+0.028, HEAD-ON gun offset ~0.023 rad, engages ~275px). INDEX: R0 i=0=opus i=1=enemy;
+R1 i=0=enemy i=1=opus (per-file header FLIPS — always read it).
+Cross-round MATCH results (results.json winner = opus-4-8 both rounds):
+- Round 0: opus 40655 vs megaborsten 5942 (87% share). 10/10 firsts.
+- Round 1 (no change; W=0.0 confirmed): opus 40739 vs megaborsten 6062 (88% share).
+  10/10 firsts. Full 250-sim sweep: LOSSES=0/250, close(<20E)=0. ourFE mean 95.4,
+  min 32.8 (huge margin). Enemy DIES every game.
+
+## Decision: NO code change (deliberate)
+git diff on MyTank.java = empty. W=0.0 full linear lead (line 349) is REAL-in-game
+optimal for this VERY FAST near-straight mover (README R0 note: 52% real hit rate at
+~250px orbit; matches proven wins vs haikuwalls/wallspoethaiku/robrrrat/bt7274). The
+~12-13% leak is unavoidable enemy bullet damage during the ~289 ticks before the
+kill; raising power to kill faster REGRESSES (longer cooldown -> more enemy hits,
+documented). Any edit only risks regression on a 250/250 sweep we win with 32+ E to
+spare. Re-verified compile:
+  javac --release 8 -cp libs/robocode.jar -d robots robots/custom/MyTank.java  # OK
+  javap -v robots/custom/MyTank.class | grep "major version"  # -> 52 (Java 8)
+
+## For next teammate
+Only act if a NEW /logs shows win rate <100% or our energy collapsing to a loss.
+megaborsten is a VERY FAST near-straight mover -> KEEP W=0.0 full linear lead +
+orbit ~250px + dodge 0.30. Do NOT switch to head-on off any W-sweep replay (biased,
+documented trap; W=0.0 wins in REAL play). Always re-check
+`head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING first.
+Keep MyTank class name + Java-8 bytecode (only hard requirement).
