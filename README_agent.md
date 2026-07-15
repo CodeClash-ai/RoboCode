@@ -3792,3 +3792,47 @@ The fire gate makes it IMPOSSIBLE to lose by self-inflicted bleed.
 - Analysis: hit-rate-by-distance one-liner (match OUR energy drops 0.09..3.05 in
   t<450 to enemy energy drops >0.9 within 2-30 ticks, bucket by dist at fire time).
 - Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 4 verification pass, THIS pass) — opponent = admiralrasmussen__wavesurfing — THE POINT-BLANK REWRITE FLIPPED THE MATCH
+
+## STATUS: WE FLIPPED A 0/10 LOSS INTO A CRUSHING 10/10 WIN — NO CODE CHANGE
+The round-3 point-blank-charge rewrite (charge to ~90px, HOLD FIRE outside 150px,
+cheap point-blank shots inside) WORKED DECISIVELY:
+- R0/R1/R2 (before/partial fixes): LOST every match (opus 2125/2501/4508 vs enemy
+  15005/14926/10989, 0-1 firsts).
+- R3 (point-blank rewrite): WON — opus 44411 vs wavesurfing 376. results_*.txt:
+  opus_4_8.MyTank ~1780 (99-100%), 10/10 FIRSTS in EVERY 10-round battle.
+- Full 250-sim sweep R3: LOSSES = 0/250, close(<20E) = 0/250. Our final energy
+  min/mean = 95.4/124.7 (ENORMOUS margin). Enemy DIES every game (finalE 0.0).
+
+## WHY IT WORKS (mechanic recap)
+Enemy = non-firing wave surfer: fires ZERO bullets, never rams -> deals us 0 damage.
+Old code fired at range (2% hit vs a perfect dodger) and self-inflicted the losing
+1-energy deficit in the inactivity drain. The rewrite CHARGES to point-blank (~90px)
+where ramming is free (enemy=0 damage) and our shots hit ~100%; it HOLDS FIRE
+outside 150px (net-negative zone) so we can NEVER bleed to death. Result: we crush
+it on bullet+ram damage AND survive to win the last-survivor race. See the detailed
+Round-3 note above for the exact fire gates / rangeBias values (lines ~349-410 fire
+gate, ~506-511 movement).
+
+## Enemy still confirmed the passive fast surfer (R3 sim_0): avg|v| 4.91, movefrac
+## 0.76, deals us 0 damage. enemyPassive = (t>40 && damageTaken<5.0) triggers
+## correctly. If it EVER starts dealing >=5 damage, enemyPassive auto-disables and
+## the normal gun (W=0.75)/orbit take over -> SAFE vs a firing opponent.
+
+## Decision this pass: NO code change (deliberate)
+Source is IDENTICAL to the round-3 winning commit 4b40324 (git diff HEAD on
+MyTank.java = empty). Any edit only risks regression on a 250/250 sweep we win
+with 95+ E to spare. Re-verified compile:
+  javac --release 8 -cp libs/robocode.jar -d robots robots/custom/MyTank.java  # OK
+  javap -v robots/custom/MyTank.class | grep "major version"  # -> 52 (Java 8)
+
+## For next teammate
+Only act if a NEW /logs shows win rate <100% or the enemy starting to deal damage
+(check damageTaken / enemy bullets in the air). wavesurfing is a PASSIVE non-firing
+surfer -> KEEP the point-blank-charge + hold-fire-outside-150px conservation mode.
+Do NOT re-enable long-range firing vs it (that's what lost us the match originally).
+Mean killtick is ~606 (long games) — that's FINE (enemy does 0 damage, we win on
+survival+bonuses regardless; faster kills would risk the strategy). Always re-check
+`head -1 /logs/rounds/0/sim_0.jsonl` for opponent name + INDEX MAPPING first.
+Keep MyTank class name + Java-8 bytecode (only hard requirement).
