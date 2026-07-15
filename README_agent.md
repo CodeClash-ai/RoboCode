@@ -4513,3 +4513,57 @@ Compiles Java 8 (major version 52). Backup: /tmp/MyTank.bak.java (= round-0 losi
   orbit, LOW reversals, avoid walls. Re-check `head -1 /logs/rounds/0/sim_0.jsonl`
   for opponent + INDEX MAPPING (round 0: i=0=opus, i=1=pikachu). Keep MyTank +
   Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 2 verification pass, THIS pass) — opponent = kcanida__pikachu
+
+## STATUS: THE ROUND-1 MOVEMENT REWRITE FLIPPED A LOSS INTO A DOMINANT WIN — NO CODE CHANGE
+Opponent = kcanida__pikachu (FAST HEAVY spinner, avg|dh|~0.149, with a HEAD-ON gun).
+Cross-round MATCH results (results.json winner = decisive):
+- R0 (old aggressive close-orbit + wall-hugging config): LOST — opus 18621 vs
+  pikachu 20472. We won bullet dmg 2.6x but LOST survival (100 vs 400) — died first
+  (wall-hugged 30% of ticks = trivial for its head-on gun).
+- R1 (prior teammate: gentler orbit toward ~450-500px, wall-stick 140->160 to cut
+  wall-hug, LOW reversals for a head-on gun, W=0.5): WON — opus 39345 vs pikachu
+  9172 (84% share). results_0.txt: opus 1530 (84%), 9/10 firsts. We win ALL 25
+  battles (opus 1st place, 77-84% share each). Full 250-sim sweep: 30 losses (down
+  from ~103/120 in R0), close(<20E) 126, ourFE mean 22, enemy killed 216/250.
+
+## Slugfest analysis (round-1 250 sims) — we WIN the exchange at EVERY distance
+Enemy hit density on us vs OUR hit density on enemy by distance (hits/1k):
+  0-100px:   enemy 72.9,  us 96.6   (our best relative edge; rarely reached)
+  100-200px: enemy 107.1, us 117.1
+  200-300px: enemy 136.5, us 142.6  (most ticks here; avg engagement ~273px)
+  300-400px: enemy 142.8, us 150.9
+  400-500px: enemy 125.5, us 142.1
+  500-600px: enemy 76.6,  us 102.9  (only ~3800 ticks — hard to reach vs a spinner)
+OUR hit density > enemy's at EVERY bucket -> we win the mutual slugfest everywhere.
+Both densities RISE with mid-range (that's where both fire most). The 30 survival
+losses are VARIANCE in a long mutual slugfest (mean 1116 turns, killtick 942) that
+we win overall on bullet damage + survival + firsts. NOT a positional bug.
+NOTE: the code TARGETS ~500px orbit but ACHIEVES only ~273px avg (it's a mutual
+orbit vs a heavy spinner — we can't force distance open). That's FINE; we win.
+Wall-hug is now only 2.3% of ticks (the key R1 fix that flipped survival).
+
+## Decision: NO code change (deliberate)
+Source is IDENTICAL to the round-1 winning commit bb7d76a (git diff on
+MyTank.java = empty; only .class recompiled). Considered pushing orbit harder or
+tweaking dodge, but REJECTED: (a) we win ALL 25 battles at 84% share — this is a
+strong stable win; (b) the README documents movement/dodge/aim changes REPEATEDLY
+backfiring (R1 conservation LOST wallspoet, R3 dodge-up LOST wallspoet, juggernaut
+dodge-up REGRESSED, dominatorx); (c) we JUST flipped this exact matchup from a
+LOSS to a big WIN — any edit only risks re-losing a 250-game sweep. The proven
+play vs a fast heavy spinner with a HEAD-ON gun: steady full-speed tangential
+orbit, LOW reversals (reversing kills lateral speed + walks into head-on bullets),
+avoid walls. That's the current config. Re-verified compile:
+  javac --release 8 -cp libs/robocode.jar -d robots robots/custom/MyTank.java  # OK
+  javap -v robots/custom/MyTank.class | grep "major version"  # -> 52 (Java 8)
+
+## For next teammate
+Only act if a NEW /logs shows the MATCH lost (winner=kcanida__pikachu) or battles
+won dropping below ~20/25. pikachu is a FAST HEAVY spinner with a HEAD-ON gun ->
+KEEP steady low-reversal orbit + avoid walls + W=0.5. Do NOT raise dodge (head-on
+gun -> reversing is counterproductive, documented vs dominatorx). Do NOT conserve
+energy / lower power (we win bullet dmg; conserving LOST vs wallspoet). The only
+robust further lever is WAVE SURFING (high-risk, local harness broken -> trust
+/logs only). Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for opponent +
+INDEX MAPPING first (R0/R1: i=0=opus, i=1=pikachu). Keep MyTank + Java-8 bytecode.
