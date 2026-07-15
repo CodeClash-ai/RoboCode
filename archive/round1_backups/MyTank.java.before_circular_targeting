@@ -55,15 +55,6 @@ public class MyTank extends AdvancedRobot {
     // even in ticks where we don't get a fresh scan.
     private double enemyDistance = Double.MAX_VALUE;
 
-    // Previous scan's enemy heading/time, used to estimate the enemy's turn rate
-    // (radians/tick) so gun prediction can account for a curving/orbiting enemy,
-    // not just one that flies in a straight line. Reset whenever we haven't seen
-    // the enemy in a while (radar re-acquire after loss of lock), since a stale
-    // turn-rate estimate across a scan gap could be wildly wrong.
-    private double prevEnemyHeading = 0;
-    private long prevEnemyScanTime = -1;
-    private double enemyHeadingRate = 0;
-
     // Turn number when we last saw an enemy; used to trigger fallback "search"
     // movement if we haven't scanned anyone for a while (e.g. radar temporarily
     // lost lock, or enemy is outside our current sweep). Prevents us from being
@@ -146,29 +137,9 @@ public class MyTank extends AdvancedRobot {
         double bulletPower = bulletPowerForDistance(e.getDistance());
         double bulletSpeed = 20 - 3 * bulletPower;
 
-        // Predict enemy future position via tick-by-tick simulation, accounting for
-        // both current velocity/heading AND the enemy's estimated turn rate
-        // (enemyHeadingRate, radians/tick) -- i.e. approximate circular targeting.
-        // This degrades gracefully to plain linear prediction when the enemy is
-        // going straight (enemyHeadingRate ~= 0), but tracks curving/orbiting
-        // enemies (e.g. bots doing their own perpendicular strafing, same as ours)
-        // much better than assuming a fixed heading the whole way.
+        // Predict enemy future position assuming constant velocity/heading.
         double enemyHeading = e.getHeadingRadians();
         double enemyVelocity = e.getVelocity();
-
-        // Estimate the enemy's turn rate from the change in heading since our last
-        // scan of them. Guard against huge/garbage deltas across a scan gap (e.g.
-        // after briefly losing radar lock) by only trusting recent, single/short-gap
-        // scans; otherwise assume 0 (straight-line fallback).
-        long scanGap = (prevEnemyScanTime >= 0) ? (getTime() - prevEnemyScanTime) : -1;
-        if (scanGap > 0 && scanGap <= 3) {
-            enemyHeadingRate = robocode.util.Utils.normalRelativeAngle(
-                    enemyHeading - prevEnemyHeading) / scanGap;
-        } else {
-            enemyHeadingRate = 0;
-        }
-        prevEnemyHeading = enemyHeading;
-        prevEnemyScanTime = getTime();
 
         double myX = getX();
         double myY = getY();
@@ -177,25 +148,13 @@ public class MyTank extends AdvancedRobot {
 
         double predictedX = enemyX;
         double predictedY = enemyY;
-        double simHeading = enemyHeading;
-        double fieldW = getBattleFieldWidth();
-        double fieldH = getBattleFieldHeight();
-        // Simulate forward tick-by-tick until the bullet would have caught up to the
-        // predicted position (bounded loop so we can't spin forever if something
-        // goes numerically weird, e.g. bulletSpeed ~ 0).
-        for (int i = 0; i < 60; i++) {
-            double distSoFar = Point2D.distance(myX, myY, predictedX, predictedY);
-            double bulletTimeSoFar = distSoFar / bulletSpeed;
-            if (bulletTimeSoFar <= i) {
-                break;
-            }
-            simHeading += enemyHeadingRate;
-            predictedX += Math.sin(simHeading) * enemyVelocity;
-            predictedY += Math.cos(simHeading) * enemyVelocity;
-            // Keep the simulated enemy inside the field (a real enemy can't walk
-            // through walls either), so we don't aim at an impossible point.
-            predictedX = Math.min(Math.max(predictedX, 18), fieldW - 18);
-            predictedY = Math.min(Math.max(predictedY, 18), fieldH - 18);
+        double t = 0;
+        // Iteratively refine time-to-target using predicted position.
+        for (int i = 0; i < 5; i++) {
+            double dist = Point2D.distance(myX, myY, predictedX, predictedY);
+            t = dist / bulletSpeed;
+            predictedX = enemyX + Math.sin(enemyHeading) * enemyVelocity * t;
+            predictedY = enemyY + Math.cos(enemyHeading) * enemyVelocity * t;
         }
 
         // Clamp predicted position to inside the battlefield so we don't aim off-field.

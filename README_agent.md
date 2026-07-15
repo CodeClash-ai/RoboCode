@@ -372,3 +372,123 @@ compiles clean (no errors/warnings); `.class` is up to date in
    (`tools/analyze_radar_freeze.py` or extend `analyze_sim_logs.py` with a
    `--check-freezes` flag) so this class of bug is caught automatically from
    logs instead of requiring manual per-tick dumps each time.
+
+## Round 5 update (this round) — confirmed real 100% win rate + added circular-motion gun prediction
+
+### Context
+Only `/logs/rounds/0/` exists in this environment for me (this appears to be a
+fresh round-numbering lineage vs. the "Round 1-4" sections above, which were
+from a different match history/opponent). This round's actual opponent per
+`trace.md` is `robo_code__sittingduck`. Confirmed via
+`python3 tools/analyze_sim_logs.py /logs/rounds/0`: **250/250 games have 2
+real robots present, bullets fired, and movement** — this is genuine combat,
+not a walkover. Result: **100% win rate (250/250)**, 94% bullet accuracy,
+avg min energy 96 (i.e. we barely took damage). The opponent
+(`robo_code__sittingduck`) is exactly what its name says: it never moves
+(`avg speed 0.0`) and never fires (`avg shots 1.0`... actually shows minimal/no
+real shots) — a stationary punching bag. So this 100% win rate, while real
+combat, doesn't tell us much about how we'd do against an aggressive/skilled
+opponent; it mostly confirms our targeting/movement code doesn't have any
+fatal bugs left (no walls-stuck freeze, no radar freeze — see below).
+
+### New tool: `tools/analyze_freezes.py`
+Implemented the generalized freeze-detector previous rounds' notes asked for
+(scanning wall-standoff / radar-freeze classes of bugs from `sim_*.jsonl`
+logs). Usage:
+```
+python3 tools/analyze_freezes.py /logs/rounds/<N> --threshold 100
+```
+Flags any robot whose position (`x`,`y`) or radar heading (`rh`) stays
+byte-identical for more than `--threshold` (default 100) consecutive ticks
+while the game is still running. Ran it against round 0's logs: **all 500
+findings were on the *opponent* robot** (`robo_code__sittingduck` — expected,
+since it's a stationary sentry bot by design, not a bug), and **zero findings
+on our own robot** (`sonnet_5`). This is good evidence the round-3
+"wall-standoff" fix and round-4 "radar-freeze" fix (see notes further up this
+file) are both still holding up and haven't regressed. If you inspect a future
+round's logs and see findings mentioning our bot's name specifically, that's a
+real regression worth digging into with the same tool.
+
+To filter to just your own bot's findings, pipe through grep for your bot's
+name/id, e.g. `... | grep "(sonnet_5)"`.
+
+### Change made this round: circular-motion gun prediction
+`robots/custom/MyTank.java`'s gun targeting previously only did **linear**
+prediction (assumed the enemy keeps a constant heading/velocity for the whole
+bullet flight time, iterated a few times to converge on flight time). This
+works fine against a bot that goes straight, but is weak against any opponent
+that curves/orbits (including, ironically, a bot doing the same kind of
+perpendicular strafing our own movement logic does) since the aim point
+converges to somewhere the target will have already turned away from.
+
+Replaced it with **tick-by-tick simulated prediction that also incorporates
+the enemy's estimated turn rate**:
+- Track `prevEnemyHeading` / `prevEnemyScanTime` across scans of the enemy.
+- On each new scan, compute `enemyHeadingRate` = (change in enemy heading) /
+  (ticks since last scan of them) — but only trust this if the gap since the
+  last scan was small (`<= 3` ticks); if we lost lock for a while and just
+  reacquired, assume 0 (straight-line fallback) rather than risk basing a turn
+  rate estimate on a huge/stale time gap.
+- Simulate the enemy's future position forward **tick-by-tick** (not a
+  closed-form solution) for up to 60 simulated ticks, applying
+  `enemyHeadingRate` each tick to `simHeading` before advancing position by
+  `enemyVelocity` along that heading, and clamping to stay inside the
+  battlefield (a real enemy can't walk through walls either). Stop as soon as
+  the bullet's travel time to the *current* predicted point is <= the
+  simulated time elapsed so far (i.e. the bullet would have already arrived).
+- This degrades gracefully to the old linear-prediction behavior whenever
+  `enemyHeadingRate ~= 0` (enemy going straight), so no regression against
+  straight-line movers/sentries — round 0's 100%/94%-accuracy result was
+  produced *after* this change (I made the change and verified compilation
+  before this round's match ran... actually to be precise: I don't have
+  access to know exactly when in the round the match played vs. when I edited
+  — treat round 0's 100% result as validation of the *pre-change* code, and
+  treat this change as *not yet validated by a real match* at the time of
+  writing this note. See "Suggestions for next teammate" below.)
+- Verified `javac -cp libs/robocode.jar -d robots robots/custom/MyTank.java`
+  compiles clean, no errors/warnings; `.class` is up to date in
+  `robots/custom/MyTank.class`.
+- Old pre-change version of `MyTank.java` preserved at
+  `archive/round1_backups/MyTank.java.before_circular_targeting` in case this
+  change needs to be reverted/compared.
+
+### What I did NOT get to
+- Did NOT get to validate the new circular-prediction gun logic against a real
+  match (no local headless-battle-running available in this sandbox, per every
+  previous round's notes — still unresolved). This is a real, un-battle-tested
+  code change, unlike most of the earlier rounds' bugfixes which were
+  validated after-the-fact against logs showing the *specific bug pattern*
+  being gone. There is some risk the tick-by-tick simulation has an edge case
+  (e.g. `bulletSpeed` could theoretically be 0 if `bulletPower` were ever 20/3
+  — but `bulletPowerForDistance()` only returns 1.0-3.0, so `bulletSpeed` is
+  always in `[11, 17]`, no div-by-zero risk there). Recommend double-checking
+  behavior/accuracy stats in the *next* round's `trace.md` closely.
+- Did not do anything about bullet-power tuning, `PREFERRED_DISTANCE`, or
+  movement/strafe timing this round — those were already producing a 94%
+  accuracy / 96-min-energy result against this (admittedly passive) opponent,
+  didn't seem like the priority given the opponent's total passivity means we
+  can't tell if those specific parameters are well-tuned or not anyway.
+
+### Suggestions for next teammate
+1. **First step**: check whether `/logs/rounds/<N>/trace.md` this round still
+   shows ~100% win rate and similar-or-better accuracy vs whatever opponent
+   you're facing. If accuracy *drops* noticeably vs round 0's 94% baseline
+   against a similar (mostly-straight-line or stationary) opponent, suspect
+   the new circular-prediction code (in `onScannedRobot()`'s targeting block)
+   introduced a regression — compare against
+   `archive/round1_backups/MyTank.java.before_circular_targeting` and consider
+   reverting if so.
+2. Run `python3 tools/analyze_freezes.py /logs/rounds/<N> --threshold 100 |
+   grep "(sonnet_5)"` (substitute your bot's actual name/id if different) as a
+   quick regression check for the wall/radar freeze bug classes — should
+   print nothing if healthy.
+3. If you get a genuinely aggressive/moving opponent next round (unlike this
+   sitting-duck one), that's the first real chance to see whether the new
+   circular-targeting code actually improves hit rate against a curving
+   target vs. the old pure-linear version — worth specifically checking
+   accuracy stats in that case.
+4. Local headless battle running in this sandbox is still unresolved (every
+   round's notes mention trying and failing) — if you have spare steps and
+   want to finally crack it, that would make all future rounds much easier to
+   validate confidently instead of relying on post-hoc log analysis of
+   real matches only.
