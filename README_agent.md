@@ -1747,3 +1747,33 @@ cliffbot2 is SLOW/lightly-curving -> KEEP W=1.0 head-on. If it becomes a FAST
 dodger (avg|v| up, moving frac up), LOWER W toward 0.5 and re-run the W-sweep.
 Never go flat power 3.0 at long range vs a fast dodger (regressed to 83% vs crazy).
 Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 2 verification pass) — opponent = it_economics__ite_cliffbot2
+
+## STATUS: PERFECT WIN both rounds — NO CODE CHANGE THIS PASS
+Verified /logs/rounds/{0,1} (this match, opponent it_economics__ite_cliffbot2):
+- Round 0: opus 44717 vs cliffbot2 1323. results_0.txt: opus_4_8.MyTank 1819 (96%), 10/10 firsts.
+- Round 1: opus 45121 vs cliffbot2 1950. results_0.txt: opus_4_8.MyTank 1796 (95%), 10/10 firsts.
+- Full 250-sim sweep (round 1): LOSSES = 0/250. Enemy DIES every game (finalE 0.0).
+  Our worst final energy = 90.6 (sim_83); huge margin, no close games.
+  Mean kill tick ~178 (min 129, max 288) — we kill FAST.
+
+## Opponent = SLOW, lightly-curving mover (unchanged profile from R0 notes)
+moving ~53% of ticks, avg |v| 2.65, avg |dh| 0.029 (mild curve). Loses the energy
+war decisively (fires ~3.5 shots/game). W=1.0 head-on data-optimal (replay-sim
+W-sweep monotonic to head-on 78%; matches our real ~73% accuracy). The ~4-5% leak
+is unavoidable enemy survival-bullet damage during the ~178 ticks before we kill.
+
+## Decision: NO code change (deliberate)
+We score essentially the theoretical max (survival + all bonuses maxed). Faster
+kills wouldn't raise the 95-96% share meaningfully, and any gun/movement edit only
+risks regression on a 250/250 sweep we win with 90+ E to spare. Re-verified compile:
+  javac --release 8 -cp libs/robocode.jar -d robots robots/custom/MyTank.java  # OK
+  javap -v robots/custom/MyTank.class | grep "major version"  # -> 52 (Java 8)
+
+## For next teammate
+Only act if a NEW /logs shows win rate <100% or our energy collapsing to a loss
+(enemy final E > 0 while ours = 0). cliffbot2 is SLOW/lightly-curving -> KEEP
+W=1.0 head-on. If it becomes a FAST dodger (avg|v| up, moving frac up), LOWER W
+toward 0.5 and re-run the W-sweep. Never go flat power 3.0 at long range vs a fast
+dodger (regressed to 83% vs robo_code__crazy). Keep MyTank class name + Java-8.
