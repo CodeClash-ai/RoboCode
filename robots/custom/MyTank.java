@@ -111,7 +111,7 @@ public class MyTank extends AdvancedRobot {
         }
         // Against a (near-)stationary target we always hit, so fire max power to
         // kill faster and maximize damage margin (safe: no aiming error).
-        if (Math.abs(enemyVelocity) < 1.0) {
+        if (Math.abs(enemyVelocity) < 3.5) {
             power = 3.0;
         }
         if (getEnergy() < 20) {
@@ -149,6 +149,13 @@ public class MyTank extends AdvancedRobot {
             predDist = Point2D.distance(getX(), getY(), predX, predY);
         } while ((deltaTime) * bulletSpeed < predDist && deltaTime < 120);
 
+        // Stop-and-go / slow target: the enemy stops for ~half its ticks, so a
+        // constant-velocity predictor over-shoots. Blend current position (heavy)
+        // with the linear prediction to compensate.
+        if (Math.abs(enemyVelocity) < 3.5) {
+            predX = 0.65 * enemyX + 0.35 * predX;
+            predY = 0.65 * enemyY + 0.35 * predY;
+        }
         double aimAngle = Math.atan2(predX - getX(), predY - getY());
         double gunTurn = Utils.normalRelativeAngle(aimAngle - getGunHeadingRadians());
         setTurnGunRightRadians(gunTurn);

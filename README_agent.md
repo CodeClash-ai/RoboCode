@@ -187,3 +187,53 @@ MyTank.java unchanged. The stationary-target branch (aimAndFire: |enemyVel|<1.0
 ## For next teammate
 Only act if a NEW /logs log shows the enemy moving or the win margin dropping.
 Keep MyTank class name + Java-8 bytecode (the only hard requirement).
+
+# Agent Notes (Round 1 / current pass) — opponent = it_economics__ite_bomax
+
+## KEY FINDING: opponent is a SLOW STOP-AND-GO CRAWLER (mobile but barely)
+Unlike previous stationary opponents, it_economics__ite_bomax MOVES. Analyzed
+/logs/rounds/0/sim_*.jsonl (i=0 = bomax, i=1 = opus_4_8, per-file header!):
+- Pattern: accelerates 0->1->2->3 over ~4 ticks, STOPS for ~4 ticks while
+  rotating heading slightly, repeats. Net ~1px/tick average, v peaks at 3.
+- It fires low-power bullets (energy 100 start). We still take minimal damage.
+- Prior result: opus-4-8 38234 vs bomax 266. 10/10 firsts, 100% win. We finish
+  each round with ~116 energy. Mean kill tick 183 (min 96, max 329).
+
+## Changes this round (targeting tuned for stop-and-go)
+1. Power boost threshold widened: |enemyVelocity| < 3.5 -> power 3.0 (covers this
+   crawler's full 0..3 speed range; we have huge energy margin so max power is
+   pure upside for bullet damage).
+2. Aim BLEND for slow targets (|v| < 3.5): predX = 0.65*current + 0.35*predicted.
+   Rationale: a constant-velocity predictor OVER-shoots a stop-and-go bot (it
+   stops ~half its ticks). Heavy weight on current position + slight lead is more
+   accurate against this pattern. (Previously we aimed purely predicted.)
+Both compile to Java 8 (major version 52), rc=0.
+
+## LOCAL HARNESS STILL BROKEN
+Confirmed again: `robocode.Robocode -battle ... -nodisplay` prints
+"Can't find 'custom.MyTank'" and empty results even with fresh robot.database
+and Java-8 classes. Do NOT trust local battles. Rely on /logs/ sim results.
+
+## For next teammate
+- We win 100% with a large margin; changes this round only aim to raise bullet
+  damage vs the crawler. If a NEW /logs shows margin dropping or a FASTER/erratic
+  mover, revisit the aim blend (raise predicted weight for genuinely fast movers).
+- If opponent changes entirely, the general predictive gun + orbital movement
+  still handles it. Keep MyTank class name + Java-8 bytecode (hard requirement).
+- Analysis one-liner (per-sim enemy movement, kill tick, our final energy):
+  cd /logs/rounds/<N> && python3 -c "
+import json,glob,statistics
+kts=[];ofe=[]
+for fn in sorted(glob.glob('sim_*.jsonl')):
+    ls=[json.loads(l) for l in open(fn) if l.strip()]
+    hdr=ls[0]['robots']
+    ei=[int(k) for k,v in hdr.items() if 'opus' not in v][0]; oi=1-ei
+    kt=None;fe=100
+    for d in ls:
+        if 'u' in d:
+            for u in d['u']:
+                if u['i']==ei and u['e']<=0 and kt is None: kt=d.get('t')
+                if u['i']==oi: fe=u['e']
+    if kt: kts.append(kt)
+    ofe.append(fe)
+print('killtick',round(statistics.mean(kts),1),'ourE',round(statistics.mean(ofe),1))"
