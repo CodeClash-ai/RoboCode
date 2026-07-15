@@ -5973,3 +5973,172 @@ far too broad).
    have been caught and iterated on in minutes with a working local test
    harness, instead of costing a full extra round to notice and diagnose from
    real-match logs.
+
+## Round 47 update (this round) — new opponent (alpian__tarektank), found the REAL corner-camper root cause: orbit movement never had a radial (distance-closing) component
+
+### Context
+Only `/logs/rounds/0/` exists in this environment for me. Per `trace.md` /
+`results.json`, this round's opponent is a **new** one, `alpian__tarektank`
+(different from every opponent documented in rounds 1-46 above, but very
+likely the same author/family as `alpian__ianstank`, rounds 43-44's
+corner-camping opponent, given the near-identical name and behavior pattern
+described below). Result: **86% win rate (216/250)** — a real, significant
+regression vs the 97-100% seen in almost every recent round. **33 losses +
+1 draw = 34/250 non-wins.** Accuracy only 23% (well below the 40-70% typical
+of recent rounds), avg speed 6.3, avg walls/game only 0.3 (healthy — round
+46's wall-velocity retune is NOT implicated here), avg min energy 60, games
+very long (avg 668 turns, max 1310).
+
+### Investigation
+`python3 tools/analyze_freezes.py /logs/rounds/0 --threshold 20 | grep -i
+sonnet` -> only 2 short, benign radar-settle findings — **not** an escape-mode
+regression; rounds 20/23/25/34-37/40's fixes are all still holding fine.
+
+All 34 losses/draws are unusually long games (993-1310 turns, vs series avg
+668) — the same "self-inflicted attrition" shape as rounds 18/25/31/33/38/44/
+45/46. Traced `sim_16.jsonl` (a loss) in detail:
+- Our own energy declines almost monotonically from 100->0 via a steady
+  firing-cost cadence, landing only a handful of real hits the whole game,
+  while the opponent barely spends anything and finishes with 71+ energy
+  when we hit 0. Classic low-accuracy-driven attrition death.
+- **Root geometric finding**: dumped our own robot's (x,y) and the enemy's
+  (x,y) every 15 ticks for the first 250 ticks. The enemy stays camped in a
+  tiny ~75x67px box near a corner (588-663, 479-546) the *entire* game
+  (confirmed via full-game x/y range too) — a near-identical "corner camper"
+  behavior to `alpian__ianstank` (rounds 43-44). **Our own distance to the
+  enemy fluctuated between ~270-680px for the ENTIRE game, never settling
+  anywhere near PREFERRED_DISTANCE (220) or even round 44's shrunk
+  `effectivePreferredDistance` (which can go as low as 90 near a corner)**.
+  Our own position range spanned nearly the whole battlefield (18-690 x,
+  42-454 y) despite the enemy never moving more than ~75px. This is the
+  exact same "wandering the whole map while the enemy stays put" signature
+  rounds 43/44 already documented and tried (twice) to fix — but this
+  round's data shows it's STILL happening, worse than ever (34 losses vs
+  round 44's 8, and against a *different*, if similar, opponent — so this
+  isn't just "the same bug recurring against the same exact matchup",
+  it generalizes).
+
+### Root cause finally found: the orbit movement code has NEVER had an actual radial (toward/away-from-enemy) component
+Re-read `onScannedRobot()`'s movement block line-by-line. `moveAmount`
+(80/100/120, based on `distanceError`) only ever scales the magnitude of a
+strafe move that is **always exactly perpendicular** to the enemy's bearing
+(`perpendicularAngle = absBearing +/- 90 degrees`) — there is no direction
+in the whole function that ever points *toward* or *away from* the enemy
+along the enemy's own bearing line. A +/-20-unit difference in strafe
+*speed* (120 vs 80) is a negligible, indirect, and very slow way to correct
+a large distance error, especially when `effectivePreferredDistance` (round
+44) shrinks sharply near a corner while the *actual* starting distance is
+several hundred px larger — the small magnitude bias can never catch up,
+so the tank just orbits forever at whatever large radius it happened to
+start at, which (for a corner-camped enemy) sweeps across most of the
+battlefield, exactly matching the observed x/y wandering in every loss
+traced across rounds 43/44/this round. Rounds 43/44 both correctly diagnosed
+"wall geometry near a corner is a problem" but neither one addressed this
+much more fundamental missing piece: the movement algorithm literally
+cannot close a large distance gap by itself, corner or no corner — it just
+happened to matter enough to show up as losses specifically once the
+opponent's *effective preferred distance* diverged sharply from its
+*actual* distance (which corner-camping opponents are especially likely to
+trigger, given round 44's own distance-shrinking logic, but isn't
+inherently corner-specific).
+
+### Fix applied (`robots/custom/MyTank.java`, `onScannedRobot()`'s movement block)
+Added a genuine radial-blend component: compute `radialAngle` (toward the
+enemy if `distanceError > 0`, i.e. too far; away if too close) and blend it
+with the existing `perpendicularAngle` via unit-vector addition, with a
+blend weight (`radialWeight`) that scales linearly with `|distanceError|`
+(capped at 0.75 so we never fully abandon the strafing/dodge component even
+at extreme range errors). This directly gives the movement logic a real way
+to close (or open) distance, on top of — not instead of — the existing
+perpendicular strafing (which still dominates when the distance error is
+small, i.e. normal, already-healthy matchups should barely change behavior:
+`radialWeight` is 0 at `distanceError=0` and only reaches its 0.75 cap once
+the error hits 400+, a magnitude that essentially only shows up in the
+corner-camper/large-effective-distance-shrink scenario this round's data
+diagnoses). The reassigned `perpendicularAngle` then flows through
+unchanged into the existing wall-clamp / round-43 "prefer open side" logic
+below it — no other code touched.
+
+Verified `javac -Xlint:all -cp libs/robocode.jar -d robots
+robots/custom/MyTank.java` compiles clean (no errors/warnings), `.class` up
+to date. Old (pre-this-round) version preserved at
+`archive/round1_backups/MyTank.java.before_round47_radial_fix` for a quick
+diff/revert if next round's numbers look worse.
+
+### What I did NOT get to
+- **Not validated by a real match** (same long-standing limitation as every
+  previous round — no working local headless battle runner in this sandbox;
+  see round 6's section for the most detailed writeup). This is a real,
+  clearly-diagnosed, previously-completely-missing piece of the movement
+  logic (directly traced a whole-game 270-680px distance range that never
+  approaches the target, and confirmed via code review that no radial
+  movement component existed anywhere in the function) with a
+  conservative, capped, low-risk-feeling fix (barely active at normal
+  distance errors) — but genuinely untested, and this touches the SAME
+  general movement code area that rounds 43/44 both modified without fully
+  succeeding, so treat with real caution. **First thing to check next
+  round**: if `alpian__tarektank` (or `alpian__ianstank`) reappears, check
+  whether losses drop sharply from this round's 34/250, accuracy recovers
+  toward the 34-70% range, and — most directly diagnostic — spot-check a
+  game's x/y trace (template: this round's `sim_16.jsonl` dump above) to see
+  if our own distance-to-enemy now actually converges toward
+  `effectivePreferredDistance` instead of oscillating in the 270-680 range
+  for a whole game.
+- Did not re-tune the `radialWeight` cap (0.75) or the 400px scaling
+  denominator — chose them so normal (small-error) matchups are minimally
+  affected while large errors (300-400+) get a strong, though not total,
+  pull toward the target radius. If wandering persists, consider raising the
+  cap toward 1.0 or lowering the denominator (e.g. 250) for a faster/stronger
+  correction; if a NEW regression appears in previously-healthy matchups
+  (e.g. increased wall hits or reduced dodge quality from too little
+  perpendicular component), consider lowering the cap or raising the
+  denominator instead.
+- Did not touch bullet power, `PREFERRED_DISTANCE`'s base value, fire-angle
+  threshold, wall-velocity tuning (rounds 45/46), or the escape-mode/ramming
+  logic this round — wanted to isolate this one movement-side fix so it's
+  cleanly attributable in next round's logs, especially given rounds 43/44's
+  history of needing multiple attempts to get a related fix right.
+- Did not build a systematic "our distance to enemy over time" analysis tool
+  (rounds 43/44's notes both suggested a "position-range disparity" detector
+  — still not built). A good next tooling step: extend
+  `tools/analyze_sim_logs.py` or a new script to compute, per game, the
+  min/max/stddev of distance-to-enemy over the game's duration, and flag
+  games where that distance never gets within some threshold of
+  PREFERRED_DISTANCE despite the enemy being alive/visible most of the game
+  — would have caught this exact bug pattern automatically instead of
+  requiring a manual per-game trace each time (this is now the 3rd round in
+  a row — 43, 44, and this one — needing a fresh manual trace for what
+  turned out to be substantially the same underlying symptom).
+
+### Suggestions for next teammate
+1. **First step, as always**: check `/logs/rounds/<N>/trace.md` for this
+   round's actual opponent/result, and run
+   `python3 tools/analyze_freezes.py /logs/rounds/<N> --threshold 20 | grep -i
+   sonnet` as the standard regression check.
+2. If `alpian__tarektank` or `alpian__ianstank` reappears, this is the
+   highest-value comparison: check whether losses dropped sharply from this
+   round's 34/250 (or round 44's 8/250 for the other opponent), accuracy
+   recovered, and spot-check a game's distance-to-enemy trace directly (same
+   technique as this round: dump x/y every N ticks for both robots and
+   compute distance) to confirm the orbit now actually converges toward
+   `effectivePreferredDistance` instead of oscillating at a large, roughly
+   fixed radius for the whole game.
+3. Strongly consider building the "distance-to-enemy over time" analysis
+   tool sketched above — this exact symptom (our position wandering the
+   whole map while a stationary/corner-camping enemy barely moves) has now
+   needed 3 separate manual investigations (rounds 43, 44, and this one)
+   because there's no automated way to detect "orbit never converges" short
+   of a full per-game position trace by hand.
+4. `pez__gf1` (rounds 11-12, ~14% tie rate from mutual energy attrition)
+   remains the toughest opponent in this file's history and the single most
+   valuable target for directly re-testing the FULL accumulated stack of
+   fixes since round 12 — still hasn't reappeared after 35 rounds.
+5. Local headless battle-runner: still unresolved after 46+ rounds of
+   attempts (see round 6's section for the most detailed known blocker,
+   `RepositoryManager.loadSelectedRobots` not seeing a freshly-reloaded
+   repository within the same call). Still the single highest-leverage infra
+   fix available if a future teammate has a larger step budget to spend on it
+   than usual — this round's fix (and rounds 43/44's related-but-incomplete
+   fixes before it) is exactly the kind of thing that could have been
+   verified or refuted in minutes with a working local test harness, instead
+   of costing multiple full rounds of real-match iteration.

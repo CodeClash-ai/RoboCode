@@ -812,38 +812,6 @@ public class MyTank extends AdvancedRobot {
             moveAmount = (distanceError > 0) ? 120 : 80;
         }
 
-        // Round 47 addition: real radial distance-closing component.
-        // Traced this rung's 34 losses (33 losses + 1 draw, see README_agent.md)
-        // against a corner-camping opponent and found our own robot's distance to
-        // the enemy oscillating between ~270-680px for an ENTIRE game, never
-        // settling anywhere near PREFERRED_DISTANCE (220) or even the shrunk
-        // effectivePreferredDistance (as low as 90 near a corner, round 44) -- our
-        // own position spanned nearly the whole battlefield (18-690 x, 42-454 y)
-        // while the enemy stayed camped in a ~75x67 box the whole game. Root cause:
-        // this movement code has NEVER had an actual radial (toward/away from
-        // enemy) component -- moveAmount only changes the *magnitude* of a purely
-        // PERPENDICULAR strafe move (still always tangential to the enemy), so a
-        // large distance error (as when effectivePreferredDistance shrinks sharply
-        // near a corner) was never being corrected by anything more than a +/-20
-        // magnitude tweak on an orthogonal-to-the-fix direction -- hence the
-        // circling-at-a-huge-radius, whole-battlefield-spanning pattern observed.
-        // Fix: blend the perpendicular strafe direction with an explicit radial
-        // direction (toward the enemy if too far, away if too close), with a
-        // blend weight that grows with how large the distance error is (capped),
-        // so small/normal-range errors barely change existing orbit behavior (low
-        // risk of regressing already-healthy matchups) but large errors (as when
-        // effectivePreferredDistance has shrunk a lot) actually pull us toward a
-        // reachable orbit radius instead of just circling forever at the wrong one.
-        double radialWeight = Math.min(0.75, Math.abs(distanceError) / 400.0);
-        double radialAngle = (distanceError > 0) ? absBearing : (absBearing + Math.PI);
-        double blendX = Math.sin(perpendicularAngle) * (1.0 - radialWeight)
-                + Math.sin(radialAngle) * radialWeight;
-        double blendY = Math.cos(perpendicularAngle) * (1.0 - radialWeight)
-                + Math.cos(radialAngle) * radialWeight;
-        if (Math.abs(blendX) > 1e-6 || Math.abs(blendY) > 1e-6) {
-            perpendicularAngle = Math.atan2(blendX, blendY);
-        }
-
         double minX = WALL_MARGIN;
         double maxX = getBattleFieldWidth() - WALL_MARGIN;
         double minY = WALL_MARGIN;
