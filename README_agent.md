@@ -535,3 +535,11 @@ Round 1 (gpt-5-5 current edit against `looklazy__chilibot`):
 - Added `fixedHeadingMediumShooter()` in `robots/custom/MyTank.java`: repeated medium-power fire + near-zero turn-rate stop/go motion. It forces pure `GUN_HEAD_ON`, uses a moderate 360px orbit (widening to 430 when low energy), and applies high pressure while healthy (max/2.35) with low-energy pinprick safeguards. It is excluded from generic medium/active stop-go branches and guarded away from weak fixed-axis oscillators and Exterminador-style high-power cases.
 - Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
 - Final tiny addition after compile: `fixedHeadingMediumShooter()` also has a max-power finisher when the enemy is under ~17 energy and we have >6, and the generic low-energy caps skip that finisher. This directly targets the two Chilibot loss traces where low-power conservation left it alive on ~13-15 energy.
+
+
+Round 2 (gpt-5-5 current edit against `looklazy__chilibot`, follow-up):
+- Reviewed `/logs/rounds/1`: aggregate improved to `42607` vs `5221`, but traces still had 2 Chilibot wins and 1 mutual-death draw. Remaining failures were late long rounds: Chilibot is fixed-heading/stop-go, fires medium/high bullets, and hit us after we had burned down to low energy; several cases had it under ~14-29 energy while our old movement stayed near 330-450px and our finishers spent expensive power-3 shots.
+- Kept the successful pure head-on `fixedHeadingMediumShooter()` gun, but added two safety/finishing tweaks in `robots/custom/MyTank.java`:
+  - fixed-heading medium shooters now widen earlier as our energy falls (455px below 32 energy, 515px below 18) and perform a short perpendicular escape immediately after detecting an enemy fire drop when our energy is low, instead of only reversing on the same line;
+  - when a fixed-heading medium/high shooter is nearly dead and our energy is below 34, cap firepower to the minimum lethal bullet. This sends faster bullets and preserves the 1-2 energy margin that decided the remaining Chilibot loss/draw traces.
+- Recompiled successfully: `javac -cp libs/robocode.jar robots/custom/MyTank.java`.

@@ -226,6 +226,15 @@ public class MyTank extends AdvancedRobot {
                     : 0.82 * enemyFirePowerAvg + 0.18 * enemyDrop;
             enemyFirePowerSamples++;
             reverseDirection();
+            if ((fixedHeadingMediumShooter() || activeHighPowerShooter()) && getEnergy() < 42.0) {
+                // Chilibot/Ultron-style shooters become dangerous once our reserve is
+                // low: simply flipping the orbit can still leave us on the same bullet
+                // line for medium/high-power head-on shots.  On the fire tick, spend a
+                // short movement command on a clean perpendicular escape before the
+                // normal range controller resumes on the following scans.
+                drivePerpendicularEscape(absBearing, 230.0);
+                return;
+            }
         }
 
         // SittingDuck-style opponents in many logs never fire.  Once we are
@@ -356,9 +365,10 @@ public class MyTank extends AdvancedRobot {
         } else if (fixedHeadingMediumShooter()) {
             // Chilibot-like fixed-heading stop/go shooter: stronger than the
             // old weak axis oscillators, but still easiest to hit head-on.
-            // Keep a moderate range to reduce its medium/high-power leakage
-            // without stretching our bullet flight as much as RegullarMonk mode.
-            preferredDistance = getEnergy() < 25.0 ? 430.0 : 360.0;
+            // Keep a moderate range while healthy for score, but widen sooner
+            // in long games; the remaining losses were late medium/high-power
+            // bullet hits after our energy had fallen below ~30.
+            preferredDistance = getEnergy() < 18.0 ? 515.0 : (getEnergy() < 32.0 ? 455.0 : 360.0);
         } else if (fixedHeadingStopGoEnemy()) {
             // Current OppsWantMeDead-style bot keeps an almost perfectly fixed
             // body heading while alternating stops/straight bursts and weak shots.
@@ -452,7 +462,7 @@ public class MyTank extends AdvancedRobot {
             // close 150-220px scrambles seen in the remaining loss/draw traces.  A
             // wider orbit gives our cheap bullets time to be energy-positive while
             // reducing the chance of one more enemy power-3 hit ending the round.
-            preferredDistance = Math.max(preferredDistance, 430.0);
+            preferredDistance = Math.max(preferredDistance, 500.0);
         }
         if (velociRobotEnemy() && getEnergy() < 22.0) {
             // VelociRobot losses happen late after our bullet energy has been spent;
@@ -784,6 +794,15 @@ public class MyTank extends AdvancedRobot {
         }
         if (getEnergy() < 9 && !finishingFixedHighPower && !finishingFixedMedium) {
             power = Math.min(power, hardToHitMover || activeHighPowerShooter() ? 0.15 : 0.55);
+        }
+        if ((fixedHeadingMediumShooter() || fixedHeadingHighPowerShooter() || activeHighPowerShooter())
+                && e.getEnergy() < 14.0 && getEnergy() < 34.0) {
+            // In the remaining Chilibot losses/draws we had the opponent under one
+            // bullet of life but continued to spend power-3 shots; old enemy bullets
+            // then killed us after (or just before) the final hit.  A minimal lethal
+            // bullet is faster and saves 1-2+ energy, which is exactly the survival
+            // margin in those traces.
+            power = Math.min(power, lethalPower(e.getEnergy()));
         }
         power = Math.min(power, Math.max(0.1, getEnergy() - 0.15));
 
@@ -1758,6 +1777,13 @@ public class MyTank extends AdvancedRobot {
 
     private static double projectY(double y, double angle, double length) {
         return y + Math.cos(angle) * length;
+    }
+
+    private static double lethalPower(double enemyEnergy) {
+        // Robocode bullet damage is 4*p for p<=1, and 6*p-2 for p>1.
+        // Add a tiny margin for rounding/energy updates, then clamp to legal firepower.
+        double p = enemyEnergy <= 4.0 ? enemyEnergy / 4.0 + 0.06 : (enemyEnergy + 2.0) / 6.0 + 0.06;
+        return limit(0.1, p, 3.0);
     }
 
     private static double limit(double min, double value, double max) {
