@@ -3299,3 +3299,65 @@ Compiles Java 8 (major version 52), rc=0.
   only robust anti-lead-gun movement, but high-risk; local harness broken, trust
   /logs only. Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for the opponent
   name + INDEX MAPPING first. Keep MyTank class name + Java-8 bytecode.
+
+# Agent Notes (Round 2 / current pass) — opponent = dankraemer__juggernaut — REVERTED ROUND-1 DODGE REGRESSION
+
+## CRITICAL: Round 1's aggressive-dodge change REGRESSED — reverted to Round-0 config
+This opponent = dankraemer__juggernaut, a MODERATE curving mover (movefrac 0.56,
+avgV 3.32, avg|dh| 0.059) with a GOOD LEAD-AIMING gun (points ~0.36 rad off head-on
+when it fires). Genuinely competitive — our highest enemy-share foe in a while.
+
+## REAL cross-round results (the decisive signal):
+- ROUND 0 (dodge-on-fire 0.45, onHitByBullet 0.5, periodic 0.07):
+  opus 42256 vs juggernaut 10269. results_0.txt: opus 1648 (79%), 9/10 firsts.
+  Full 250-sim sweep: 15 LOSSES, ourFE mean 78.7.
+- ROUND 1 (prior teammate RAISED dodge-on-fire 0.45->0.70, onHitByBullet 0.5->0.8,
+  periodic 0.07->0.08): opus 41914 vs juggernaut 13195. results_0.txt: 1727 (76%),
+  9/10 firsts. Full 250-sim sweep: 26 LOSSES (worse!), ourFE mean 69.9.
+  The "dodge MORE on enemy fire" theory BACKFIRED — enemy score went UP 10269->
+  13195, losses 15->26. Forced reversals at the enemy's fire cadence reduced our
+  lateral coverage / became learnable, exposing us more.
+
+## THIS PASS: reverted dodge params to the Round-0 (better) config
+Restored dodge-on-fire 0.45 (>=6 tick gate), onHitByBullet reverse 0.5, periodic
+reversal 0.07. Verified FUNCTIONALLY IDENTICAL to git 7c1b825 (the round-0 winning
+config) via `diff` ignoring comments. Gun (W=1.0 head-on), power tiers (3.0/<200
+1.6/<300 1.0/<400 0.6/else), orbit ~160px, energy-war taper, fire gates UNCHANGED.
+Compiles Java 8 (major version 52). rc=0.
+
+## ROOT-CAUSE analysis of the 15 losses (round 0): energy-war VARIANCE, not position
+- Losses vs wins have SAME distance dist (~43% at 100-200px both). NOT positional.
+- The ONLY difference: "behind on energy" 79% of ticks in losses vs 16% in wins.
+  Pure hit-rate variance in the energy war (enemy's lead gun connects ~45% in
+  losses vs ~32% in wins; ours cools 25% vs 48%).
+- Measured hit/enemy-density by distance (150 games): 0-100px hr0.78 enemy13.1/1k,
+  100-200px hr0.60 enemy6.5/1k (BEST net zone — we camp here), 200-300px hr0.33
+  enemy4.3/1k (break-even). Current orbit (~160px) already camps the right zone.
+- Modeled extending the energy-war taper to 200px: net change +0.1% (negligible —
+  200-300px hr 33% is already ~break-even, taper has nothing to bite). NOT worth it.
+
+## Interesting (unused) signal: losses had LOWER reversal rate (0.0076/tick) than
+## wins (0.0107/tick) — we were STEADIER (more predictable) in loss games. This
+## suggests MORE *uncorrelated* unpredictability (periodic random reversal, NOT
+## fire-triggered) MIGHT help. I considered bumping periodic reversal 0.07->0.10
+## but REVERTED it: can't validate (local harness broken), and it risks lowering
+## our own hit rate (more lateral direction changes -> gun realigns). The proven
+## round-0 config is the safe, better-than-round-1 choice. If a next teammate wants
+## to try it, bump ONLY the periodic reversal (line 446, 0.07->0.10-0.12), NOT the
+## fire-triggered dodge (round-1 proved raising that REGRESSES). Weight the REAL
+## /logs win rate far above any replay-sim.
+
+## Aim W-sweep (round-0 replay, 80 games, BIASED toward W=1.0): W=1.0 57.9%,
+## W=0.75 59.1% (marginal), W=0.5 56.2%. W=0.75 barely edges W=1.0 but within
+## noise + biased. Do NOT switch aim off this. Keep W=1.0 head-on (proven).
+
+## For next teammate
+- Only act if NEW /logs shows losses RISING above 15 or a MATCH loss. juggernaut
+  is a MODERATE lead-gun mover -> KEEP W=1.0 head-on and the round-0 dodge config
+  (0.45 fire-dodge). Do NOT raise fire-triggered dodge (round-1 proved -REGRESSION).
+- The only robust remaining lever vs its 45%-in-loss lead gun is WAVE SURFING
+  (track enemy bullet waves, move to min-danger GF) — high-risk, local harness
+  broken, trust /logs only. A safer micro-experiment: raise ONLY periodic
+  (uncorrelated) reversal 0.07->0.10.
+- Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING.
+- Keep MyTank class name + Java-8 bytecode (only hard requirement).

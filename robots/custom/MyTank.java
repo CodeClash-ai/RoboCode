@@ -440,10 +440,10 @@ public class MyTank extends AdvancedRobot {
         // shorten the rate-limit 6 -> 5 ticks so we can dodge consecutive waves,
         // and keep the rare random reversal to break any residual period.
         long now = getTime();
-        if (enemyFired && now - lastReverseTime >= 5 && Math.random() < 0.70) {
+        if (enemyFired && now - lastReverseTime >= 6 && Math.random() < 0.45) {
             moveDirection = -moveDirection;
             lastReverseTime = now;
-        } else if (now - lastReverseTime >= 8 && Math.random() < 0.08) {
+        } else if (now - lastReverseTime >= 8 && Math.random() < 0.07) {
             moveDirection = -moveDirection;
             lastReverseTime = now;
         }
@@ -475,7 +475,7 @@ public class MyTank extends AdvancedRobot {
         // Change direction when hit to be less predictable. Raised 0.5 -> 0.8:
         // a hit means the enemy's gun profiled our current path, so disrupt it
         // (vs dankraemer__juggernaut, a lead-aiming gun that hits 45% in our losses).
-        if (Math.random() < 0.8) {
+        if (Math.random() < 0.5) {
             moveDirection = -moveDirection;
         }
     }
