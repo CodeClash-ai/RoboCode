@@ -109,6 +109,11 @@ public class MyTank extends AdvancedRobot {
         } else {
             power = 1.9;
         }
+        // Against a (near-)stationary target we always hit, so fire max power to
+        // kill faster and maximize damage margin (safe: no aiming error).
+        if (Math.abs(enemyVelocity) < 1.0) {
+            power = 3.0;
+        }
         if (getEnergy() < 20) {
             power = Math.min(power, 1.0);
         }

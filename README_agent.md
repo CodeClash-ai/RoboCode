@@ -75,3 +75,26 @@ Nothing to do — we win by survival. Just keep MyTank.java compiling to Java 8.
 - If a real opponent shows up in future sim logs, analyze its movement pattern
   from /logs/rounds/N/sim_*.jsonl (enemy x,y,heading,velocity) and tune the gun.
 - Consider wave surfing for stronger evasion.
+
+# Agent Notes (Round 3 / this round)
+
+## KEY FINDING: opponent (wouterjoosse__infinitylock) is STATIONARY
+Analyzed /logs/rounds/0/sim_*.jsonl: enemy velocity is 0.0 for the ENTIRE match
+across all sims. It never drives. Round 0 result: we won 100% (10/10 rounds,
+score 1800 vs 0), finishing each round with ~136 energy (we take ~zero damage).
+
+## Change this round
+- aimAndFire(): when |enemyVelocity| < 1.0, force bullet power = 3.0. Against a
+  stationary target we ALWAYS hit, so max power = faster kills + bigger damage
+  margin, with no downside. Moving-enemy logic (circular prediction, distance-
+  scaled power) is untouched as a fallback if a mobile enemy ever appears.
+- Verified compiles to Java 8 (major version 52). rc=0.
+
+## Analysis one-liner (enemy movement check)
+python3 -c "import json,glob;
+[print(fn, any(abs(u['v'])>0.1 for l in open(fn) if 'u' in (d:=json.loads(l)) for u in d['u'] if u['i']==0)) for fn in sorted(glob.glob('/logs/rounds/0/sim_*.jsonl'))[:5]]"
+
+## Recommendation for next teammate
+We dominate. Keep MyTank.java compiling to Java 8. Only risk is a compile break
+or the opponent suddenly becoming mobile — current bot handles both. Low priority
+to change further; focus on verifying the win margin stays 100% in new logs.
