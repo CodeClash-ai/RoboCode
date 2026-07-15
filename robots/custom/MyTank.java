@@ -38,6 +38,7 @@ public class MyTank extends AdvancedRobot {
     private int stopGoEnemyScans = 0;
     private int closeRammerScans = 0;
     private double enemyVelocityAvg = 0.0;
+    private double enemySpeedAvg = 0.0;
     private double enemyTurnRateAvg = 0.0;
     private boolean haveEnemyAxis = false;
     private double enemyAxisHeading = 0.0;
@@ -113,6 +114,7 @@ public class MyTank extends AdvancedRobot {
                 ? Utils.normalRelativeAngle(e.getHeadingRadians() - lastEnemyHeading)
                 : 0.0;
         enemyVelocityAvg = 0.84 * enemyVelocityAvg + 0.16 * e.getVelocity();
+        enemySpeedAvg = 0.84 * enemySpeedAvg + 0.16 * Math.abs(e.getVelocity());
         enemyTurnRateAvg = 0.84 * enemyTurnRateAvg + 0.16 * scanTurnRate;
         updateEnemyAxis(enemyX, enemyY, e.getHeadingRadians(), scanTurnRate);
 
@@ -299,6 +301,12 @@ public class MyTank extends AdvancedRobot {
             // gated by low virtual error/fire count so RegullarMonk-style self-
             // depletion cases still use their conservation profile.
             preferredDistance = 255.0;
+        } else if (highPowerStopGoDodger()) {
+            // Current Ultron-style target: frequent power-3 firing, lots of stops,
+            // but enough max-speed reversing that the high-pressure Florian branch
+            // self-depletes.  Stay in a moderate exchange band and let fast
+            // head-on bullets land without spending our whole energy stack.
+            preferredDistance = 355.0;
         } else if (heavyStopGoShooter()) {
             // Florian2-style target: spends most of the round stopped, occasionally
             // bursts at max speed, and spends power-3 shots with poor aim.  It is
@@ -414,7 +422,7 @@ public class MyTank extends AdvancedRobot {
             // energy on heavier bullets: its own hit rate is tiny, and the
             // shorter rounds are worth the slightly slower bullet speed.
             power = Math.max(power, distance < 360 ? 3.0 : (distance < 520 ? 2.8 : 2.35));
-        } else if ((slowEnemyScans > 8 || activeStopGoEnemy()) && getEnergy() > 12 && distance < 720) {
+        } else if ((slowEnemyScans > 8 || activeStopGoEnemy()) && !highPowerStopGoDodger() && getEnergy() > 12 && distance < 720) {
             // Slow and stop/go opponents give up enough predictable time that
             // heavier bullets trade a little travel time for much faster damage and
             // a larger bullet bonus.  Fast/unknown movers keep the safer ladder.
@@ -502,6 +510,18 @@ public class MyTank extends AdvancedRobot {
             // to this easier stop/go target.
             if (getEnergy() > 24 && distance < 720) {
                 power = Math.max(power, distance < 560 ? 3.0 : 2.45);
+            }
+        } else if (highPowerStopGoDodger()) {
+            // Ultron-like evasive high-power stop/go shooters made the old generic
+            // slow/stop-go max-power branches burn us to zero in rare long games.
+            // Head-on replay is best, and lower-power bullets are much faster; keep
+            // them cheap enough that misses cannot throw away survival points.
+            if (getEnergy() > 42) {
+                power = Math.min(power, distance < 380 ? 1.45 : 1.15);
+            } else if (getEnergy() > 18) {
+                power = Math.min(power, distance < 340 ? 0.85 : 0.65);
+            } else {
+                power = Math.min(power, getEnergy() < 9 ? 0.15 : 0.35);
             }
         } else if (heavyStopGoShooter()) {
             // Florian2-like heavy stop/go shooters waste mostly power-3 shots but
@@ -603,6 +623,10 @@ public class MyTank extends AdvancedRobot {
             // virtual-error gate prevents overriding the averaged gun on MarkIV /
             // Terminator-style stop-go bots where damping is better.
             gun = GUN_HEAD_ON;
+        } else if (highPowerStopGoDodger()) {
+            // The current Ultron traces strongly favor head-on: it stops/reverses
+            // during bullet flight, so linear/circular/averaged over-lead badly.
+            gun = GUN_HEAD_ON;
         } else if (heavyStopGoShooter()) {
             // Florian2-style heavy stop/go shooters spend most of the round either
             // stopped or crawling, then make occasional fast bursts.  The damped
@@ -694,7 +718,11 @@ public class MyTank extends AdvancedRobot {
             // a tick for a cleaner gun angle saves energy and raises hit rate.
             tolerance = Math.min(tolerance, Math.atan2(17.0, distance));
         }
-        if (activeStopGoShooter()) {
+        if (highPowerStopGoDodger()) {
+            // Cheap head-on shots are still wasted if the gun is broadside; wait for
+            // a clean angle in these long high-power stop/go exchanges.
+            tolerance = Math.min(tolerance, Math.atan2(15.0, distance));
+        } else if (activeStopGoShooter()) {
             // RegullarMonk rounds are decided by long low-power exchanges; only
             // spend even the small conservation bullets when the head-on gun is
             // closely aligned.
@@ -807,7 +835,8 @@ public class MyTank extends AdvancedRobot {
         // RegullarMonk conservation branch, which only triggers when the virtual
         // error remains high or fire count grows large.
         if (virtualSamples < 10 || stopGoEnemyScans <= 8 || crazyEnemyScans > 4
-                || fixedHeadingStopGoEnemy() || fixedHeadingLineEnemy() || fastWallCruiser()) {
+                || fixedHeadingStopGoEnemy() || fixedHeadingLineEnemy() || fastWallCruiser()
+                || highPowerStopGoDodger()) {
             return false;
         }
         double head = Math.min(virtualGunError[GUN_HEAD_ON], virtualGunError[GUN_DRIFT_HEAD_ON]);
@@ -817,6 +846,26 @@ public class MyTank extends AdvancedRobot {
                 && (enemyFireCount <= 6 || bestGunError() < 50.0)
                 && Math.abs(enemyTurnRateAvg) < 0.05
                 && Math.abs(enemyVelocityAvg) < 4.4;
+    }
+
+
+    private boolean highPowerStopGoDodger() {
+        // rafaeljdesa__ultron in the current logs: fires many power-3 bullets,
+        // repeatedly stops/reverses, but has a much higher average speed than the
+        // slow Florian2/Gruffalo stop-go farmers.  Offline replay over this round
+        // puts head-on well ahead of all lead guns; conserve energy with fast, cheap
+        // bullets instead of the older max-power slow-target pressure.
+        return stopGoEnemyScans > 6
+                && enemyFireCount > 1
+                && enemyFirePowerSamples > 0
+                && enemyFirePowerAvg > 2.35
+                && enemySpeedAvg > 2.35
+                && enemySpeedAvg < 5.8
+                && crazyEnemyScans <= 4
+                && Math.abs(enemyTurnRateAvg) < 0.075
+                && !fixedHeadingStopGoEnemy()
+                && !fixedHeadingLineEnemy()
+                && !fastWallCruiser();
     }
 
     private boolean heavyStopGoShooter() {
@@ -831,6 +880,7 @@ public class MyTank extends AdvancedRobot {
                 && enemyFirePowerSamples > 2
                 && enemyFirePowerAvg > 2.2
                 && crazyEnemyScans <= 4
+                && enemySpeedAvg < 2.55
                 && Math.abs(enemyVelocityAvg) < 3.4
                 && Math.abs(enemyTurnRateAvg) < 0.055
                 && !fixedHeadingStopGoEnemy()
@@ -928,6 +978,7 @@ public class MyTank extends AdvancedRobot {
         // often.  Do not wait for many virtual-wave samples before switching out
         // of the old "harmless wall target" max-power close-orbit mode.
         return wallEnemyScans > 4 && enemyFireCount > 3 && stopGoEnemyScans <= 12
+                && !highPowerStopGoDodger()
                 && !heavyStopGoShooter() && !mediumStopGoShooter() && !fastWallCruiser();
     }
 
