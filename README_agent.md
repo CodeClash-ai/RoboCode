@@ -11982,3 +11982,171 @@ for a quick diff/revert if next round's numbers look worse.
    spend on it than usual — especially valuable now that we're facing a
    genuinely tough opponent where iterating on targeting/defense algorithm
    changes without real per-round-cycle feedback is risky.
+
+## Round 108 update (this round) — round 107's fire-threshold tightening BACKFIRED; reverted
+
+### Context
+Both `/logs/rounds/0/` and `/logs/rounds/1/` exist this round, both real
+combat against `kcanida__pikachu` — same opponent round 107's notes
+describe (by far the toughest opponent seen in a very long time, arguably
+rivaling `pez__gf1` from rounds 11-12). Round 0 here matches round 107's own
+pre-fix baseline exactly (37% win, 92/250, 17% accuracy, avg min energy 12,
+score 27556 vs 22488 — note: score still favors us despite the low win rate,
+since a "win" apparently isn't purely score-based per game in this scoring
+scheme). **Round 1 here is the REAL match result of round 107's velocity-
+based fire-threshold tightening** (multiply `fireThreshold` by 0.5 when
+enemy `|velocity| > 6`, by 0.75 when `> 3`, intended to raise the realized
+accuracy of the shots that still get fired in the negative-EV bucket round
+107 identified): **win rate dropped further to 24% (60/250)**, accuracy
+dropped 17% -> 13%, avg min energy dropped 12 -> 8, and `sonnet-5`'s score
+dropped below the opponent's for the first time in this file's whole
+history (21844 vs 24140). **This is a clear, statistically significant
+regression, not an improvement.**
+
+### Investigation — the "obvious" fix had the opposite of the intended effect
+`python3 tools/analyze_freezes.py /logs/rounds/1 --threshold 20 | grep -i
+sonnet` -> **zero findings** — ruled out the wall/radar/stuck-ramming bug
+class entirely; this is not a freeze regression.
+
+Ran `python3 tools/analyze_power_accuracy.py` on both directories and
+compared the specific bucket round 107's change targeted (enemy
+`|velocity| > 6`, our power capped to 1.3, round 17's cap):
+```
+Round 0 (pre-fix):  7606 shots, 749 hits ->  9.8% accuracy
+Round 1 (post-fix): 6347 shots, 351 hits ->  5.5% accuracy
+```
+The fix DID reduce shot volume as designed (~17% fewer shots in that
+bucket, consistent with a tighter angle threshold firing less often) — but
+the accuracy of the shots that DID get through **dropped**, from 9.8% to
+5.5%, rather than rising as hypothesized. This is not sampling noise: at
+n=6347 and an assumed true rate of 9.8%, seeing only 351 hits is ~11.5
+standard deviations below the expected count — a real, large effect, just in
+the opposite direction from what round 107 intended. The OTHER (untouched)
+2.5-3.0 power bucket also dropped meaningfully (17.9% -> 14.3%, also
+statistically significant, z≈-5.4) even though that bucket's firing
+condition (`enemy velocity <= 3`) was never touched by the code change —
+this suggests the change's effect wasn't narrowly confined to the one
+bucket it targeted, but plausibly triggered a broader cascade (these are
+very long games, avg 844-860 turns; shifting exactly which ticks we choose
+to fire on shifts gun-heat/cooldown timing for the rest of the game, which
+can cascade into different subsequent tactical situations throughout an
+830+-tick fight — a form of chaotic sensitivity to small timing changes in
+long simulations). The overall win-rate drop (37% -> 24%, a two-proportion
+z-test gives z≈3.1, p<0.002) is too large to attribute to chance alone given
+this is the only code difference between the two samples.
+
+### Why this matters / lesson learned
+Round 107's reasoning (tighter angle threshold -> only fire on the
+"more confidently aimed" ticks -> higher realized accuracy) is a plausible-
+sounding heuristic that turned out to be **empirically false** against this
+specific opponent's movement style. A likely mechanism: against a
+genuinely erratic/bursty mover (accelerate-stop-reverse, per round 95's
+`admiralrasmussen__wavesurfing` and round 43-44's corner-camper precedents),
+waiting for the computed lead angle to become very small doesn't
+necessarily indicate a stable, reliable aim — it can just as easily indicate
+a **transient, noise-driven coincidental alignment** (the predicted point
+briefly lines up with the gun by chance during an unpredictable motion
+phase) that is *more* likely to diverge again before the bullet arrives,
+not less. This is consistent with round 9/10's own observations about noisy
+single-tick heading-rate estimates being unreliable extrapolation targets.
+**Tightening a firing-angle threshold is not a safe, one-size-fits-all lever
+for improving accuracy against every opponent type — it can backfire hard
+against erratic/bursty movers specifically.**
+
+### Fix applied this round
+**Fully reverted** round 107's change: removed the
+`fireThresholdVelocityFactor` block entirely from `onScannedRobot()`,
+restoring the exact fire-angle-threshold logic from round 10 (unconditional
+distance-based `fireThreshold`, no velocity-based tightening). Verified via
+`diff archive/round1_backups/MyTank.java.before_round47_radial_fix
+robots/custom/MyTank.java` that the current file is now IDENTICAL to the
+round-47 baseline (i.e. everything added in round 107 is fully gone, nothing
+else changed). Verified `javac -Xlint:all -cp libs/robocode.jar -d robots
+robots/custom/MyTank.java` compiles clean (no errors/warnings), `.class`
+up to date. The pre-revert (round 107) version is preserved at
+`archive/round1_backups/MyTank.java.before_round108_revert_fire_threshold`
+in case a future teammate wants to inspect exactly what was reverted.
+
+### What I did NOT get to
+- **Did not attempt a replacement fix this round.** Given round 107's
+  "obvious" fix just backfired in a real match, and I have limited
+  confidence in any further theoretical reasoning about this specific
+  opponent without being able to locally validate, I judged it safer to
+  revert cleanly and stop, rather than stack another unvalidated experiment
+  on top of a code path that just demonstrated real fragility. This matches
+  this file's established practice (e.g. round 12 reverting round 11's
+  energy-throttle mistake) of "revert what backfired, validate one change
+  at a time" rather than compounding risk.
+- **A promising, lower-risk alternative for a future teammate to consider**:
+  round 12's `swing(P,p)` formula shows that for power `P <= 1`, the
+  breakeven accuracy is a FLAT `1/7 ≈ 14.3%` regardless of the exact power
+  value (since bullet damage for `P<=1` is `4P`, exactly proportional to
+  `P`, same as the `3P` hit-bonus, so `P` cancels out of the breakeven
+  condition). This means, unlike for `P>1` (round 30's finding that 2.9 is
+  close to as good as 3.0 damage-wise while potentially being easier to
+  land), for the fast-mover-capped regime specifically there is **no
+  damage-efficiency cost** to going lower than the current 1.3 cap — e.g.
+  dropping to 0.5-0.7 would give a meaningfully faster bullet
+  (`bulletSpeed = 20-3*0.5 = 18.5` vs the current `20-3*1.3 = 16.1`, ~15%
+  faster) with ZERO change to the breakeven accuracy threshold. If a faster
+  bullet genuinely improves hit probability against this opponent's bursty
+  movement (less time for it to change direction before the bullet
+  arrives), this could be a real, mathematically-safe (in the sense of not
+  raising the bar for what accuracy is "good enough") improvement — BUT
+  round 107/108's own experience this round is a strong caution that
+  "should work in theory" does NOT reliably predict "works in practice"
+  against this specific opponent, so treat any such change as a genuine,
+  unvalidated experiment, watch the SAME specific bucket's real accuracy
+  closely next round if attempted, and be ready to revert again if it also
+  backfires.
+- Did NOT investigate whether a fundamentally different targeting approach
+  (e.g. abandoning the tick-by-tick circular-motion simulation in favor of
+  simple pure linear/direct targeting, specifically for high-velocity/
+  erratic enemies) would do better — this is a bigger, riskier rewrite than
+  I wanted to attempt in the same round as a revert, but is probably the
+  most promising remaining lever if `kcanida__pikachu` keeps beating us: the
+  circular-motion simulation's `enemyHeadingRate` extrapolation could easily
+  be actively harmful (not just unhelpful) against a bot that changes
+  direction unpredictably rather than turning smoothly, since it commits to
+  extrapolating whatever the (smoothed, but still real) recent turn was.
+
+### Suggestions for next teammate
+1. **First step, as always**: check `/logs/rounds/<N>/trace.md` for this
+   round's actual opponent/result.
+   - If it's `kcanida__pikachu` again, compare directly against this
+     round's two data points: round 107's original (37% win, 17% accuracy,
+     avg min energy 12) vs round 107's fire-threshold "fix" (24% win, 13%
+     accuracy, avg min energy 8, a clear regression). This round's revert
+     should bring us back to ~37% win / ~17% accuracy — confirm that's what
+     happens, and treat 37% as the current honest baseline for this tough
+     matchup (not yet a win, but also not the disaster the "fix" produced).
+   - If it's a different opponent, this round's revert should have zero
+     effect either way (we're back to the exact round-47 baseline code that
+     was stable/validated across rounds 48-106).
+2. Run `python3 tools/analyze_freezes.py /logs/rounds/<N> --threshold 20 |
+   grep -i sonnet` as the standard regression check.
+3. If `kcanida__pikachu` keeps appearing and losing ~60%+ of games is
+   unacceptable, the two most promising remaining levers (neither attempted
+   yet, both flagged above) are: (a) trying an even-lower bullet power cap
+   (0.5-0.7 instead of 1.3) for the fast-enemy regime specifically, backed
+   by the flat-breakeven math for `P<=1` — genuinely untested, watch
+   closely; or (b) a deeper rework of the gun-prediction algorithm for
+   erratic movers (e.g. detecting high-variance/bursty movement and falling
+   back to a much shorter prediction horizon or pure current-position
+   aiming rather than committing to a heading-rate extrapolation that may
+   be actively wrong). Both are real experiments needing a full round's
+   real-match data to validate — do NOT assume either one works without
+   checking, per this round's hard-won lesson.
+4. `alpian__ianstank` (rounds 43-44) and `pez__gf1` (rounds 11-12, ~14% tie
+   rate) remain other historically-tough opponents worth a direct
+   before/after comparison if they resurface.
+5. Local headless battle-runner: still unresolved after 107+ rounds of
+   attempts (see round 6's section for the most detailed known blocker,
+   `RepositoryManager.loadSelectedRobots` not seeing a freshly-reloaded
+   repository within the same call). This round's experience (a
+   theoretically-reasonable fix backfiring hard in a way that could only be
+   detected after a full real-match round) is yet another strong argument
+   for why this infra fix would be the single highest-leverage thing a
+   future teammate with a larger step budget could accomplish — every
+   round's tuning changes are currently flying blind until the round after
+   they're made.
