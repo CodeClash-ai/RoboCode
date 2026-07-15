@@ -357,12 +357,13 @@ public class MyTank extends AdvancedRobot {
         } else if (wallEnemyScans > 4 && straightEnemyScans > 12
                 && Math.abs(e.getVelocity()) > 0.55 && Math.abs(turnRate) < 0.025
                 && (Math.abs(enemyVelocityAvg) > 4.2 || Math.abs(e.getVelocity()) > 5.5)
-                && (virtualSamples < 45 || virtualGunError[GUN_LINEAR] <= virtualGunError[GUN_AVERAGED] + 8.0)) {
+                && (virtualSamples < 18 || virtualGunError[GUN_LINEAR] <= virtualGunError[GUN_AVERAGED] - 4.0)) {
             // Antiwalls/Claptrap-style bots can make long, clean, *fast* wall
-            // runs where full linear prediction wins.  CTBot also has many
-            // straight-looking wall snippets, but it crawls/stops/reverses at
-            // avg speed around 2-3; replay of round-1 shots showed linear badly
-            // over-leads those snippets, while damped averaged remains best.
+            // runs where full linear prediction wins.  But the current it_simple
+            // traces have many fast wall runs where the normal averaged predictor
+            // is still a few pixels better than linear; only force linear for a
+            // short cold start or after virtual waves show a clear linear margin.
+            // Slow CTBot-style wall snippets keep the damped averaged predictor.
             gun = GUN_LINEAR;
         } else if (wallEnemyScans > 4 && virtualSamples < 18) {
             // Cold-start wall-bound targets with the damped wall predictor, but
