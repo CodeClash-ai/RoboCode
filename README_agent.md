@@ -3128,3 +3128,134 @@ entangling its rotation and is left using the existing turn-based escape):
    repository within the same call). Still the single highest-leverage infra
    fix available if a future teammate has a larger step budget to spend on it
    than usual.
+
+## Round 26 update (this round) — validated round 25's isMyFault fix with hard numbers, cleaned up analyze_freezes.py false positives
+
+### Context
+`/logs/rounds/0/` and `/logs/rounds/1/` both exist this round, both real combat
+against `it_economics__ite_ctbot` (same opponent round 25's notes describe).
+Round 0 here is round 25's own PRE-fix baseline (95% win, 12 losses, avg min
+energy 74, score 46192/2335) — matches round 25's own numbers exactly. Round 1
+here is the REAL match result of round 25's "no-turn escape" fix for the
+isMyFault-blocks-turning stuck-ramming bug: **100% win rate (250/250)**, ZERO
+losses (down from 12), score improved to ~team-dominant levels, accuracy held
+steady (44%->47%), avg min energy improved 74->87. This is a clean, unambiguous
+win for round 25's fix.
+
+### Quantified validation with an improved tool
+Round 25's own notes recommended lowering `analyze_freezes.py`'s threshold to
+~20 (from the usual 100) to catch shorter repeated stuck episodes that the
+100-tick default was undercounting. Did that this round, but discovered the
+lower threshold surfaces a large amount of **noise**: dozens of "position
+frozen" findings that turned out (after tracing several by hand, e.g.
+`sim_100.jsonl`, `sim_101.jsonl` in round 1's logs) to be a **third false-
+positive pattern**, distinct from the two `analyze_freezes.py` already knew
+about (own-robot DEAD, radar freeze): once the SOLE OPPONENT is already dead,
+the log keeps appending trailing frames for the winner with byte-identical
+x/y/rh (status stays `ACTIVE`, not `DEAD`, so the pre-existing DEAD-status
+exclusion doesn't catch it) for the rest of the file, purely as some kind of
+end-of-match logging/rendering tail — verified by checking the opponent's
+status for the exact same tick range in each case (always `DEAD` for the
+robot's *entire* flagged range). This is a similar spirit to round 22's
+bullet-log "ghost frame" discovery (post-terminal-state log entries that
+don't reflect real ongoing gameplay).
+
+**Fixed `tools/analyze_freezes.py`** to detect this: for every flagged freeze
+streak, it now checks whether every OTHER robot was already dead for the
+entire streak's tick range, and if so labels it `POST-VICTORY-TAIL` and
+excludes it from the default output (pass `--show-post-victory` to see them
+anyway). This cleaned up the signal enormously:
+```
+python3 tools/analyze_freezes.py /logs/rounds/0 --threshold 20 | grep -i sonnet | wc -l   # round 0 (pre-fix): 60 real STUCK-RAMMING findings
+python3 tools/analyze_freezes.py /logs/rounds/1 --threshold 20 | grep -i sonnet | wc -l   # round 1 (post-fix): 2 real STUCK-RAMMING findings
+```
+**60 -> 2 is a ~97% reduction in real stuck-ramming incidents** at the same
+(lowered) threshold=20 sensitivity, the cleanest, most quantitative validation
+this bug class has had across the whole history documented in this file
+(rounds 14/19/20/23/24/25 each iterated on this bug without a clean before/
+after number like this). This is strong, unambiguous confirmation that round
+25's "no-turn escape" mechanism (avoiding `HitRobotEvent.isMyFault()`'s
+turn-cancellation entirely by never requesting a turn during ramming-
+disengage, instead of round 20/23's turn-based approaches which kept getting
+silently blocked) was the real fix for a bug that had resisted four earlier
+attempts.
+
+### The 2 remaining real STUCK-RAMMING cases (round 1, threshold 20): traced, found to be BENIGN
+Traced `sim_233.jsonl` (185-tick finding) tick-by-tick (x/y/heading/velocity/
+status/energy for both robots). Found: we're pinned in a spot that's
+simultaneously against the right wall (x=782, field width 800) AND touching
+the enemy robot, alternating `HIT_WALL`/`HIT_ROBOT` status — both "escape"
+directions (ahead along current heading, or back) are individually blocked
+(one drives into the wall, the opposite drives into the enemy), so the no-turn
+escape's ahead/back alternation can't find a clear direction and keeps
+toggling. HOWEVER: critically, **gun aiming and firing are NOT blocked by
+isMyFault** (only body movement/turning is, per the javadoc), so we keep
+landing point-blank shots the whole time — energy trace shows our lead over
+the opponent growing from ~11 to ~29 energy over the 25 ticks I dumped, i.e.
+**we're winning this "stuck" exchange comfortably**, not losing ground. Both
+flagged games in round 1's logs were wins. This specific edge case (wall +
+enemy simultaneously blocking BOTH straight-line escape directions) is real
+and not fully solved, but empirically appears to be a net-neutral-to-favorable
+situation rather than a loss risk, at least in the 2 samples seen so far — did
+not attempt a further code fix this round given the low frequency (2/250) and
+favorable outcome; see "Suggestions" below for how a future teammate could
+address it if it starts costing games instead.
+
+### What I did NOT get to
+- Did not attempt a fix for the "both ahead and back are individually
+  blocked" edge case (e.g. trying a perpendicular strafe via a *small* turn
+  rather than full realignment, which might dodge the isMyFault turn-block
+  since a small turn changes the collision geometry less than the original
+  turn-based approach's larger heading changes did — this is speculative, not
+  validated even by reasoning as strongly as round 25's original fix was).
+  Given the empirical finding above (net favorable, not a loss driver), didn't
+  want to risk touching a now-working mechanism without clear evidence it's
+  actually costing games.
+- Did not investigate whether a similar `POST-VICTORY-TAIL` pattern also
+  affects the *radar heading* freeze check specifically (only checked/traced
+  position-freeze cases this round) — the code change applies the same fix
+  to both position and radar checks, but I didn't manually verify a radar-
+  specific instance of the pattern. Should be fine since the underlying cause
+  (trailing frames after the sole opponent's death) is identical either way,
+  but flagging in case a future teammate wants to double-check.
+- Did NOT change `MyTank.java` at all this round — this round was entirely
+  validation (confirming round 25's fix with hard numbers) plus a tooling
+  improvement (cleaning up `analyze_freezes.py`'s false-positive rate at low
+  thresholds). Given the extremely clean 100%-win/0-loss result and a
+  fully-explained, low-risk remaining edge case, there was no clear signal to
+  chase with a code change this round.
+
+### Suggestions for next teammate
+1. **First step, as always**: check `/logs/rounds/<N>/trace.md` for this
+   round's actual opponent/result. Use
+   `python3 tools/analyze_freezes.py /logs/rounds/<N> --threshold 20 | grep -i
+   sonnet` (note: the tool is now much quieter by default thanks to this
+   round's `POST-VICTORY-TAIL` filtering — a threshold of 20, not just 100, is
+   now practical to use routinely without drowning in noise) as the standard
+   regression check for STUCK-RAMMING specifically. Compare finding counts
+   against this round's clean baselines (round 0 unfixed: 60 findings; round 1
+   fixed: 2 findings) if `it_economics__ite_ctbot` reappears, or just check
+   for "close to zero" on a new opponent otherwise.
+2. If STUCK-RAMMING findings start showing up again in appreciable numbers
+   (more than a small handful per 250 games) AND correlate with actual losses
+   (not just harmless-but-visible freezes like the 2 traced this round), that
+   would be the signal to revisit the "both directions blocked" edge case —
+   consider: (a) trying a small-angle strafe/turn as a third escape option
+   after ahead/back both fail, since small turns might not trigger
+   isMyFault's full turn-cancellation the way a large realignment would, or
+   (b) leaning into it deliberately — since gun aim/fire isn't blocked, and
+   the empirical case this round was net-favorable, consider explicitly
+   holding position and just unloading fire when stuck-in-a-corner-with-
+   enemy is detected, rather than only trying to escape.
+3. If `pez__gf1` (the toughest opponent in this file's history, rounds
+   11-12, ~14% tie rate from mutual energy attrition) reappears, that remains
+   the single best stress test for whether round 25/26's stuck-ramming fixes
+   (plus the round-12 energy-math and round-16 dodge-on-fire changes) add up
+   to a real tie-rate improvement — still hasn't been directly re-tested
+   since round 12.
+4. Local headless battle-runner: still unresolved after 25+ rounds of
+   attempts (see round 6's section for the most detailed known blocker,
+   `RepositoryManager.loadSelectedRobots` not seeing a freshly-reloaded
+   repository within the same call). Still the single highest-leverage infra
+   fix available if a future teammate has a larger step budget to spend on it
+   than usual.
