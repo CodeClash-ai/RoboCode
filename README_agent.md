@@ -3587,3 +3587,51 @@ Compiles Java 8 (major version 52). Backup of prior source: /tmp/MyTank.bak.java
   `head -1 /logs/rounds/0/sim_0.jsonl` for opponent name + INDEX MAPPING first.
 - The remaining lever if grind losses persist is WAVE SURFING (high-risk, harness
   broken, trust /logs only). Keep MyTank class name + Java-8 bytecode.
+
+# Agent Notes (Round 2 verification pass, THIS pass) — opponent = it_economics__ite_m9
+
+## STATUS: THE ROUND-1 W=0.75 GUN CHANGE WORKED BIG — NO CODE CHANGE THIS PASS
+Verified /logs/rounds/{0,1} (opponent it_economics__ite_m9, SLOW near-straight
+mover that CONSERVES energy; INDEX both rounds: i=0=ite_m9, i=1=opus):
+- Round 0 (OLD W=1.0 head-on): opus 39510 vs ite_m9 7909 (84% share). trace WIN
+  RATE 91% — LOST 22 games (long energy-war grinds).
+- Round 1 (prior teammate switched gun aim W=1.0 -> W=0.75 partial lead): opus
+  42916 vs ite_m9 3843. results_0.txt: opus_4_8.MyTank 1674 (92%), 10/10 firsts.
+  HUGE improvement: full 250-sim sweep LOSSES = 1/250 (down from 22!), close(<20E)
+  =1, ourFE min/mean = 0.0/103.9, mean killtick 257 (faster), enemy score HALVED
+  (7909 -> 3843). The W=0.75 change (partial lead for this slow tiny-drift mover)
+  is real-result-confirmed.
+
+## Fresh W-sweep on ROUND-1 logs CONFIRMS W=0.75 is the peak (not just biased)
+Per-tick interception over recorded round-1 paths (80 games), MONOTONIC PEAK at 0.75:
+  W=0.0 0.436 | W=0.5 0.533 | W=0.6 0.546 | W=0.7 0.564 | W=0.75 0.576 |
+  W=0.8 0.575 | W=0.9 0.553 | W=1.0 0.526.
+Even though the replay is BIASED toward W=0.75 (round-1 enemy path was reactive to
+our actual W=0.75 shots), the clean peak + the cross-round REAL result (W=1.0 lost
+22 / W=0.75 lost 1) is decisive. KEEP W=0.75. Do NOT revert to head-on.
+
+## The 1 loss (sim_243) is pure VARIANCE, NOT a fixable config bug
+621-turn grind, behind on energy 78% of ticks, avg dist 286px. BUT our firing was
+NET-POSITIVE: in-game hit rates 200-300px 0.36, 300-400px 0.53 (both above the 1/3
+break-even). We simply had a cold-streak on defense (enemy landed its shots that
+game). No firing gate / power taper would have helped — our shots were good. We win
+10/10 firsts in EVERY 10-round battle, so this is NOT a match-level loss.
+
+## Decision: NO code change (deliberate)
+Source IDENTICAL to round-1 winning commit 64e7f21 (git diff on MyTank.java =
+empty). W=0.75 (line 299), power tiers 3.0/<300 1.6/<400 1.0/<500 0.6/else, orbit
+~245px, energy-war taper, fire gates, dodge (0.45) all data-optimal. Any edit only
+risks regression on a 249/250 sweep we win with margin. Re-verified compile:
+  javac --release 8 -cp libs/robocode.jar -d robots robots/custom/MyTank.java  # OK
+  javap -v robots/custom/MyTank.class | grep "major version"  # -> 52 (Java 8)
+
+## For next teammate
+Only act if a NEW /logs shows a MATCH loss (enemy wins a 10-round battle) or win
+rate collapsing. ite_m9 is SLOW/near-straight & conserves energy -> KEEP W=0.75
+partial lead (fresh W-sweep peak confirmed). Do NOT revert to head-on off any bias
+argument — the cross-round REAL result is decisive. If it becomes a FAST mover
+(avg|v|>4), lower W toward 0.25; if HEAVY spinner (avg|dh|>0.06), set W=0.0
+(circular). The remaining lever if grind losses ever RISE to a match threat is
+WAVE SURFING (high-risk, harness broken, trust /logs only). Always re-check
+`head -1 /logs/rounds/0/sim_0.jsonl` for opponent name + INDEX MAPPING first.
+Keep MyTank class name + Java-8 bytecode (only hard requirement).
