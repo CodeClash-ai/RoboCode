@@ -39,6 +39,7 @@ public class MyTank extends AdvancedRobot {
     private int stopGoEnemyScans = 0;
     private int closeRammerScans = 0;
     private int trackerApproachScans = 0;
+    private int npcSniperScans = 0;
     private double enemyVelocityAvg = 0.0;
     private double enemySpeedAvg = 0.0;
     private double enemyTurnRateAvg = 0.0;
@@ -210,6 +211,16 @@ public class MyTank extends AdvancedRobot {
         } else {
             trackerApproachScans = Math.max(0, trackerApproachScans - 1);
         }
+        // NPCSniper can briefly leave the wall/straight signature late in long
+        // rounds, exactly when we most need its low-energy conservation caps.
+        // Keep a sticky confirmation counter once the medium-fire fast/straight
+        // wall-runner profile has appeared instead of falling back to generic
+        // slow/low-energy shots that spend 0.5-0.6 energy while nearly dead.
+        if (npcSniperSignatureRaw()) {
+            npcSniperScans = Math.min(70, npcSniperScans + 4);
+        } else {
+            npcSniperScans = Math.max(0, npcSniperScans - 1);
+        }
 
         updateVirtualGuns(enemyX, enemyY);
 
@@ -247,6 +258,15 @@ public class MyTank extends AdvancedRobot {
                 // short movement command on a clean perpendicular escape before the
                 // normal range controller resumes on the following scans.
                 drivePerpendicularEscape(absBearing, 230.0);
+                return;
+            }
+            if (npcSniperEnemy() && getEnergy() < 24.0) {
+                // The remaining NPCSniper loss came from a late low-energy exchange:
+                // after a few medium bullets our bot kept orbiting predictably near
+                // 250-370px and was finished by one small hit.  When it fires while our
+                // reserve is low, spend the next movement command sidestepping the shot
+                // instead of only reversing along the same orbit.
+                drivePerpendicularEscape(absBearing, 260.0);
                 return;
             }
         }
@@ -359,7 +379,7 @@ public class MyTank extends AdvancedRobot {
             // lots of medium shots.  It is harder to hit than the simple wall
             // cruisers, and max-power shots self-deplete in the loss traces; keep a
             // wider, safer band and rely on faster damped bullets.
-            preferredDistance = getEnergy() < 28.0 ? 485.0 : 405.0;
+            preferredDistance = getEnergy() < 18.0 ? 540.0 : (getEnergy() < 28.0 ? 500.0 : 405.0);
         } else if (velociRobotEnemy()) {
             // VelociRobot-style target in the current logs: medium-fast low-turn
             // straight runs with frequent weak fire.  It is not a continuous Crazy
@@ -616,9 +636,9 @@ public class MyTank extends AdvancedRobot {
             } else if (getEnergy() > 24.0) {
                 power = Math.min(Math.max(power, distance < 360 ? 1.35 : 1.05), 1.45);
             } else if (getEnergy() > 12.0) {
-                power = Math.min(power, distance < 330 ? 0.65 : 0.45);
+                power = Math.min(power, distance < 330 ? 0.50 : 0.30);
             } else {
-                power = Math.min(power, getEnergy() < 7.0 ? 0.15 : 0.30);
+                power = Math.min(power, getEnergy() < 7.0 ? 0.15 : 0.20);
             }
         }
         if (velociRobotEnemy()) {
@@ -1101,7 +1121,13 @@ public class MyTank extends AdvancedRobot {
         // straight/wall runner, repeated medium bullets (roughly power 1.2-1.8), and
         // enough stop/go pauses that full linear/circular over-leads.  This is more
         // active than daCruzer/Antiwalls (so do not use fastWallCruiser max power),
-        // but not a power-3 stop/go duelist.
+        // but not a power-3 stop/go duelist.  Once confirmed, keep the branch sticky
+        // for a while; in round 1 it briefly fell out late in the only loss, causing
+        // generic low-energy 0.5-0.6 shots instead of NPCSniper pinpricks.
+        return npcSniperScans > 0 || npcSniperSignatureRaw();
+    }
+
+    private boolean npcSniperSignatureRaw() {
         return enemyFireCount > 3
                 && enemyFirePowerSamples > 2
                 && enemyFirePowerAvg > 1.15
