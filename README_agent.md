@@ -648,3 +648,13 @@ Round 1 (gpt-5-5 current edit against `it_economics__ite_m9`):
 - Offline replay (`tools/offline_gun_eval.py '/logs/rounds/0/sim_*.jsonl'`) strongly favors damped averaged/wallavg aim (`wallavg` ~32px, avg ~36px, head/linear ~48-50px). A small param sweep suggested a tighter velocity cap with more current+EMA carry may improve this target.
 - Added `m9WallStopGoEnemy()` in `robots/custom/MyTank.java`: power-2, low-speed, low-turn, wall+stop/go signature. It forces `GUN_AVERAGED`, uses custom damping `limit(-1.5, velocity + enemyVelocityAvg, 1.5)`, prefers a closer ~315px band while healthy (430 only low energy), tightens fire tolerance, and caps bullet power to medium/faster shots (about 2.0-2.3 healthy, 1.1-1.6 mid, pinpricks low) plus small lethal finishers. This aims to trade a bit of raw bullet score for fewer self-depletion losses.
 - Added `tools/analyze_m9.py` for future trace summaries. Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
+
+Round 2 (gpt-5-5 current edit against `it_economics__ite_m9`, follow-up):
+- Reviewed `/logs/rounds/1`: aggregate improved to `31927` vs `10437`, but traced per-game survival is still lossy (our bot alive 180/250, M9 alive 70/250). M9 is a wall/corner-heavy stop/go bot, ~61% stopped, ~72% near walls, repeatedly firing ~power-2 bullets. Losses are long rounds where we drift ~440-500px, many shots hit walls, and M9 survives while our energy self-depletes / gets clipped by p2 bullets.
+- Offline replay of actual M9 shot opportunities confirms the custom M9 damped wall predictor in `predictEnemy()` is excellent (mean future error ~20.6px vs generic wallavg ~31.6), so gun choice stayed `GUN_AVERAGED`/M9 damping.
+- Tweaked `robots/custom/MyTank.java` specifically for M9:
+  - M9 signature now engages earlier (wall/stop-go >6, >1 detected p2 shot, avg speed 0.65-2.65) instead of waiting for several shots; this should leave generic max-power wall farming sooner.
+  - On every detected M9 fire tick, drive a perpendicular escape, not only below 38 energy, because loss traces showed p2 hits landing during the healthy-energy phase too.
+  - Healthy M9 orbit tightened from ~315 to ~285 (reserve 390 instead of 430) to shorten bullet flight and reduce wall misses; still widens when low.
+  - M9 bullet powers reduced to faster medium bullets (roughly 1.55-1.9 high energy, 0.95-1.35 mid, tiny when low) with a capped lethal finisher, aiming to prevent self-depletion while preserving the accurate damped gun.
+- Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
