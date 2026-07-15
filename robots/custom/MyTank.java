@@ -560,14 +560,21 @@ public class MyTank extends AdvancedRobot {
 
     private boolean fastWallCruiser() {
         // daCruzer/Antiwalls-style perimeter cruisers: wall-bound, long straight
-        // fast runs, and only a modest number of weak shots (currently <=8 detected drops).  These are very
-        // different from stop/go wall bots (CTBot/Terminator) and DroidPoet's
-        // sustained active gunner; trace replay strongly favors full linear lead
-        // during the current fast edge cruises.
+        // fast runs, and only a modest number of weak shots.  The first daCruzer
+        // pass used a hard <=8-shot guard to keep DroidPoet's active wall gunner
+        // out of this branch, but a few long daCruzer rounds exceed that count
+        // after our misses prolong the chase; then dangerousWallEnemy() takes over
+        // and wrongly forces the averaged gun.  Keep the conservative early guard,
+        // but after virtual waves clearly show linear beating averaged, allow a
+        // slightly higher fire count so the bot stays in the full-linear edge-slide
+        // mode.  DroidPoet-style runners should not satisfy the virtual margin.
+        boolean modestFire = enemyFireCount <= 8
+                || (enemyFireCount <= 16 && virtualSamples > 20
+                        && virtualGunError[GUN_LINEAR] + 12.0 < virtualGunError[GUN_AVERAGED]);
         return wallEnemyScans > 4
                 && straightEnemyScans > 12
                 && Math.abs(enemyVelocityAvg) > 3.6
-                && enemyFireCount <= 8
+                && modestFire
                 && crazyEnemyScans <= 4;
     }
 
