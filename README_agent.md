@@ -3519,3 +3519,119 @@ match anyway. Flagging clearly for a future teammate with more time.
    repository within the same call). Still the single highest-leverage infra
    fix available if a future teammate has a larger step budget to spend on it
    than usual.
+
+## Round 29 update (this round) — new weak opponent (it_economics__ite_terminator), confirmed healthy, no code changes
+
+### Context
+Only `/logs/rounds/0/` exists in this environment for me. Per `trace.md` /
+`results.json`, this round's opponent is a **new** one,
+`it_economics__ite_terminator` (different from every opponent documented in
+rounds 1-28 above). Result: **100% win rate (250/250)**, team score
+**44150 vs opponent's 1145** (huge ~39x margin), 48% accuracy, avg speed 6.4,
+avg walls/game 2.6, avg rams/game 0.7, avg min energy 86. Zero losses, zero
+ties. The opponent is weak (0% win rate, 10% accuracy, avg speed 2.5, dies at
+avg turn 299) — moves a bit but not fast/erratic like `barriosnahuel__tirolio`
+(rounds 17-18) and not accurate like `pez__gf1` (rounds 11-12, still the
+toughest opponent seen in this file's history and the single best remaining
+target for re-validating the accumulated stuck-ramming/energy-management/
+dodge-on-fire fixes from rounds 12-26 — has not reappeared).
+
+### Validation performed
+1. `python3 tools/analyze_freezes.py /logs/rounds/0 --threshold 20 | grep -i
+   sonnet` -> **1 finding only**: a 28-tick "radar heading frozen" streak in
+   `sim_57.jsonl` (ticks ~24-52). Manually traced it (dumped `rh`/`s`/`e` per
+   tick for that range) — this is **benign, not a real bug**: the radar
+   heading (5.205 rad) simply converges and holds almost perfectly still
+   because the enemy is sitting nearly dead-ahead and not moving much during
+   that window (energy is still changing on both sides throughout, i.e. we're
+   actively firing/being scanned the whole time — nothing else is frozen,
+   this is just a radar lock that's genuinely settled, not stuck). Not the
+   round-4 radar-freeze bug pattern (that one showed the radar frozen for
+   hundreds/thousands of ticks with zero further combat activity at all — this
+   is 28 ticks with normal ongoing combat). No action taken.
+2. `python3 tools/analyze_power_accuracy.py /logs/rounds/0 --bucket-width 0.5`
+   -> sanity check: **20.4 combined shots/game** vs `trace.md`'s
+   17.7 (sonnet_5) + 3.7 (opponent) = 21.4 — within ~5%, consistent with round
+   28's tick-step fix still holding (tool remains trustworthy, no regression
+   in the tooling itself).
+3. `javac -Xlint:all -cp libs/robocode.jar -d robots
+   robots/custom/MyTank.java` compiles clean, no errors/warnings. `.class`
+   up to date. `MyTank.java` is unchanged from round 28 (950 lines).
+
+### Per-power accuracy breakdown this round (informational, not acted on)
+```
+sonnet_5:
+  1.0-1.5 (velocity-capped, fast enemy): 1229 shots, 44.3% accuracy
+  1.5-2.0 (velocity-capped, med enemy):   436 shots, 34.6% accuracy
+  2.0-2.5 (350-550 distance band, 2.2):   466 shots, 43.8% accuracy
+  2.5-3.0 (150-350 distance band, 2.9):   242 shots, 61.6% accuracy  <- best
+  3.0-3.5 (finishing/press-adv/close):   2050 shots, 38.0% accuracy  <- most-used bucket, below-average accuracy
+```
+Using round 12's `swing(P,p) = p*(9P-2) - P` formula with each bucket's
+observed `p` and a representative `P` at the bucket midpoint, the 2.5-3.0
+bucket (150-350 distance, power 2.9) has by far the best per-shot energy
+swing (~+11.3) of any bucket this round, notably better than the far more
+heavily-used 3.0-3.5 bucket (~+6.5, but 46% of all our shots land here,
+mostly via the "finishing"/"press advantage" `maxUsablePower=3.0` overrides
+from rounds 11/12/18 forcing power up regardless of distance when the
+opponent is slow). This is a similar (though not identical — this round's
+1.5-2.0 bucket is the *worst*, not the 2.0-2.5 or 3.0-3.5 buckets like round
+28's data) pattern to round 28's finding against a different opponent: the
+150-350/2.9-power "sweet spot" band consistently looks like the best
+per-shot value, and the flat-3.0-power override buckets consistently look
+mediocre by comparison, across at least 2 independent opponents now (round 28
+saw 2.5-3.0 accuracy 41%, 2nd-best of 5; this round it's 61.6%, best of 5).
+**Did NOT act on this with a code change** — same reasoning as rounds 22/28:
+(a) only 2 data points so far, both against weak opponents where we're
+already winning every game regardless, (b) this needs more rigorous checking
+that it's really the POWER driving the accuracy difference and not just
+distance/context confounding (the 2.9-power band only ever fires at
+150-350px, an intrinsically easier range to hit at REGARDLESS of power — a
+future teammate could check this by comparing hit rates at similar distances
+across different power levels, which the current tool doesn't break out),
+and (c) no local battle-testing is available to validate a change before a
+full round's real match anyway. Flagging clearly for a future teammate with
+more time/steps: **if this pattern holds a 3rd time against a 3rd different
+opponent**, it would be worth seriously considering whether the finishing/
+press-advantage overrides (`maxUsablePower` in `onScannedRobot()`, rounds
+11/12/18) should be capped at something like 2.9 instead of 3.0, or made
+distance-aware (only push to 3.0 at genuinely close range, use ~2.9 at medium
+range even during a finishing/press-advantage window) — this is a small,
+well-motivated, easily-scoped follow-up if the data keeps pointing this way.
+
+### What I did this round (or rather, chose NOT to do)
+Given a fully healthy result (100% win, 0 losses, 0 ties, only one trivially
+benign freeze finding, tooling sanity checks all green) against a new but
+weak opponent, and no clear underperformance signal to chase, I made **no
+changes to `MyTank.java`'s combat logic** this round — consistent with this
+file's long-established pattern (rounds 6, 13, 15, 21, 22, 26, 27, 28) of not
+touching already-working code without real evidence of a problem. The
+accuracy-by-power finding above is informational/exploratory, not yet
+strong enough (only 2 data points, both weak opponents, distance-confound
+not ruled out) to justify a code change on its own this round.
+
+### Suggestions for next teammate
+1. **First step, as always**: check `/logs/rounds/<N>/trace.md` for the
+   actual opponent this round, and run
+   `python3 tools/analyze_freezes.py /logs/rounds/<N> --threshold 20 | grep -i
+   sonnet` as the standard regression check (should print nothing or only
+   trivially-short benign findings like this round's 28-tick radar settle).
+2. Run `python3 tools/analyze_power_accuracy.py /logs/rounds/<N>
+   --bucket-width 0.5` and check its sanity-check line against `trace.md`'s
+   avg-shots columns (should be within ~5%, per round 28's tick-step fix). If
+   the 150-350/2.9-power "sweet spot" bucket keeps showing up as the
+   best-or-near-best accuracy bucket for a 3rd different opponent in a row
+   (round 28: 2nd-best of 5 at 41%; round 29/this round: best of 5 at 61.6%),
+   seriously consider the "cap finishing/press-advantage overrides at 2.9
+   instead of 3.0, or make them distance-aware" idea sketched above.
+3. `pez__gf1` (rounds 11-12, ~14% tie rate from mutual energy attrition)
+   remains the toughest opponent in this file's history and the single most
+   valuable target for directly re-testing the many stuck-ramming/energy-
+   management/dodge-on-fire changes accumulated since round 12 — still
+   hasn't reappeared after 17 rounds.
+4. Local headless battle-runner: still unresolved after 28+ rounds of
+   attempts (see round 6's section for the most detailed known blocker,
+   `RepositoryManager.loadSelectedRobots` not seeing a freshly-reloaded
+   repository within the same call). Still the single highest-leverage infra
+   fix available if a future teammate has a larger step budget to spend on it
+   than usual.
