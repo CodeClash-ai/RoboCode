@@ -197,7 +197,7 @@ public class MyTank extends AdvancedRobot {
         // Orbit perpendicular, with a distance-control offset.  Far away we cut
         // inward; too close we open out.  wallSmooth then bends the path away
         // from the battlefield edges before we commit to it.
-        double preferredDistance = (crazyEnemyScans > 4 ? 305.0 : (dangerousWallEnemy() ? 335.0 : ((straightEnemyScans > 16 && enemyFireCount == 0 && wallEnemyScans <= 4) ? 310.0 : ((straightEnemyScans > 4 && enemyFireCount == 0) ? 275.0 : (wallEnemyScans > 4 ? 315.0 : (headOnGunIsBest() ? 330.0 : (slowEnemyScans > 12 ? 285.0 : PREFERRED_DISTANCE)))))));
+        double preferredDistance = (crazyEnemyScans > 4 ? 305.0 : (dangerousWallEnemy() ? 335.0 : ((straightEnemyScans > 16 && harmlessLowFireEnemy() && wallEnemyScans <= 4) ? 310.0 : ((straightEnemyScans > 4 && harmlessLowFireEnemy()) ? 275.0 : (wallEnemyScans > 4 ? 315.0 : (headOnGunIsBest() ? 330.0 : (slowEnemyScans > 12 ? 285.0 : PREFERRED_DISTANCE)))))));
         // Against the current GF-style opponent our gun struggles mostly due
         // to long bullet flight, while its own gun almost never connects.  Once
         // virtual guns report a hard-to-hit mover, tighten the orbit a bit to
@@ -257,7 +257,7 @@ public class MyTank extends AdvancedRobot {
             // head-on/near-head-on shots to finish them before they can spend
             // energy on stray bullets (which lowers our available bullet score).
             power = 3.0;
-        } else if (straightEnemyScans > 2 && enemyFireCount == 0 && getEnergy() > 14 && distance < 760) {
+        } else if (straightEnemyScans > 2 && harmlessLowFireEnemy() && getEnergy() > 14 && distance < 760) {
             // Straight runners are easy for the linear gun, even when they are
             // not close enough to the wall to trip wallEnemyScans.  Use max
             // power to shorten antiwalls-style rounds once the line is clear.
@@ -280,7 +280,7 @@ public class MyTank extends AdvancedRobot {
         // enemies), do not gamble the whole energy stack on repeated heavy
         // bullets.  Use tiny bullets at low energy: a hit gives more energy back
         // than it costs, while misses cannot self-kill us quickly.
-        if (straightEnemyScans > 16 && enemyFireCount == 0 && wallEnemyScans <= 4) {
+        if (straightEnemyScans > 16 && harmlessLowFireEnemy() && wallEnemyScans <= 4) {
             // Sustained non-wall straight runners are harmless enough for heavy
             // bullets; the averaged gun still handles their stops/reverses.
             // Keep pressure high while the slightly wider orbit reduces rare
@@ -348,19 +348,20 @@ public class MyTank extends AdvancedRobot {
             // favors the normal averaged stop/reversal predictor over head-on,
             // linear, circular, or the old wall-damped special case.
             gun = GUN_AVERAGED;
-        } else if (straightEnemyScans > 2 && enemyFireCount == 0 && wallEnemyScans <= 4) {
+        } else if (straightEnemyScans > 2 && harmlessLowFireEnemy() && wallEnemyScans <= 4) {
             // Short non-wall straight-looking snippets are often stop/reverse
             // noise (e.g. Tirolio).  The current Claptrap traces also show the
             // damped averaged gun slightly ahead of full linear at our actual
             // shot times, despite long straight runs.
             gun = GUN_AVERAGED;
         } else if (wallEnemyScans > 4 && Math.abs(e.getVelocity()) > 0.55 && Math.abs(turnRate) < 0.025
-                && (virtualSamples < 22 || virtualGunError[GUN_LINEAR] <= virtualGunError[GUN_AVERAGED] + 5.0)) {
-            // Antiwalls-style bots often sit still, then run in a straight line
-            // along an edge.  During those fast/straight wall bursts, full
-            // linear prediction is much better than the damped wall-stop gun,
-            // but only keep forcing it after learning if the virtual scores
-            // agree; some wall runners stop/reverse enough to prefer averaging.
+                && (virtualSamples < 45 || virtualGunError[GUN_LINEAR] <= virtualGunError[GUN_AVERAGED] + 8.0)) {
+            // Antiwalls/Claptrap-style bots often sit still, then run in a
+            // straight line along an edge.  During those fast wall bursts, full
+            // linear prediction beats the damped/averaged wall-stop gun in the
+            // latest trace replay.  Keep the override through more early waves,
+            // then require the virtual scores to stay roughly competitive so
+            // stop/reverse wall runners can still switch back to averaging.
             gun = GUN_LINEAR;
         } else if (wallEnemyScans > 4 && virtualSamples < 18) {
             // Cold-start wall-bound targets with the damped wall predictor, but
@@ -413,6 +414,15 @@ public class MyTank extends AdvancedRobot {
             }
         }
         return best;
+    }
+
+    private boolean harmlessLowFireEnemy() {
+        // Claptrap/Tirolio/Antiwalls-style opponents may show one or two
+        // energy drops from stray shots or wall/collision bookkeeping, but are
+        // still effectively harmless.  Keep the aggressive straight-run farming
+        // active until repeated firing proves otherwise; dangerousWallEnemy()
+        // takes over after several shots for DroidPoet-like perimeter gunners.
+        return enemyFireCount <= 2;
     }
 
     private boolean dangerousWallEnemy() {
