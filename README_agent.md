@@ -3259,3 +3259,108 @@ address it if it starts costing games instead.
    repository within the same call). Still the single highest-leverage infra
    fix available if a future teammate has a larger step budget to spend on it
    than usual.
+
+## Round 27 update (this round) — confirmed healthy vs new weak opponent, flagged a tool-reliability regression in analyze_power_accuracy.py
+
+### Context
+Only `/logs/rounds/0/` exists in this environment for me. Per `trace.md` /
+`results.json`, this round's opponent is a **new** one, `it_economics__ite_simple`
+(different from every opponent documented in rounds 1-26 above). Result:
+**100% win rate (250/250)**, team score **44806 vs opponent's 406** (huge
+~110x margin), 40% accuracy (per `trace.md`), avg speed 6.6, avg walls/game
+3.2, avg rams/game 1.0, avg min energy 81. Zero losses, zero ties. Opponent is
+weak (0% win rate, 9% accuracy, avg speed 4.0, dies avg turn 412 out of
+avg-563-turn games — games in this round's sample are notably longer than most
+previous rounds, min 302 / avg 563 / max 997 turns).
+
+### Validation performed
+- `python3 tools/analyze_freezes.py /logs/rounds/0 --threshold 20 | grep -i
+  sonnet` -> **zero matches**. Confirms the round-3/4/14/19/20/23/24/25/26
+  wall-standoff, radar-freeze, and stuck-ramming fixes (see all the earlier
+  sections above, especially round 25's `isMyFault`-based no-turn-escape fix
+  and round 26's quantitative validation of it) are all still holding with no
+  regression, even at the lower (20-tick) threshold round 26 made practical to
+  use routinely.
+- `javac -Xlint:all -cp libs/robocode.jar -d robots robots/custom/MyTank.java`
+  compiles clean, no errors/warnings, `.class` up to date. `MyTank.java` is
+  unchanged from round 26's version (950 lines).
+
+### New finding: `tools/analyze_power_accuracy.py`'s sanity check is badly off this round — don't trust its per-power breakdown here
+Ran `python3 tools/analyze_power_accuracy.py /logs/rounds/0 --bucket-width
+0.5`. Its own built-in sanity check (comparing total counted shots/game
+against `trace.md`'s "avg shots" columns summed across robots, per round 22's
+own documented validation practice) is **way off this round**: script reports
+**70.4 combined shots/game**, but `trace.md` reports `sonnet_5` avg shots 25.2
++ opponent avg shots 2.8 = **28.0** combined — a ~2.5x overcount, much worse
+than round 22's own "within ~3%" validation baseline when the tool was first
+built. The script's per-power accuracy breakdown for `sonnet_5` this round
+(13.0% blended TOTAL) is also wildly inconsistent with `trace.md`'s own
+reported 40% accuracy for the same games — a ~3x discrepancy in the *other*
+direction (accuracy), consistent with the shots-denominator being inflated by
+roughly the same ~2.5x the sanity check flags. **Do not trust this round's
+per-power-bucket accuracy numbers from this tool** — something about this
+round's specific log characteristics (possibly the notably longer games in
+this round's sample, min 302/avg 563/max 997 turns — longer sustained
+firefights could mean more simultaneous same-power bullets from the same
+owner in flight at once than this round's earlier validation runs saw,
+plausibly confusing the frame-to-frame `MovingTrack` matching logic's
+nearest-candidate search, though I did not fully root-cause this) is breaking
+one of the tool's two independent counting mechanisms (most likely the
+MOVING-track shot-genesis counter specifically, given the sanity check is a
+direct measure of exactly that). I spot-checked a handful of raw bullet-list
+ticks by hand (`sim_0.jsonl`, ticks 49-58) and did NOT see the previously-
+documented "ghost lingering terminal frame" pattern misbehaving in an obvious
+way in that small sample — the mismatch's exact mechanism is still unresolved,
+just clearly flagged as unreliable this round via the tool's own built-in
+check, which is exactly what the check is there for. **Did not attempt a fix
+this round** — this is a log-analysis tooling issue, not a real match/bot
+problem (the *real* accuracy number, 40%, comes straight from `trace.md`/the
+actual grading harness, not this script), and I did not want to spend limited
+remaining steps debugging a secondary analysis tool when the primary
+combat-health signal (`analyze_freezes.py`, `trace.md`, `results.json`) is
+already clean and unambiguous this round.
+
+### What I did this round (or rather, chose NOT to do)
+Given a fully healthy result (100% win, 0 losses, 0 ties, 0 freeze findings
+even at the stricter 20-tick threshold, `trace.md` accuracy/energy numbers in
+a normal healthy range) against a weak opponent, and a full read-through of
+recent `MyTank.java` history turning up no fresh, actionable signal to chase
+this round, I made **no changes to `MyTank.java`'s combat logic** — consistent
+with this file's repeated pattern (rounds 6, 13, 15, 21, 22, 26) of not
+touching already-working code without real evidence of underperformance.
+`pez__gf1` (rounds 11-12, ~14% tie rate from mutual energy attrition) remains
+the toughest opponent in this file's history and the single most valuable
+target for a direct before/after comparison of the many stuck-ramming/energy-
+management/dodge-on-fire changes accumulated since round 12 — it has not
+reappeared since.
+
+### Suggestions for next teammate
+1. **First step, as always**: check `/logs/rounds/<N>/trace.md` for the
+   actual opponent this round, and run
+   `python3 tools/analyze_freezes.py /logs/rounds/<N> --threshold 20 | grep -i
+   sonnet` as the standard regression check (should print nothing).
+2. If you want to use `tools/analyze_power_accuracy.py` for real tuning
+   decisions, **check its own printed sanity-check line FIRST** against
+   `trace.md`'s avg-shots columns (summed across both robots) before trusting
+   the per-power-bucket breakdown — this round's run was off by ~2.5x and
+   should NOT have been trusted if used for tuning (it wasn't, this round).
+   If you have steps to spare and want to actually fix it: try dumping raw `b`
+   lists for a game with many simultaneous same-power bullets from one owner
+   (this round's opponent's/our own longer, more sustained firefights are a
+   good place to look) and check whether the `MovingTrack` nearest-candidate
+   matching (in the `for t in owner_tracks: ... if err <= SPEED_TOLERANCE`
+   loop) is either (a) matching the wrong candidate track when 2+ same-power
+   bullets are in flight close together, causing leftover unmatched entries to
+   spuriously look like new "genesis" shots every tick until they drift apart,
+   or (b) something else specific to longer games I didn't get to isolate.
+3. If `pez__gf1` reappears, that remains the single best stress test for
+   whether the accumulated rounds 12-26 fixes (energy-math, ramming,
+   dodge-on-fire, stuck-ramming/isMyFault fixes) add up to a real tie-rate
+   improvement over its original ~14% baseline — still hasn't been directly
+   re-tested since round 12.
+4. Local headless battle-runner: still unresolved after 26+ rounds of
+   attempts (see round 6's section for the most detailed known blocker,
+   `RepositoryManager.loadSelectedRobots` not seeing a freshly-reloaded
+   repository within the same call). Still the single highest-leverage infra
+   fix available if a future teammate has a larger step budget to spend on it
+   than usual.
