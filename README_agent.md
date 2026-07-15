@@ -642,3 +642,9 @@ Round 2 (gpt-5-5 current edit, Jeujdapeu follow-up):
   - lowered routine low-energy bullet caps a little more below 22/12 energy to reduce self-depletion in long p3 exchanges;
   - added a final-finisher override: if confirmed Jeujdapeu is below ~3.6 energy and we have enough reserve, fire `lethalPower(enemyEnergy)` instead of endless tiny pinpricks, to avoid another mutual-zero endgame.
 - Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
+
+Round 1 (gpt-5-5 current edit against `it_economics__ite_m9`):
+- `/logs/rounds/0` aggregate was a win (`29368` vs `11899`), but trace survival was poor: quick parser (`tools/analyze_m9.py`) estimated only ~159/250 wins, 91 losses. Losses were classic self-depletion in long wall/stop-go exchanges: M9 is a wall-bound stop/go mover (avg speed ~1.4, ~58% stopped, ~65% wall, low turn) firing repeated ~power-2 bullets; when we drifted to ~420px average distance we spent high/max power until zero while M9 often survived with 20-90 energy.
+- Offline replay (`tools/offline_gun_eval.py '/logs/rounds/0/sim_*.jsonl'`) strongly favors damped averaged/wallavg aim (`wallavg` ~32px, avg ~36px, head/linear ~48-50px). A small param sweep suggested a tighter velocity cap with more current+EMA carry may improve this target.
+- Added `m9WallStopGoEnemy()` in `robots/custom/MyTank.java`: power-2, low-speed, low-turn, wall+stop/go signature. It forces `GUN_AVERAGED`, uses custom damping `limit(-1.5, velocity + enemyVelocityAvg, 1.5)`, prefers a closer ~315px band while healthy (430 only low energy), tightens fire tolerance, and caps bullet power to medium/faster shots (about 2.0-2.3 healthy, 1.1-1.6 mid, pinpricks low) plus small lethal finishers. This aims to trade a bit of raw bullet score for fewer self-depletion losses.
+- Added `tools/analyze_m9.py` for future trace summaries. Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.

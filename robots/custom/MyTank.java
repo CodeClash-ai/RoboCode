@@ -293,6 +293,13 @@ public class MyTank extends AdvancedRobot {
                 drivePerpendicularEscape(absBearing, 240.0);
                 return;
             }
+            if (m9WallStopGoEnemy() && getEnergy() < 38.0) {
+                // M9 keeps firing power-2 down the wall/stop-go exchange.  Once our
+                // energy reserve is no longer dominant, make its firing tick cross the
+                // gun line instead of only reversing the same orbit.
+                drivePerpendicularEscape(absBearing, 250.0);
+                return;
+            }
             if (npcSniperEnemy() && getEnergy() < 24.0) {
                 // The remaining NPCSniper loss came from a late low-energy exchange:
                 // after a few medium bullets our bot kept orbiting predictably near
@@ -369,6 +376,12 @@ public class MyTank extends AdvancedRobot {
             // Late losses against the current power-3 turner were decided by one more
             // heavy hit while we were low.  Reopen range before resuming the orbit.
             drivePerpendicularEscape(absBearing, 380.0);
+            return;
+        }
+        if (m9WallStopGoEnemy() && getEnergy() < 30.0 && e.getDistance() < 310.0) {
+            // Avoid low-energy point-blank wall scrambles against the current power-2
+            // stop/go shooter; resume the normal close band after a safe gap is open.
+            driveAwayFrom(absBearing, 335.0);
             return;
         }
         if (lowFireTracker() && e.getDistance() < 415.0) {
@@ -556,6 +569,13 @@ public class MyTank extends AdvancedRobot {
             // safe to keep the short-flight damped stop/go exchange instead of
             // falling into the old RegullarMonk conservation orbit.
             preferredDistance = 275.0;
+        } else if (m9WallStopGoEnemy()) {
+            // it_economics__ite_m9 is a power-2 wall/stop-go duelist.  Round-0 losses
+            // correlated with us drifting out around 420px and spending high-power
+            // bullets until self-depletion while it survived on 20-90 energy.  Keep
+            // the proven closer hit band while healthy, only widening in the true
+            // reserve phase.
+            preferredDistance = getEnergy() < 22.0 ? 430.0 : 315.0;
         } else if (mediumStopGoDuelist()) {
             // MarkRobo-style medium-power stop/go duelists are the current lossy
             // profile.  They are easy enough to outscore, but close max-power
@@ -952,6 +972,22 @@ public class MyTank extends AdvancedRobot {
             } else {
                 power = Math.min(power, 0.45);
             }
+        } else if (m9WallStopGoEnemy()) {
+            // Current M9 profile fires endless power-2 bullets but is very predictable
+            // on its wall/stop-go path.  Max-power shots overkill our energy reserve in
+            // long rounds; medium, faster bullets preserve survival and offline replay
+            // still gives small geometric error with the custom damped wall predictor.
+            if (e.getEnergy() < 8.5 && getEnergy() > 6.0) {
+                power = Math.min(Math.max(power, lethalPower(e.getEnergy())), 1.65);
+            } else if (getEnergy() > 58.0 && distance < 660) {
+                power = Math.min(Math.max(power, distance < 420 ? 2.25 : 1.95), 2.30);
+            } else if (getEnergy() > 32.0) {
+                power = Math.min(Math.max(power, distance < 380 ? 1.45 : 1.15), 1.60);
+            } else if (getEnergy() > 16.0) {
+                power = Math.min(power, distance < 340 ? 0.65 : 0.45);
+            } else {
+                power = Math.min(power, getEnergy() < 8.0 ? 0.15 : 0.25);
+            }
         } else if (mediumStopGoDuelist()) {
             // Current MarkRobo logs: stop/go low-turn movement with many medium
             // bullets.  Max-power is fine early, but the only losses are long
@@ -1159,6 +1195,8 @@ public class MyTank extends AdvancedRobot {
             // zero, and better for slow rolls), then return to the damped averaged
             // gun for fast bursts.
             gun = Math.abs(e.getVelocity()) <= 3.25 ? GUN_LINEAR : GUN_AVERAGED;
+        } else if (m9WallStopGoEnemy()) {
+            gun = GUN_AVERAGED;
         } else if (mediumStopGoDuelist()) {
             gun = GUN_AVERAGED;
         } else if (mediumStopGoShooter()) {
@@ -1270,6 +1308,9 @@ public class MyTank extends AdvancedRobot {
         }
         if (velociRobotEnemy()) {
             tolerance = Math.min(tolerance, Math.atan2(18.0, distance));
+        }
+        if (m9WallStopGoEnemy()) {
+            tolerance = Math.min(tolerance, Math.atan2(16.0, distance));
         }
         if (turningHighPowerEnemy()) {
             tolerance = Math.min(tolerance, Math.atan2(15.0, distance));
@@ -1675,6 +1716,32 @@ public class MyTank extends AdvancedRobot {
                 && (virtualSamples < 18 || virtualGunError[GUN_AVERAGED] < 62.0 || bestGunError() < 58.0);
     }
 
+    private boolean m9WallStopGoEnemy() {
+        // it_economics__ite_m9 in /logs/rounds/0: stop/go wall-bound mover, average
+        // speed about 1.4, fixed/low turn rate, and repeated power-2 fire.  It is
+        // more dangerous than weak QuadWall, but not a MarkRobo-style open-field
+        // duelist; keeping this branch separate prevents the generic duelist from
+        // opening too wide and spending max-power bullets in long wall chases.
+        return wallEnemyScans > 8
+                && stopGoEnemyScans > 8
+                && enemyFireCount > 3
+                && enemyFirePowerSamples > 2
+                && enemyFirePowerAvg > 1.65
+                && enemyFirePowerAvg <= 2.18
+                && enemySpeedAvg > 0.85
+                && enemySpeedAvg < 2.25
+                && enemyAbsTurnRateAvg < 0.040
+                && crazyEnemyScans <= 4
+                && !stationaryShooter()
+                && !fixedHeadingMediumShooter()
+                && !fixedHeadingHighPowerShooter()
+                && !fixedHeadingStopGoEnemy()
+                && !fixedHeadingLineEnemy()
+                && !heavyStopGoShooter()
+                && !quadWallEnemy()
+                && !fastWallCruiser();
+    }
+
     private boolean mediumStopGoDuelist() {
         // zcjerry229__markrobo profile in /logs/rounds/0: a low-turn stop/go
         // mover with repeated medium-power fire.  It is close to the broad
@@ -1732,6 +1799,7 @@ public class MyTank extends AdvancedRobot {
                 && !fixedHeadingMediumShooter()
                 && !fixedHeadingStopGoEnemy()
                 && !heavyStopGoShooter()
+                && !m9WallStopGoEnemy()
                 && !mediumStopGoShooter()
                 && !fastWallCruiser()
                 && !straightStopGoLinearEnemy()
@@ -1815,7 +1883,7 @@ public class MyTank extends AdvancedRobot {
         // of the old "harmless wall target" max-power close-orbit mode.
         return wallEnemyScans > 4 && enemyFireCount > 3 && stopGoEnemyScans <= 12
                 && !highPowerStopGoDodger()
-                && !heavyStopGoShooter() && !mediumStopGoShooter() && !quadWallEnemy() && !fastWallCruiser() && !npcSniperEnemy();
+                && !heavyStopGoShooter() && !m9WallStopGoEnemy() && !mediumStopGoShooter() && !quadWallEnemy() && !fastWallCruiser() && !npcSniperEnemy();
     }
 
     private double bestGunError() {
@@ -1936,6 +2004,11 @@ public class MyTank extends AdvancedRobot {
                 // NPCSniper traces prefer a little more velocity carry than old
                 // wallavg, but far less than full averaged/linear prediction.
                 velocity = limit(-2.6, 0.30 * velocity + 0.45 * enemyVelocityAvg, 2.6);
+            } else if (m9WallStopGoEnemy()) {
+                // M9's wall path alternates hard stops with short straight bursts.  A
+                // slightly stronger current+EMA carry, capped tightly, matched the
+                // round-0 replay better than the old very damped wallavg predictor.
+                velocity = limit(-1.5, velocity + enemyVelocityAvg, 1.5);
             } else if (mediumStopGoDuelist()) {
                 velocity = limit(-2.2, 0.25 * velocity + 0.35 * enemyVelocityAvg, 2.2);
             } else if (mediumStopGoShooter()) {
