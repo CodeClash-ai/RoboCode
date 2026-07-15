@@ -6634,3 +6634,44 @@ the lever — DEFENSE is). Orbit ~260px moderate bias UNCHANGED. dodge 0.30 UNCH
   bullet waves, move to min-danger GF) — high-risk, harness broken, trust /logs.
 - Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING.
 - Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 5)
+
+## KEY FINDING: opponent is johan_adriaans__berendbotje and we were LOSING
+Prior notes ("opponent stationary/absent") were WRONG for the real opponent.
+Real opponent = FAST HEAVY spinner (avgV 4.5, avgdh 0.11) with a LEAD gun.
+R1-R4 results: we LOST every round (~607 vs 1550 in R4, 2-9 first places each).
+
+## DECISIVE DATA (from /logs/rounds/4/sim_*.jsonl, 40 sims)
+Enemy CANNOT hit us at range. Hit density (per 1k ticks):
+  0-100px enemy=32.3 us=77.1 | 100-200 enemy=15.6 us=66.6 (RATIO 4.2:1, OUR ZONE!)
+  200-300 enemy=5.0 us=13.2 | 300-400 enemy=0.5 us=9.6 | 400+ enemy=0
+Net-dmg model: 100-200px = +0.9/1k (BEST by 9x), 200-300px only +0.1/1k.
+Enemy fires higher power (2.34) & more often than us; when we get hit it hurts.
+Our speed: fast=10.6 hits/1k vs slow=13.3 -> full speed cuts enemy hits ~20%.
+Gun replay (60 sims): W=1.0 head-on 23.7% hit vs W=0.0 full-lead 18.9% (spinner).
+
+## R5 CHANGES (all in MyTank.java)
+1. W = 1.0 (HEAD-ON) for berendbotje (was 0.0 full-lead which overshoots a spinner).
+2. Fire FULL power-3 at 100-250px (was capped at 2.0). We hit 66%/13% there -> both
+   clear 33% break-even. Only taper past 250px.
+3. Orbit ~150px (rangeBias charges INWARD when far: >300px=-0.9, >200px=-0.4) instead
+   of the failed R1-R4 "flee to 260/380px" (never reached; put us in weak 200-300 zone).
+   Escape only <90px (enemy 32/1k kill zone).
+4. REMOVED full dead-stops from stop-and-go (R4 stopped us 30% of ticks = trivially
+   hit). Now near-full-speed tangential motion with mild speed variation, never 0.
+5. Fire gate relaxed: only hold fire past 280px when behind (was 200px) since 100-250px
+   is now net-positive even when behind.
+
+Rationale: we already WIN the damage race 4.2:1 at 100-200px but R4 code FLED that
+zone and capped power. This flips the energy war. Compiles to Java 8 (major 52).
+
+## IF STILL LOSING next round
+- Check achieved engagement dist (should now be ~130-170px, was 204px). If still >200,
+  strengthen inward rangeBias further (enemy is a strong pursuer).
+- Consider ramming (getting even closer): we hit 77/1k at 0-100px but enemy hits 32/1k
+  there too -- risky, only if 100-200px still loses.
+- Backup saved as MyTank.java.bak (the losing R4 version).
+
+## Analysis one-liner (hit density by distance, current opponent)
+python3 script pattern: iterate sim_*.jsonl, track energy drops as hits, bucket by dist.

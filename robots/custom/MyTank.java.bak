@@ -319,14 +319,9 @@ public class MyTank extends AdvancedRobot {
         // 808 vs our 619) AND still lost survival (we couldn't reach 380px vs a
         // fast pursuer). FIX: fight HARD at close range with HIGH power where we
         // hit 80%%+ (max damage/bullet-bonus), taper only at range where we miss.
-        // R5 vs berendbotje: MEASURED net-energy by distance (R4 40 sims): 100-200px
-        // is our BEST zone by 9x (our hit dens 66.6/1k vs enemy 15.6/1k = 4.2:1 ratio;
-        // net-dmg +0.9/1k) but the R4 code CAPPED power at 2.0 there and FLED to 260px
-        // (200-300px = only net +0.1/1k) -> we threw away our dominant zone and LOST
-        // 607-1550. FIX: fire FULL power-3 at 100-250px where we hit 66%%/13%% (both
-        // clear the 33%% break-even), only taper at range where we truly miss.
-        if (dist > 250) {
-            if (dist < 400)      power = Math.min(power, 1.2);
+        if (dist > 150) {
+            if (dist < 250)      power = Math.min(power, 2.0);
+            else if (dist < 350) power = Math.min(power, 1.0);
             else                 power = Math.min(power, 0.5);
         }
         power = Math.max(0.1, Math.min(power, 3.0));
@@ -374,7 +369,7 @@ public class MyTank extends AdvancedRobot {
         // (distance-based, kept net-positive) still guard the crazy-bot regression.
         // Chose W=0.85: strongly toward head-on (physics: slow target -> head-on best),
         // hedged just short of pure 1.0 since replay is biased by the reactive enemy path.
-        double W = 1.0;  // R5 vs berendbotje: HEAD-ON. Replay over 60 R4 sims: W=1.0 23.7% hit vs W=0.0 18.9% (heavy spinner avgdh 0.11 -> lead overshoots). Physics + replay both favor head-on. Circular loop still runs but head-on blend dominates.
+        double W = 0.0;  // vs pez__haikupoet REVERTED to W=0.0 (R0 winning config). R1 teammate switched to W=1.0 head-on off a BIASED replay -> LOST the match (R0 opus WON 39044 vs 14634 realHR 35.2% 24 losses; R1 opus LOST 23359 vs 25398 realHR 21.5% 136 losses). Unbiased in-game hit rate is DECISIVE: W=0.0 full lead beats W=1.0 head-on for this moderate near-straight mover. Do NOT trust the W-sweep replay (reactivity bias). See README round-2 haikupoet note.
         // [roleksii] double W = 0.5;
         // [wallspoetas] double W = 0.9;
         // [maximbot] double W = 1.0;  // vs mgalushka__maximbot: MODERATE near-straight mover (movefrac 0.68, avgV 4.51, avg|dh| 0.022, engages ~240px). W-sweep (2 slices, 80 games each) robustly peaks at HEAD-ON: W=1.0 ~0.55 vs W=0.5 ~0.35 vs W=0.0 ~0.39. Damage model W=1.0 dmg +47pct AND net energy far higher. Near-straight moderate mover -> head-on optimal (matches florian2/gruffalo/ultron/hugbot). Was 0.5 (leftover from kcanida pikachu heavy-spinner avgdh 0.149 -- wrong profile here).
@@ -422,10 +417,7 @@ public class MyTank extends AdvancedRobot {
         // real hit rate is only 14.6%% (below the 33%% break-even) so mid-range shots
         // when BEHIND on energy are net-negative bleed that lost us 197/250 sims.
         // Hold fire past 200px when behind (still fight hard <200px where we hit ~40-80%%).
-        // R5 vs berendbotje: fight at 100-250px (net-positive even when behind: 66%%/13%%
-        // hit clears the 33%% break-even). Only gate the truly low-hit far shots (>280px)
-        // when we're behind, so we never bleed on misses but always fire in our win zone.
-        if (dist > 280 && getEnergy() < enemyEnergy - 8) allowFire = false;
+        if (dist > 200 && getEnergy() < enemyEnergy - 8) allowFire = false;
         // Tighter alignment for distant shots (bullet spread grows with range).
         double alignThresh = (dist > 300) ? 0.06 : (dist > 200 ? 0.09 : 0.13);
 
@@ -733,18 +725,11 @@ public class MyTank extends AdvancedRobot {
         // perpendicular full-speed orbit (harder for its lead gun, maintains
         // distance better than fleeing straight back). Only a gentle inward pull
         // when very far so we don't drift out of our own firing range.
-        // R5 vs berendbotje: HOLD ~150px (100-200px zone). MEASURED net-dmg by dist
-        // (R4 40 sims): 100-200px +0.9/1k (our best, 4.2:1 ratio), 200-300px +0.1/1k,
-        // 300-400px +0.1/1k. The R4 "flee to 260px" put us in the WEAK 200-300px zone
-        // AND we only reached 204px avg anyway -> LOST 607-1550. Fight at 100-200px
-        // where we CRUSH the damage race. Avoid <90px (enemy 32/1k kill zone). Pull
-        // inward hard when far so this fast pursuer's opening never drifts us out of
-        // our dominant zone; push out only if we're pinned point-blank.
-        if (enemyDistance > 300)      rangeBias = -0.9;  // charge back into our win zone
-        else if (enemyDistance > 200) rangeBias = -0.4;  // close toward ~150px
-        else if (enemyDistance < 90)  rangeBias = 0.6;   // escape the <90px enemy kill zone
-        else if (enemyDistance < 120) rangeBias = 0.2;   // gently hold ~150px
-        else                          rangeBias = -0.05; // steady orbit at 120-200px
+        if (enemyDistance > 400)      rangeBias = -0.4;  // gentle inward only when very far
+        else if (enemyDistance > 300) rangeBias = -0.1;
+        else if (enemyDistance > 260) rangeBias = 0.1;   // hold ~260-300px
+        else if (enemyDistance < 160) rangeBias = 0.7;   // push out of point-blank kill zone
+        else                          rangeBias = 0.4;   // steer outward toward ~260px
         double desiredDir = absBearing + (Math.PI / 2 + rangeBias) * moveDirection;
 
         // Wall smoothing: steer away from walls
@@ -761,16 +746,11 @@ public class MyTank extends AdvancedRobot {
         // accuracy should collapse. This is the classic anti-lead-gun movement that
         // no prior round tried (R1 orbit-wide, R2 flee/conserve, R3 close-aggressive
         // all LOST). Applied ONLY vs a firing lead-gunner (enemyPassive off).
-        // R5 vs berendbotje: the R4 stop-and-go STOPPED us 30%% of ticks (r<0.28 full
-        // stop) -- a STATIONARY tank is trivially hit by BOTH head-on AND lead guns,
-        // and it killed our lateral speed (measured enemy hits: fast 10.6/1k vs slow
-        // 13.3/1k -> full speed cuts hits ~20%%). We lost 607-1550. FIX: NEVER fully
-        // stop; keep near-full-speed tangential motion (best defense vs a lead gun)
-        // with only mild speed VARIATION to defeat lead prediction. No dead-stops.
-        if (getTime() - lastStopGoChange >= 10 + (int)(Math.random() * 12)) {
+        if (getTime() - lastStopGoChange >= 8 + (int)(Math.random() * 10)) {
             double r = Math.random();
-            if (r < 0.30)      moveAmountCurrent = 45 + Math.random() * 35;   // moderate (varies lead)
-            else               moveAmountCurrent = 110 + Math.random() * 70;  // fast dash (full speed)
+            if (r < 0.28)      moveAmountCurrent = 0;                    // full STOP (defeats lead)
+            else if (r < 0.55) moveAmountCurrent = 20 + Math.random() * 40;  // slow crawl
+            else               moveAmountCurrent = 100 + Math.random() * 80; // fast dash
             lastStopGoChange = getTime();
         }
         double moveAmount = moveAmountCurrent;
