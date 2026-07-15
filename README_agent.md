@@ -6142,3 +6142,106 @@ diff/revert if next round's numbers look worse.
    fixes before it) is exactly the kind of thing that could have been
    verified or refuted in minutes with a working local test harness, instead
    of costing multiple full rounds of real-match iteration.
+
+## Round 48 update (this round) — validated round 47's radial-blend movement fix: huge, clean improvement
+
+### Context
+Both `/logs/rounds/0/` and `/logs/rounds/1/` exist this round, both real combat
+against `alpian__tarektank` (same opponent round 47's notes describe — per
+`git log`, this is "Rung 23/115"). Round 0 matches round 47's own pre-fix
+baseline exactly (86% win, 216/250, 34 losses/draws, 23% accuracy, avg speed
+6.3, avg min energy 60, avg death turn 974, games avg 668 turns, score 38696
+vs 4132). **Round 1 is the REAL match result of round 47's radial-blend orbit
+fix** (adding a genuine toward/away-from-enemy movement component, blended
+with the existing perpendicular strafe, weighted by how far `distanceError`
+is from 0, capped at 0.75): **100% win rate (250/250)**, **ZERO losses/draws**
+(down from 34), accuracy **23% -> 54%** (more than doubled), avg speed
+**6.3 -> 6.0** (essentially unchanged), avg min energy **60 -> 90**, avg death
+turn/game length dropped sharply (games now avg 400 turns instead of 668 —
+we're finishing opponents off much faster instead of grinding in long,
+close, self-inflicted-attrition fights), score **38696 vs 4132 -> 44943 vs
+2102**. This is one of the cleanest, most dramatic before/after validations
+in this whole file's history — round 47's diagnosis (the orbit-strafe
+movement code had NO radial component at all, so it could never close a
+large distance gap against a corner-camping/effective-preferred-distance-
+mismatched opponent, causing whole-battlefield wandering and self-inflicted
+energy attrition from a long string of below-breakeven shots at bad range)
+and fix are fully confirmed correct by real match data.
+
+### Validation performed
+1. `python3 tools/analyze_freezes.py /logs/rounds/1 --threshold 20 | grep -i
+   sonnet` -> **9 findings**, all short (20-37 ticks) benign "radar heading
+   frozen" (the well-established radar-genuinely-settled pattern from many
+   earlier rounds, e.g. 15/29/32/33/39/41/42, not the round-4 freeze bug) —
+   zero STUCK-RAMMING findings at all this round. No escape-mode regression;
+   rounds 20/23/25/34-37/40's fixes are all still holding fine, and round 47's
+   new radial-blend logic didn't introduce any new stuck/freeze pattern.
+2. `python3 tools/analyze_power_accuracy.py /logs/rounds/1 --bucket-width
+   0.5` -> sanity check: 21.5 shots/game combined vs `trace.md`'s
+   15.0+7.5=22.5 (within ~5%, tool still trustworthy per round 28's
+   tick-step fix). The merged 2.5-3.0 power bucket (round 30's 2.9-cap
+   change) shows the highest shot volume (2424 of 3739 total) at a healthy
+   46.0% accuracy. A small (104-shot) 2.0-2.5 bucket (the 350-550px distance
+   band) shows a notably lower 18.3% — consistent with round 33's earlier
+   finding that long range is just intrinsically harder to hit regardless of
+   power, not a new issue.
+3. `diff archive/round1_backups/MyTank.java.before_round47_radial_fix
+   robots/custom/MyTank.java` — confirmed round 47's radial-blend fix (and
+   nothing else) is exactly what's currently live; no accidental changes or
+   reversions since.
+4. `javac -Xlint:all -cp libs/robocode.jar -d robots
+   robots/custom/MyTank.java` compiles clean, no errors/warnings. `.class`
+   up to date. `MyTank.java` is 1232 lines, unchanged from round 47.
+
+### What I did this round (or rather, chose NOT to do)
+Given an extremely clean, dramatic, fully-validated improvement (0 losses
+down from 34, accuracy more than doubled, no new freeze/regression signal,
+tooling sanity checks green) directly confirming round 47's diagnosis and
+fix, I made **no further changes to `MyTank.java`** this round — consistent
+with this file's long-established pattern (rounds 6, 13, 15, 21, 22, 26, 27,
+28, 29, 32, 33, 38, 39, 41, 42) of not touching already-working code without
+a fresh, clear, actionable signal, and especially appropriate right after a
+big, freshly-validated win: better to let this "bake" with more real-match
+data (ideally against other opponents too, including a genuine corner-camper
+like `alpian__ianstank` from rounds 43-44, which never got a clean re-test
+after rounds 43/44's two earlier, less-successful attempts at a related fix)
+before stacking another movement-side change on top of it.
+
+### Suggestions for next teammate
+1. **First step, as always**: check `/logs/rounds/<N>/trace.md` for the
+   actual opponent this round, and run
+   `python3 tools/analyze_freezes.py /logs/rounds/<N> --threshold 20 | grep -i
+   sonnet` as the standard regression check (should print nothing or only
+   short/benign findings, per this round's clean 9-findings-all-benign
+   baseline).
+2. If `alpian__tarektank` reappears, treat this round's numbers (100% win, 0
+   losses, 54% accuracy, avg min energy 90, avg speed 6.0) as the new stable
+   healthy baseline for this matchup.
+3. If `alpian__ianstank` (rounds 43-44's corner-camping opponent, which
+   never got a clean before/after re-test with the round-47 radial-blend fix
+   specifically — rounds 43/44's own fixes were narrower/less successful
+   attempts at a related problem) reappears, that would be a very valuable
+   comparison: check whether round 44's original baseline (97% win, 8
+   losses, 31% accuracy) improves similarly dramatically the way this
+   round's data shows for the closely-related `alpian__tarektank` opponent.
+4. If a NEW opponent shows different symptoms (e.g. elevated wall hits
+   again, or long self-inflicted-attrition-style losses), the diagnostic
+   playbook from rounds 43/44/45/46/47 is now well-documented above: check
+   (a) opponent's position-range vs. our own (corner-camper detection), (b)
+   whether our distance-to-enemy actually converges toward
+   `effectivePreferredDistance` over time (round 47's fix should now handle
+   this — if it's STILL not converging, that would be a new, deeper issue
+   worth its own investigation), and (c) energy-delta tracing for the
+   self-inflicted-attrition signature (rounds 18/25/31/33/38/44/45/46/47).
+5. `pez__gf1` (rounds 11-12, ~14% tie rate from mutual energy attrition)
+   remains the toughest opponent in this file's history and the single most
+   valuable target for directly re-testing the FULL accumulated stack of
+   fixes since round 12 (energy-math, ramming, dodge-on-fire, wall-margin,
+   the escape-mode mechanism, execute()-removal, and now the radial-blend
+   movement fix) — still hasn't reappeared after 36 rounds.
+6. Local headless battle-runner: still unresolved after 47+ rounds of
+   attempts (see round 6's section for the most detailed known blocker,
+   `RepositoryManager.loadSelectedRobots` not seeing a freshly-reloaded
+   repository within the same call). Still the single highest-leverage infra
+   fix available if a future teammate has a larger step budget to spend on it
+   than usual.
