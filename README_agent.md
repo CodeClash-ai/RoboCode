@@ -15060,3 +15060,138 @@ quick diff/revert if next round's numbers look worse.
    spend on it than usual — especially valuable now that the ladder may be
    producing genuinely tough, close-to-even opponents where each tuning
    experiment currently costs a full round to validate or refute.
+
+## Round 132 update (this round) — 3rd sample vs logancsc__dodgebot2 (round 131's ram-juke-gate fix, applied), still losing narrowly, no changes
+
+### Context
+Three log directories exist this round: `/logs/rounds/0` and `/logs/rounds/1`
+match round 130/131's own pre-fix baseline data exactly (46%/44% win for us,
+score 25333/27703 and 25100/27454). **`/logs/rounds/2` is the REAL match
+result of round 131's ram-juke-gate fix** (gating the round-12 opportunistic-
+ramming charge on `Math.abs(enemyHeadingRate) < 0.05`, i.e. skip charging into
+contact while the enemy is actively juking): **48% win for
+`logancsc__dodgebot2` / 47% for `sonnet_5`** (score 26252 vs 25357) — we are
+STILL losing the overall round, but by the narrowest margin of the three
+samples so far (895 points, vs ~2370/2354 in the two pre-fix samples).
+
+### Validation performed
+1. `python3 tools/analyze_freezes.py /logs/rounds/2 --threshold 20 | grep -i
+   sonnet` -> 5 findings, 4 of which are LONG (211-379 tick) "radar heading
+   frozen" findings. Traced these against the per-game winner table — all 4
+   correspond to games that either TIE or run very long (1300-1650+ turns),
+   consistent with the already-documented (rounds 11/95/130/131) benign
+   "mutual energy exhaustion, both robots pinned at 0 energy with status
+   staying ACTIVE (not DEAD) for a long tail" pattern — **not a new bug**,
+   the escape-mode mechanism (rounds 20/23/25/34-37/40) is still healthy.
+   The 1 short (20-tick) `STUCK-RAMMING` finding is likewise unremarkable.
+2. Re-ran the ad-hoc HIT_ROBOT-status-tick net-energy-swing check (same
+   `|delta|<5` bullet-coincidence filter as rounds 102/130/131) across all
+   three full 250-game samples:
+   ```
+   round 0 (pre-fix):  us -2.49/game vs them -1.24/game
+   round 1 (pre-fix):  us -2.55/game vs them -1.26/game
+   round 2 (post-fix): us -2.55/game vs them -1.17/game
+   ```
+   **The ramming asymmetry is essentially UNCHANGED after round 131's fix**
+   (if anything, marginally worse for us on this specific metric) — `avg
+   rams/game` also barely moved (2.9 -> 2.9 -> 2.8 across the three
+   samples). This suggests the `enemyHeadingRate < 0.05` gate is either
+   rarely triggering (the smoothed heading-rate estimate is usually already
+   below 0.05 by the time we're close enough to consider ramming, so the
+   gate isn't actually filtering many charge decisions) or isn't the right
+   lever for the asymmetry's true cause. **Round 131's ramming-fix hypothesis
+   is NOT clearly validated by this round's data** — the contact-cost
+   asymmetry that motivated it is still there at essentially the same
+   magnitude.
+3. Re-ran `python3 tools/analyze_power_accuracy.py` (which now permanently
+   prints the round-131-added swing(P,p) summary) on all three directories:
+   ```
+   round 0 (pre-fix):  them +36.68/game vs us +34.30/game  (them ahead)
+   round 1 (pre-fix):  them +34.17/game vs us +34.06/game  (near-tied)
+   round 2 (post-fix): them +26.86/game vs us +31.67/game  (us ahead!)
+   ```
+   The BULLET-power swing (not the ramming metric round 131's fix targeted)
+   moved notably in our favor in this specific sample. Since the ram-gate
+   change has no mechanical connection to bullet-power swing, this is most
+   plausibly **ordinary game-to-game variance** (round 0 vs round 1's
+   pre-fix data already varied by a couple points with IDENTICAL code, so a
+   several-point swing between samples isn't unprecedented) rather than a
+   real effect of round 131's change — but it's at least consistent with
+   round 2's narrower overall score-margin loss.
+4. `javac -Xlint:all -cp libs/robocode.jar -d /tmp/build_check
+   robots/custom/MyTank.java` compiles clean (exit 0, no errors/warnings).
+   `diff archive/round1_backups/MyTank.java.before_round131_ram_juke_gate
+   robots/custom/MyTank.java` confirms round 131's ram-juke-gate change (and
+   nothing else) is exactly what's currently live.
+
+### What I did this round (or rather, chose NOT to do)
+Given (a) round 131's specific fix does NOT show a clear, attributable
+improvement in the metric it targeted (ramming asymmetry essentially
+unchanged), (b) the overall result is still a loss in all 3 samples (albeit
+the closest-margin one so far), (c) only ONE post-fix sample exists so far
+(not enough to distinguish "the fix helped a little" from "this sample just
+got a favorable bullet-swing roll"), and (d) no local battle-testing is
+available to iterate faster, I made **no further changes to `MyTank.java`**
+this round. Reverting round 131's change also didn't seem clearly warranted
+either — it's a narrowly-scoped, purely-subtractive change (can only ever
+skip some ram opportunities, never add new risk) that hasn't shown clear
+harm either. Consistent with this file's established practice (e.g. round 12
+correcting round 11's real mistake only after clear evidence, not on a single
+ambiguous sample), I'm leaving it in place and flagging for more data.
+
+### What I did NOT get to
+- Did not try widening the `enemyHeadingRate` gate threshold (e.g. from 0.05
+  to something larger like 0.15-0.2) to see if a more aggressive filter
+  actually changes `avg rams/game` and the contact-swing metric — worth
+  trying if a 2nd post-fix sample confirms the gate is barely triggering.
+  Should be easy to check by instrumenting/estimating the real distribution
+  of `enemyHeadingRate` values if this becomes a priority (not currently
+  logged in `sim_*.jsonl`, would need a temporary debug print in
+  `MyTank.java` and a throwaway match, which isn't possible without a local
+  battle-runner — flagging as another reason that infra fix would help).
+- Did not consider a completely different lever (e.g. requiring an energy
+  edge before charging, or increasing the charge distance threshold, or
+  abandoning opportunistic ramming entirely against a detected evasive
+  opponent) — wanted to see if round 131's specific, narrower fix showed any
+  signal first before layering on more ramming-logic changes, given this
+  exact code area's history of regressions (rounds 34-37) when touched
+  carelessly.
+- Did not build the "HIT_ROBOT contact-only net energy swing" as a committed
+  `tools/` script (still ad-hoc each time, per round 130/131's own
+  suggestion) — would be worth doing if this investigation continues for a
+  few more rounds.
+
+### Suggestions for next teammate
+1. **First step, as always**: check `/logs/rounds/<N>/trace.md` for this
+   round's actual opponent/result, and run
+   `python3 tools/analyze_freezes.py /logs/rounds/<N> --threshold 20 | grep -i
+   sonnet` as the standard regression check (watch for LONG radar/position
+   freezes specifically in TIE/very-long games — per rounds 11/95/130/131/132,
+   that's the known benign mutual-exhaustion pattern, not a bug).
+2. **If `logancsc__dodgebot2` reappears again**, this is now the 4th data
+   point for this matchup — check whether win rate/score margin keeps
+   trending toward parity (round 0: 46%/-2370, round 1: 44%/-2354, round 2:
+   47%/-895) or reverts back toward the wider pre-fix gap. If it stays
+   close to parity or flips to a win across 1-2 more samples, round 131's
+   fix (or just favorable variance) is working out; if it reverts to a wide
+   loss again, the fix likely isn't the real lever and a different approach
+   (see "What I did NOT get to" above) is worth trying instead. Also
+   specifically re-check the HIT_ROBOT contact-swing metric (template in
+   this round's and round 130/131's notes) — if it's STILL essentially
+   unchanged (~-2.5 us vs ~-1.2 them) across a 4th+ sample, that's fairly
+   strong evidence the `enemyHeadingRate<0.05` gate isn't an effective lever
+   for this specific asymmetry and either the threshold needs to be much
+   more aggressive or a different mechanism is the real cause.
+3. `kcanida__pikachu` (rounds 107-109, the fast-mover-cap fix still awaiting
+   its first real re-test after 23+ consecutive rounds of not reappearing)
+   and `pez__gf1`/`alpian__ianstank` (rounds 11-12/43-44) remain the other
+   historically-toughest opponents in this file.
+4. Local headless battle-runner: still unresolved after 131+ rounds of
+   attempts (see round 6's section for the most detailed known blocker,
+   `RepositoryManager.loadSelectedRobots` not seeing a freshly-reloaded
+   repository within the same call). Still the single highest-leverage
+   infra fix available — would let a future teammate directly measure the
+   effect of gate-threshold tweaks (e.g. by adding a temporary debug print
+   of `enemyHeadingRate` at ramming decisions) instead of needing a full
+   round's real-match turnaround per experiment, which is especially costly
+   for this specific investigation.
