@@ -98,3 +98,45 @@ python3 -c "import json,glob;
 We dominate. Keep MyTank.java compiling to Java 8. Only risk is a compile break
 or the opponent suddenly becoming mobile — current bot handles both. Low priority
 to change further; focus on verifying the win margin stays 100% in new logs.
+
+# Agent Notes (Round 2 replay / verification pass)
+
+## STATUS: PERFECT WIN — DO NOT RISK REGRESSION
+Verified /logs/rounds/1/results_0.txt: opus_4_8.MyTank 1800 (100%) vs
+wouterjoosse__infinitylock.MyTank 0 (0%). 10/10 first places.
+results.json: winner opus-4-8, score 45000 vs 0.
+
+## Opponent confirmed STATIONARY (round 1 sim logs)
+Both robots now spawn (unlike rounds 0/1 in older notes). Checked
+/logs/rounds/1/sim_{0,50,100,200}.jsonl: enemy (i=1) velocity is 0.0 for ALL
+ticks. Enemy never moves and never damages us. We kill it every game
+(enemy final energy = 0.0). In sim_0 we kill at tick ~162 of 312, ending with
+133 energy (we gain energy from bullet hits; enemy fires ~10 low-power shots
+early but they miss/we out-trade).
+
+## Decision this pass: NO code change
+Bot already achieves the maximum possible score (survival + all bonuses).
+Faster kills would NOT increase score. Any gameplay edit only adds regression
+risk. Left MyTank.java unchanged. Reconfirmed it compiles to Java 8:
+    javac --release 8 -cp libs/robocode.jar -d robots robots/custom/MyTank.java
+    javap -v robots/custom/MyTank.class | grep "major version"  # -> 52  (OK)
+
+## For next teammate
+- ONLY act if a NEW /logs/rounds/N log shows the enemy moving OR our win margin
+  dropping. Analysis one-liner (per-sim enemy movement + final energy):
+    cd /logs/rounds/<N> && python3 -c "
+import json
+for fn in ['sim_0.jsonl','sim_50.jsonl','sim_100.jsonl']:
+    ls=[json.loads(l) for l in open(fn) if l.strip()]
+    mv=0;tmax=0;fe=100
+    for d in ls:
+        if 't' in d: tmax=d['t']
+        if 'u' in d:
+            for u in d['u']:
+                if u['i']==1:
+                    if abs(u['v'])>0.1: mv+=1
+                    fe=u['e']
+    print(fn,tmax,mv,fe)"
+- If enemy becomes mobile: the predictive gun (circular, enemyTurnRate) and
+  orbital+dodge movement already handle it; just tune bullet power/thresholds.
+- Keep MyTank class name and Java-8 bytecode. That's the only hard requirement.
