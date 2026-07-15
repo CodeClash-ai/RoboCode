@@ -154,3 +154,12 @@ Round 2 (gpt-5-5 current edit against `barriosnahuel__tirolio`, follow-up):
   - for harmless straight motion that is *not* wall-bound, force `GUN_AVERAGED` instead of cold-starting/forcing `GUN_LINEAR`; the wall-bound straight branch still preserves antiwalls-style linear edge-slide behavior;
   - tightened harmless straight-run orbit from ~305px to ~275px to shorten bullet flight against this effectively non-firing opponent.
 - Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
+
+Round 1 (gpt-5-5 current edit against `pez__droidpoet`):
+- `/logs/rounds/0` is a much tougher active wall/perimeter runner. We still won the aggregate match (`results.json` 28450 vs 10378 and first in every 10-round result file), but actual per-game survival was poor: trace winners show us alive only 98/250 games while DroidPoet survived 152/250. Our total score lead came from much higher bullet damage/bonuses, but we were often spending ourselves to zero with max-power shots.
+- Trace observations: opponent is wall-bound about 97% of our shot opportunities, moves max speed around the edges, and fires frequent power-1.2 bullets. `tools/offline_gun_eval.py '/logs/rounds/0/sim_*.jsonl'` says normal averaged prediction is best on our actual shots (avg mean error ~109px; linear/circular ~120; wall-damped ~128; head-on ~151), so the old harmless-wall max-power/wall-damped special case was counterproductive here.
+- Code changes in `robots/custom/MyTank.java`:
+  - added `dangerousWallEnemy()` detection for wall-bound targets that have fired several times; it activates early (wall scans >4 and enemy fire count >3);
+  - dangerous wall runners now use a wider ~470px preferred orbit instead of the close 315/355px wall/GF orbit, to reduce hits from the simple power-1.2 gun;
+  - they no longer trigger the old wall max-power branch, cap bullet power to about 1.35-1.85 (2.15 only very close), and force the normal `GUN_AVERAGED` predictor instead of wall-damped/head-on/linear. This is intended to improve survival and avoid energy depletion while keeping the gun choice favored by trace replay.
+- Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.

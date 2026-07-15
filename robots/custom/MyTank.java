@@ -187,12 +187,12 @@ public class MyTank extends AdvancedRobot {
         // Orbit perpendicular, with a distance-control offset.  Far away we cut
         // inward; too close we open out.  wallSmooth then bends the path away
         // from the battlefield edges before we commit to it.
-        double preferredDistance = (straightEnemyScans > 4 && enemyFireCount == 0) ? 275.0 : (wallEnemyScans > 4 ? 315.0 : (headOnGunIsBest() ? 330.0 : (slowEnemyScans > 12 ? 285.0 : PREFERRED_DISTANCE)));
+        double preferredDistance = dangerousWallEnemy() ? 470.0 : ((straightEnemyScans > 4 && enemyFireCount == 0) ? 275.0 : (wallEnemyScans > 4 ? 315.0 : (headOnGunIsBest() ? 330.0 : (slowEnemyScans > 12 ? 285.0 : PREFERRED_DISTANCE))));
         // Against the current GF-style opponent our gun struggles mostly due
         // to long bullet flight, while its own gun almost never connects.  Once
         // virtual guns report a hard-to-hit mover, tighten the orbit a bit to
         // shorten flight time and improve hit/kill speed without going to ram range.
-        if (virtualSamples > 28 && bestGunError() > 72.0 && stationaryScans <= 5 && slowEnemyScans <= 12) {
+        if (!dangerousWallEnemy() && virtualSamples > 28 && bestGunError() > 72.0 && stationaryScans <= 5 && slowEnemyScans <= 12) {
             preferredDistance = 355.0;
         }
         double distanceOffset = limit(-0.62, (e.getDistance() - preferredDistance) / 430.0, 0.55);
@@ -242,7 +242,7 @@ public class MyTank extends AdvancedRobot {
         // kill reduces exposure.  Moving opponents keep the conservative ladder.
         if (stationaryScans > 5 && getEnergy() > 12) {
             power = 3.0;
-        } else if (wallEnemyScans > 4 && getEnergy() > 14 && distance < 820) {
+        } else if (wallEnemyScans > 4 && !dangerousWallEnemy() && getEnergy() > 14 && distance < 820) {
             // Wall-huggers have very limited escape room; use max-power
             // head-on/near-head-on shots to finish them before they can spend
             // energy on stray bullets (which lowers our available bullet score).
@@ -270,6 +270,13 @@ public class MyTank extends AdvancedRobot {
         // enemies), do not gamble the whole energy stack on repeated heavy
         // bullets.  Use tiny bullets at low energy: a hit gives more energy back
         // than it costs, while misses cannot self-kill us quickly.
+        if (dangerousWallEnemy()) {
+            // DroidPoet-style wall runners are not harmless: they hug the edge,
+            // fire steady power-1.2 shots, and are difficult enough that max-power
+            // misses can spend us to zero.  Faster medium bullets and a wider
+            // orbit trade a little damage-per-hit for many more living rounds.
+            power = Math.min(power, distance < 240 ? 2.15 : (getEnergy() > e.getEnergy() + 20 ? 1.85 : 1.35));
+        }
         if (hardToHitMover) {
             if (getEnergy() < 12) {
                 power = Math.min(power, 0.15);
@@ -299,6 +306,11 @@ public class MyTank extends AdvancedRobot {
         int gun = chooseGun();
         if (stationaryScans > 5) {
             gun = GUN_HEAD_ON;
+        } else if (dangerousWallEnemy()) {
+            // Against the active wall runner in the current logs, trace replay
+            // favors the normal averaged stop/reversal predictor over head-on,
+            // linear, circular, or the old wall-damped special case.
+            gun = GUN_AVERAGED;
         } else if (straightEnemyScans > 2 && enemyFireCount == 0 && wallEnemyScans <= 4) {
             // Tirolio-style harmless movers show lots of short straight-looking
             // snippets, but they stop/reverse and hit walls often enough that
@@ -365,6 +377,13 @@ public class MyTank extends AdvancedRobot {
             }
         }
         return best;
+    }
+
+    private boolean dangerousWallEnemy() {
+        // Current DroidPoet logs: a high-speed wall/perimeter runner that fires
+        // often.  Do not wait for many virtual-wave samples before switching out
+        // of the old "harmless wall target" max-power close-orbit mode.
+        return wallEnemyScans > 4 && enemyFireCount > 3;
     }
 
     private double bestGunError() {
@@ -450,11 +469,13 @@ public class MyTank extends AdvancedRobot {
         if (gunType == GUN_HEAD_ON) {
             return new double[] {enemyX, enemyY};
         }
-        if (wallEnemyScans > 4 && gunType == GUN_AVERAGED) {
-            // A wall-bound bot often alternates between max-speed bursts and
-            // hard stops/reverses.  A damped linear projection was slightly
-            // better than pure head-on in trace replay, while still avoiding
-            // the heavy over-lead of full circular/linear prediction.
+        if (wallEnemyScans > 4 && gunType == GUN_AVERAGED && !dangerousWallEnemy()) {
+            // A harmless wall-bound bot often alternates between max-speed bursts
+            // and hard stops/reverses.  Damping avoids over-leading those weak
+            // opponents.  If the wall runner is actively firing and virtual-wave
+            // errors remain high (DroidPoet-style), use the normal averaged gun
+            // below instead; trace replay shows the wall-damped shot under-leads
+            // that full-perimeter movement.
             velocity = limit(-2.2, 0.25 * velocity + 0.35 * enemyVelocityAvg, 2.2);
             turnRate = 0.0;
         } else if (gunType == GUN_AVERAGED) {
