@@ -171,7 +171,16 @@ public class MyTank extends AdvancedRobot {
         // over two independent 80-game slices: W=0.25 hits 24-31% vs W=0.5 21-24%
         // and W=0.0 17-20% -- clean peak at 0.25. Slightly-less-than-half lead is
         // optimal for this fast straight mover (full lead overshoots its rare curves).
-        double W = 0.25;
+        // ROUND-1 (vs it_economics__ite_terminator): SLOW mover (avg |v| 2.56,
+        // moving ~51% of ticks, turn 0.026 rad/tick). Replay-sim over TWO independent
+        // 80-game slices shows a clean MONOTONIC rise toward head-on:
+        //   W=0.0 ~33%, W=0.25 ~34%, W=0.5 ~37%, W=0.75 ~42%, W=1.0 ~50% hit.
+        // A slow, lightly-curving target is best hit near head-on (any lead overshoots).
+        // We win the energy war (finalE ~107, worst 58) so no drain risk; power tiers
+        // (distance-based, kept net-positive) still guard the crazy-bot regression.
+        // Chose W=0.85: strongly toward head-on (physics: slow target -> head-on best),
+        // hedged just short of pure 1.0 since replay is biased by the reactive enemy path.
+        double W = 0.85;
         double predX = W * enemyX + (1 - W) * leadX;
         double predY = W * enemyY + (1 - W) * leadY;
 

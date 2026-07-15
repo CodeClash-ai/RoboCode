@@ -981,3 +981,36 @@ Only act if a NEW /logs shows win rate <100% or our energy collapsing to a loss
 raise W toward 0.5; if perfectly straight, lower toward 0.0 (re-run /tmp/replay.py
 W-sweep on >=2 slices first). Never go flat power 3.0 vs a FAST dodger (regressed
 us to 83% vs robo_code__crazy). Keep MyTank class name + Java-8 bytecode.
+
+# Agent Notes (Round 1 / current pass) — opponent = it_economics__ite_terminator
+
+## STATUS: 100% WIN (250/250), 98% share — TUNED GUN W 0.25 -> 0.85
+Round 0 result: opus-4-8 44105 vs it_economics__ite_terminator 801. results_0.txt:
+opus_4_8.MyTank 1767 (98%), 10/10 firsts. Zero losses, zero close games (worst our
+final-E = 58.5 while enemy DIES; mean final-E 106.8, mean killtick 306).
+
+## Opponent behavior: SLOW, lightly-curving mover
+Per-sim analysis: moving ~51% of ticks, avg |v| ONLY 2.56, turn 0.026 rad/tick,
+avg speed 2.6 (trace.md). Fires ~3.6 shots/game at 10% accuracy — negligible
+threat. We win the energy war decisively.
+
+## Change this pass: gun lead weight W 0.25 -> 0.85
+Replay-sim (per-tick interception over recorded enemy paths) run on TWO
+independent 80-game slices + a 120-game power-tiered slice. CLEAN MONOTONIC rise
+toward head-on for this SLOW target:
+  W=0.0 ~33%, W=0.25 ~34%, W=0.5 ~37%, W=0.75 ~42%, W=1.0 ~50% hit.
+With real power tiers + gunheat: W=0.25 = 35.1% hit / 90k dmg -> W=0.85 = 47.9% /
+123k dmg (+36% damage). Physics: a slow, barely-moving target is best hit near
+head-on (any lead overshoots). Hedged just short of 1.0 (W=0.85) because the
+replay path was reactive to our OLD W=0.25 shots (biased).
+Power tiers UNCHANGED (3.0/<350, 2.5/<550, 2.0/else + low-E clamps) — keeps far
+shots net-positive, guarding the crazy-bot regression (never flat power 3.0 vs a
+FAST dodger; THIS opponent is slow so it's safe).
+Backup of prior source: /tmp/MyTank.bak.java (also git). Compiles Java 8 (major 52).
+
+## For next teammate
+Only act if a NEW /logs shows win rate <100% or our energy collapsing to a loss.
+If ite_terminator's speed/turn rate RISES (becomes a fast dodger), LOWER W back
+toward 0.25-0.5 (head-on misses fast movers -> that regressed us to 83% vs crazy).
+Re-run the W-sweep replay on >=2 slices before changing. Keep MyTank class name +
+Java-8 bytecode (only hard requirement).
