@@ -35,6 +35,7 @@ public class MyTank extends AdvancedRobot {
     private int wallEnemyScans = 0;
     private int straightEnemyScans = 0;
     private int crazyEnemyScans = 0;
+    private int spinEnemyScans = 0;
     private int stopGoEnemyScans = 0;
     private int closeRammerScans = 0;
     private int trackerApproachScans = 0;
@@ -170,6 +171,19 @@ public class MyTank extends AdvancedRobot {
             crazyEnemyScans++;
         } else {
             crazyEnemyScans = Math.max(0, crazyEnemyScans - 1);
+        }
+        // sample.SpinBot-style opponents move at about velocity 5 while turning
+        // continuously in a tight circle.  The old Crazy detector starts at >5.2
+        // velocity and therefore misses SpinBot, leaving the cold-start head-on /
+        // averaged guns and power-2 shots to waste time.  Track this lower-speed
+        // continuous-turn signature separately so we can force exact circular aim
+        // and heavier bullets from the first few scans.
+        if (Math.abs(e.getVelocity()) > 4.15 && Math.abs(e.getVelocity()) < 5.35
+                && Math.abs(scanTurnRate) > 0.045 && Math.abs(scanTurnRate) < 0.18
+                && stopGoEnemyScans <= 4) {
+            spinEnemyScans++;
+        } else {
+            spinEnemyScans = Math.max(0, spinEnemyScans - 1);
         }
         // sample.RamFire-style bots repeatedly drive straight into close range
         // and only score through rare point-blank shots/collisions.  Their future
@@ -332,7 +346,13 @@ public class MyTank extends AdvancedRobot {
         // inward; too close we open out.  wallSmooth then bends the path away
         // from the battlefield edges before we commit to it.
         double preferredDistance;
-        if (velociRobotEnemy()) {
+        if (spinBotEnemy()) {
+            // SpinBot follows a compact, very predictable circle.  Stay in a
+            // short-to-moderate exchange band: close enough for quick circular
+            // max-power hits, but not so close that its spinning gun gets free
+            // point-blank intersections.
+            preferredDistance = 340.0;
+        } else if (velociRobotEnemy()) {
             // VelociRobot-style target in the current logs: medium-fast low-turn
             // straight runs with frequent weak fire.  It is not a continuous Crazy
             // turner; keeping a moderate range plus fast head-on shots avoids the
@@ -560,6 +580,16 @@ public class MyTank extends AdvancedRobot {
             // point-blank ram/leakage in long field-crossing runs.
             power = Math.max(power, distance < 620 ? 3.0 : 2.65);
         }
+        if (spinBotEnemy()) {
+            // Circular prediction is essentially exact for SpinBot; max-power
+            // bullets increase damage/bonus and reduce the number of random
+            // spinning-gun shots it can fire before dying.
+            if (getEnergy() > 16 && distance < 760) {
+                power = Math.max(power, distance < 680 ? 3.0 : 2.55);
+            } else if (getEnergy() < 10) {
+                power = Math.min(power, 0.55);
+            }
+        }
         if (fastWallCruiser() && getEnergy() > 14 && distance < 820) {
             power = Math.max(power, distance < 650 ? 3.0 : 2.55);
         }
@@ -585,7 +615,7 @@ public class MyTank extends AdvancedRobot {
                 power = Math.min(power, getEnergy() < 7 ? 0.15 : 0.35);
             }
         }
-        if (crazyEnemyScans > 3 && !velociRobotEnemy()) {
+        if (crazyEnemyScans > 3 && !velociRobotEnemy() && !spinBotEnemy()) {
             // High-speed continuous turners are easier to hit with faster,
             // moderate-power circular shots.  For this round's meow opponent the
             // circular virtual gun settles far below the old sample.Crazy errors;
@@ -820,6 +850,8 @@ public class MyTank extends AdvancedRobot {
         int gun = chooseGun();
         if (stationaryScans > 5) {
             gun = GUN_HEAD_ON;
+        } else if (spinBotEnemy()) {
+            gun = GUN_CIRCULAR;
         } else if (velociRobotEnemy()) {
             // For this medium-speed weak shooter, damped averaged prediction is usually
             // best, but trace replay shows pure head-on is competitive and sometimes
@@ -1027,6 +1059,18 @@ public class MyTank extends AdvancedRobot {
         return best;
     }
 
+
+    private boolean spinBotEnemy() {
+        return spinEnemyScans > 4
+                && enemySpeedAvg > 4.15
+                && enemySpeedAvg < 5.35
+                && enemyAbsTurnRateAvg > 0.045
+                && enemyAbsTurnRateAvg < 0.16
+                && stopGoEnemyScans <= 5
+                && !fixedHeadingStopGoEnemy()
+                && !fixedHeadingLineEnemy()
+                && !fastWallCruiser();
+    }
 
     private boolean velociRobotEnemy() {
         // Current robo_code__velocirobot profile: sustained medium-fast straight
