@@ -232,6 +232,14 @@ public class MyTank extends AdvancedRobot {
             driveAwayFrom(absBearing, 285.0);
             return;
         }
+        if (straightEnemyScans > 8 && harmlessLowFireEnemy() && e.getDistance() < 260.0) {
+            // Hugbot/simple harmless runners can cross our orbit at full speed before
+            // the narrow rammer detector fully confirms.  Open the gap a little early;
+            // these opponents are not shooting, so avoiding collision leakage is worth
+            // a few extra pixels of bullet flight.
+            driveAwayFrom(absBearing, 255.0);
+            return;
+        }
         if (e.getDistance() < 225.0
                 && (harmlessLowFireEnemy() || wallEnemyScans > 2 || stopGoEnemyScans > 4
                         || Math.abs(enemyVelocityAvg) < 1.2)) {
@@ -698,10 +706,20 @@ public class MyTank extends AdvancedRobot {
             gun = GUN_LINEAR;
         } else if (straightEnemyScans > 2 && harmlessLowFireEnemy() && wallEnemyScans <= 4) {
             // Short non-wall straight-looking snippets are often stop/reverse
-            // noise (e.g. Tirolio).  The current Claptrap traces also show the
-            // damped averaged gun slightly ahead of full linear at our actual
-            // shot times, despite long straight runs.
-            gun = GUN_AVERAGED;
+            // noise (e.g. Tirolio), so the averaged gun remains the safe cold start.
+            // Hugbot-style targets, however, spend most of the match in genuinely
+            // fast field-crossing straight runs and almost never fire; offline replay
+            // for the current logs shows full linear leading the damped averaged gun
+            // by a wide margin.  Let virtual waves (or a very clean high-speed/low-stop
+            // signature) promote these harmless runners to linear without disturbing
+            // prior stop/reverse movers where averaged keeps winning.
+            if ((virtualSamples > 16 && virtualGunError[GUN_LINEAR] + 5.0 < virtualGunError[GUN_AVERAGED])
+                    || (straightEnemyScans > 12 && stopGoEnemyScans <= 4 && enemySpeedAvg > 5.0
+                            && Math.abs(enemyVelocityAvg) > 4.0)) {
+                gun = GUN_LINEAR;
+            } else {
+                gun = GUN_AVERAGED;
+            }
         } else if (wallEnemyScans > 4 && straightEnemyScans > 12 && stopGoEnemyScans <= 8
                 && Math.abs(e.getVelocity()) > 0.55 && Math.abs(turnRate) < 0.025
                 && (Math.abs(enemyVelocityAvg) > 4.2 || Math.abs(e.getVelocity()) > 5.5)

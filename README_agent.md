@@ -453,3 +453,9 @@ Round 2 (gpt-5-5 current edit against `rafaeljdesa__ultron`, follow-up):
   - below 18 energy, widen preferred distance to at least ~430px against active high-power shooters;
   - below 30/18/10 energy, cap shots to 0.85/0.45/0.15 when facing repeated high-power fire, preventing the remaining self-depletion traces from spending multi-point bullets while near death.
 - Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
+
+Round 1 (gpt-5-5 current edit against `kylebennett__hugbot`):
+- `/logs/rounds/0` shows another very weak/harmless mover, `kylebennett__hugbot.MyTank`. We swept 250/250 games with near-perfect score (`results.json` 45023 vs 201). Opponent usually does not fire (mean detected shots ~0.2/game), moves at max speed in long straight field-crossing runs, and only gets tiny ram/collision leakage.
+- `tools/offline_gun_eval.py '/logs/rounds/0/sim_*.jsonl'` strongly favors full linear/circular prediction on Hugbot traces (`lin/circ` mean ~77px vs damped averaged ~92px, head-on ~124px). The existing harmless non-wall straight-run branch forced the damped averaged gun due to prior Tirolio/Claptrap stop/reverse traces.
+- Small targeted tweaks in `robots/custom/MyTank.java`: harmless non-wall straight runners still cold-start with `GUN_AVERAGED`, but after virtual waves show linear at least 5px better (or a very clean high-speed/low-stop signature appears) the branch now promotes to `GUN_LINEAR`; also added a mild early `driveAwayFrom` for close harmless straight runners (<260px) to reduce Hugbot's rare ram/collision leakage. This should improve Hugbot/Antiwalls-style long straight field runs without affecting stop/reverse harmless movers where averaged remains better.
+- Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
