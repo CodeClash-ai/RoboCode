@@ -12670,3 +12670,196 @@ code without a clear, actionable signal of underperformance.
    spend on it than usual — especially valuable for iterating faster on
    tough matchups like `kcanida__pikachu`, where each experiment currently
    costs a full round to validate or refute.
+
+## Round 113 update (this round) — 2nd consecutive round vs robo_code__walls (fully healthy), fixed a real analyze_power_accuracy.py overcounting bug (root-caused round 112's ">100% accuracy" anomaly)
+
+### Context
+Both `/logs/rounds/0/` and `/logs/rounds/1/` exist this round, both real
+combat against `robo_code__walls` — same opponent round 112's notes
+describe (no code change happened between round 112 and this round;
+`kcanida__pikachu`, the very tough opponent from rounds 107-109 whose
+round-109 low-power fast-mover-cap fix still awaits a direct before/after
+re-test, did NOT reappear again this round either). Round 0 here matches
+round 112's own baseline exactly (100% win, 250/250, 82% accuracy, avg speed
+6.2, avg walls/game 0.4, avg rams/game 2.1, avg min energy 77, score 45632
+vs 9137). Round 1 (2nd independent sample): **100% win rate (250/250)**,
+81% accuracy, avg speed 6.2, avg walls/game 0.4, avg rams/game 2.2, avg min
+energy 77, score 45933 vs 9313 — essentially identical, no regression, no
+drift. **Zero losses, zero ties in either round.**
+
+### Validation performed
+1. `python3 tools/analyze_freezes.py /logs/rounds/1 --threshold 20 | grep -i
+   sonnet` -> **3 findings**, all short (28-71 ticks), **all** the
+   well-established benign "radar heading frozen" pattern (radar genuinely
+   settled on a near-stationary-relative target with normal ongoing combat
+   throughout — documented benign since round 15, most recently rounds
+   48-112, not the round-4 freeze bug). **Zero `STUCK-RAMMING` findings.**
+   Confirms the escape-mode mechanism (rounds 20/23/25/34-37/40) and round
+   47/48's radial-blend movement fix are both still fully healthy.
+2. `javac -Xlint:all -cp libs/robocode.jar -d /tmp/build
+   robots/custom/MyTank.java` compiles clean (exit 0, no errors/warnings).
+3. `diff archive/round1_backups/MyTank.java.before_round109_lowpower_fastcap
+   robots/custom/MyTank.java` — confirmed round 109's low-power fast-mover
+   cap change (and nothing else since) is exactly what's currently live in
+   `MyTank.java`; no accidental drift or reversion. **No changes made to
+   `MyTank.java` this round** — a fully healthy, unchanged-code result
+   against a repeat weak opponent, consistent with this file's long pattern
+   (rounds 6, 13, 15, 21, 22, 26-29, 32-33, 38-39, 41-42, 48-106, 109-112) of
+   not touching already-working combat code without a clear signal.
+
+### Real progress: found and fixed the root cause of round 112's "impossible >100% accuracy" tooling anomaly
+Round 112 flagged (but didn't root-cause) that `tools/analyze_power_
+accuracy.py`'s per-bucket breakdown showed the round-109-introduced
+low-power (0.5-1.0) fast-mover bucket for `sonnet_5` at **109.9% accuracy**
+(8084 hits on only 7354 shots — literally impossible) and speculated it was
+a shots-undercounting bug from the `MovingTrack` matcher merging distinct
+bullets. Investigated this round by directly dumping raw `b`-list entries
+from real logs (`sim_0.jsonl` in `/logs/rounds/1`) and found the **actual**
+mechanism is different, and had never been documented before:
+
+**The round-22-documented "lingering ghost HIT_VICTIM frame" (a bullet's
+terminal-status log entry keeps reappearing for 80+ ticks after the real
+hit) does not sit still — it visibly DRIFTS, and the drift tracks the
+VICTIM robot's own subsequent movement** (i.e. the impact marker stays
+"glued" to the point of impact on the victim and follows the victim around
+the battlefield for the rest of the game; confirmed directly — one ghost
+frame's position changed by up to ~8px/tick, matching the victim's own
+velocity, for 20+ consecutive ticks after a single real hit). The OLD
+version of this script's hit-attribution logic scanned EVERY tick's raw
+`HIT_VICTIM` entries and deduped only by rounded `(x, y)` — since the ghost
+frame's position keeps changing tick-to-tick (because it's following the
+victim, not staying fixed), it generates a **fresh, never-before-seen dedup
+key on almost every tick it lingers**, giving a single real hit dozens of
+extra "opportunities" to get wrongly re-attributed to any *unrelated* small
+energy-drop event that happens to fall within `ENERGY_TOLERANCE` of that
+bucket's damage formula. This bites hardest for LOW-power buckets (small
+`bulletDamage`, e.g. `4*0.5=2.0`) since small energy drops from unrelated
+causes (partial-tick decay accumulation, a different attacker's hit that
+happens to be close in magnitude, etc.) are common and easily fall within
+the ±0.35 tolerance window — exactly the failure mode that first became
+visible once round 109 pushed sustained heavy usage into a bucket this low
+(no earlier round's bullet-power tuning had ever used `P<=1` this heavily).
+
+**Fix applied** (`tools/analyze_power_accuracy.py`): completely replaced
+the raw-HIT_VICTIM-rescan approach with a one-time-resolution detector that
+reuses the SAME frame-to-frame `MovingTrack` bookkeeping already built for
+shot-counting: when a tracked bullet stops appearing as `MOVING` (a
+"vanish" event), the script now looks for a terminal-status entry near
+where that track would have travelled to (within the existing
+speed/tolerance window, PLUS a new `RESOLUTION_DIST_BUFFER=25px` flat
+allowance to account for collision detection triggering anywhere within the
+victim's ~36px hitbox rather than at an exact straight-line continuation
+point — verified empirically: several real resolutions landed 1-6px beyond
+the old, too-tight window). That single vanish-tick/position is now the
+ONLY event eligible for hit attribution for that specific bullet — later
+ticks where the same (now-stale) terminal entry keeps drifting are never
+consulted again, closing off the entire "give a stale ghost frame another
+chance every subsequent tick" mechanism. Being generous with the distance
+buffer here is safe (unlike relaxing tolerance in the old always-rescanning
+code) precisely BECAUSE this check now only ever fires once per real bullet,
+not repeatedly across dozens of future ticks.
+
+**Verified the fix**: re-ran on both this round's log directories.
+`sonnet_5`'s previously-impossible 0.5-1.0 bucket now shows a sane
+**89.3-90.0% accuracy** (was 109.9%/111.0%), and overall script-derived
+accuracy (75.4-75.6%) is now much closer to (and, consistent with every
+other round's already-documented "usual modest gap", slightly BELOW)
+`trace.md`'s reported 81-82% — matching the normal, benign, well-established
+script-vs-trace.md discrepancy pattern this file has noted since round 41,
+rather than the wildly-wrong inflated numbers round 112 (and, per this
+round's finding, every round back to round 109) actually had. Also spot-
+verified the overall shots-per-game sanity check is unaffected (still
+within ~1-2% of `trace.md`, since shot-counting/Part 1 was never the
+buggy part) and re-ran on a second, independent log directory (`/logs/rounds/0`)
+with a consistent, matching result (75.4% overall, 89.3% in the fixed
+bucket) — not a one-sample fluke.
+
+Note the docstring's numbered "IMPORTANT LOG-FORMAT GOTCHAS" list (originally
+just gotchas #1/#2 from rounds 22/28) now has a new, detailed #3 documenting
+this round's finding, in the same style as previous rounds' gotcha writeups,
+for the next person who has to debug this script again.
+
+### Important retroactive caveat for future teammates
+**Every `analyze_power_accuracy.py` accuracy number quoted in this file's
+notes from round 109 through round 112 (inclusive) — i.e. any round that
+used the round-109-introduced low-power (`P<=1`, mostly the 0.5-1.0 bucket)
+fast-mover cap heavily — was computed with the OLD, buggy overcounting
+logic and is likely inflated, potentially significantly, for that specific
+bucket.** This does NOT retroactively invalidate any of those rounds'
+actual real-match results (win rate, `trace.md`'s own reported accuracy,
+score margins — all always came straight from the authoritative grading
+harness, never from this script) or any of the CODE changes made in those
+rounds (round 109's fast-mover cap change was justified by a `swing(P,p)`
+calculation using accuracy figures from round 108's PRE-round-109 data, i.e.
+from the OLD 1.3-power bucket under the OLD-but-not-yet-broken script
+version — that specific number should still be trustworthy, since the bug
+only manifests once heavy `P<=1` usage exists to exploit it). It DOES mean:
+if a future teammate wants to re-validate round 109's change against
+`kcanida__pikachu` using this tool (per rounds 109-112's own repeated
+suggestion), make sure to use THIS round's fixed version of the script, not
+trust any bucket-level number from those earlier rounds' README write-ups
+at face value.
+
+### What I did NOT get to
+- Did not attempt to further validate round 109's fast-mover bullet-power
+  change against its actual target opponent (`kcanida__pikachu`) — it still
+  hasn't reappeared in 4 consecutive rounds now (109-113). This remains the
+  single highest-value outstanding validation in this file.
+- Did not investigate whether a similar "ghost frame follows the victim's
+  movement" mechanism could also somehow corrupt the shot-counting side
+  (Part 1) in some edge case — Part 1 only ever looks at `MOVING`-status
+  entries (never terminal ones) for its own continuity matching, so it
+  should be structurally immune to this specific mechanism, and the
+  sanity-check numbers (shots/game vs `trace.md`) have consistently matched
+  well across many rounds including this one, so I don't believe this is a
+  live concern, but flagging the reasoning in case a future teammate finds
+  a NEW anomaly and wants to rule this out systematically.
+- Did not lower `RESOLUTION_DIST_BUFFER` from the somewhat-generous flat
+  25px chosen this round, or otherwise more rigorously tune it — chose it
+  based on the largest single unresolved-track gap actually observed in a
+  quick sample (`sim_0.jsonl`'s worst case needed about +5.5px beyond the
+  old tolerance; used a larger, rounder 25px for safety margin across other
+  games/opponents not individually inspected). If a future round's sanity
+  check ever regresses noticeably, this constant would be the first thing
+  to reconsider.
+- Did not touch `MyTank.java` at all this round — the real match result is
+  fully healthy and this round's only investigation was a tooling fix that
+  doesn't touch bot behavior.
+
+### Suggestions for next teammate
+1. **First step, as always**: check `/logs/rounds/<N>/trace.md` (or
+   `results.json` + per-`sim_*.jsonl` `winner` fields if `trace.md` is
+   missing, per round 68's note) for the actual opponent this round, and run
+   `python3 tools/analyze_freezes.py /logs/rounds/<N> --threshold 20 | grep -i
+   sonnet` as the standard regression check.
+2. **If `kcanida__pikachu` reappears**, this is STILL the single highest-
+   value comparison outstanding across this whole file's recent history —
+   see rounds 107-109's notes for the full history (round 107: 37% win
+   baseline; round 107's fire-threshold "fix": 24% win, a regression,
+   reverted in round 108; round 108's revert: back to 37%; round 109:
+   lowered the fast-mover power cap 1.3->0.5, still NOT validated by a real
+   match against this specific opponent as of this round). When checking
+   `analyze_power_accuracy.py`'s output for that matchup, you can now
+   **trust the per-bucket numbers directly** (this round's fix is in
+   place) — no need for the extra caution round 112 had to flag.
+3. If `robo_code__walls` keeps reappearing, treat ~100% win / 81-82%
+   accuracy / avg min energy 77 / avg walls/game 0.4 as the stable healthy
+   baseline for this specific matchup.
+4. `mgalushka__maximbot` (rounds 110-111, ~83-85% win/90-91% accuracy),
+   `alexbay218__shreker` (rounds 101-102, ~83-87% win/47-48% accuracy),
+   `vikdov__dominatorx` (rounds 99-100, ~94-96% win), and
+   `admiralrasmussen__wavesurfing` (rounds 95-96, ~99% win/24-29% accuracy,
+   likely a genuine wave-surfer) are the most recent moderately-tougher
+   opponents seen — all confirmed stable (not regressing) across repeat
+   samples without needing a code change. `alpian__ianstank`/`pez__gf1`
+   (rounds 43-44/11-12, the historically toughest opponents in this file
+   alongside `kcanida__pikachu`) remain outstanding high-value direct
+   re-tests of the accumulated fix stack if either resurfaces.
+5. Local headless battle-runner: still unresolved after 112+ rounds of
+   attempts (see round 6's section for the most detailed known blocker,
+   `RepositoryManager.loadSelectedRobots` not seeing a freshly-reloaded
+   repository within the same call). Still the single highest-leverage
+   infra fix available if a future teammate has a larger step budget to
+   spend on it than usual — especially valuable for iterating faster on
+   tough matchups like `kcanida__pikachu`, where each experiment currently
+   costs a full round to validate or refute.
