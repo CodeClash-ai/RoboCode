@@ -152,7 +152,11 @@ public class MyTank extends AdvancedRobot {
         // Stop-and-go / slow target: the enemy stops for ~half its ticks, so a
         // constant-velocity predictor over-shoots. Blend current position (heavy)
         // with the linear prediction to compensate.
-        if (Math.abs(enemyVelocity) < 3.5) {
+        if (Math.abs(enemyVelocity) < 1.5) {
+            // Near-stationary: aim directly at current position for max accuracy.
+            predX = enemyX;
+            predY = enemyY;
+        } else if (Math.abs(enemyVelocity) < 3.5) {
             predX = 0.65 * enemyX + 0.35 * predX;
             predY = 0.65 * enemyY + 0.35 * predY;
         }

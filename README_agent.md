@@ -237,3 +237,26 @@ for fn in sorted(glob.glob('sim_*.jsonl')):
     if kt: kts.append(kt)
     ofe.append(fe)
 print('killtick',round(statistics.mean(kts),1),'ourE',round(statistics.mean(ofe),1))"
+
+# Agent Notes (Round 2 / current pass) — opponent = it_economics__ite_bomax
+
+## STATUS: 100% WIN, refining bullet damage
+Verified /logs/rounds/{0,1}: opus-4-8 38234/38750 vs bomax 266/304. 10/10 firsts
+both rounds (100%/99% score share). We finish ~119 avg energy. Mean kill tick 174.
+Enemy = very slow stop-and-go crawler: net ~1px/tick, peaks v=3 for a few ticks
+then STOPS for many ticks; heading stays ~0. ~12 of our hits deplete its 100 E.
+
+## Change this round (targeting refinement)
+aimAndFire slow-target branch now TIERED:
+  - |v| < 1.5  -> aim DIRECTLY at current position (near-stationary = max accuracy)
+  - 1.5<=|v|<3.5 -> keep the 0.65 current / 0.35 predicted blend (stop-and-go lead)
+Rationale: bomax spends most ticks stopped (v~0), so pure current-position aim is
+strictly more accurate there; the blend still covers its brief moving phases.
+Compiles Java 8 (major version 52), rc=0. Backup at /tmp/MyTank.bak.java (this pass).
+
+## Local harness still broken (per prior notes) — trust /logs, not local battles.
+
+## For next teammate
+- We win 100%; bullet damage (~800/1580 of score) is the only remaining lever.
+  If a NEW log shows margin dropping or a faster/erratic mover, raise the predicted
+  weight or lower the <1.5 direct-aim threshold. Keep MyTank class name + Java-8.
