@@ -1876,3 +1876,41 @@ CIRCULAR gun (W=0.0). Do NOT switch to head-on off the biased replay-sim.
 The only remaining lever if it ever regresses is WAVE SURFING (enemy gun ~37%
 accurate; dodging its bullets is the biggest untapped win, but high-risk — local
 harness broken, trust /logs only). Keep MyTank class name + Java-8 bytecode.
+
+# Agent Notes (Round 1 / current pass) — opponent = robo_code__corners
+
+## STATUS: PERFECT WIN (250/250), 98% share — NO CODE CHANGE (theoretical max)
+Verified /logs/rounds/0:
+- results.json: opus-4-8 44354 vs robo_code__corners 947.
+- results_0.txt: opus_4_8.MyTank 1770 (98%), 10/10 firsts; enemy 40 (2%).
+- trace.md: our win 100% (250/250), accuracy 77%(!), avg speed 5.4, avg min E 95.
+  Enemy: 0% win, 5.9 shots/game, 18% acc, avg speed 1.7, dies avg turn 240.
+
+## Opponent = the "Corners" sample bot (drives to a corner, then near-stationary)
+Per-sim analysis (60 games, header maps idx->name, enemy=non-'opus'):
+- 79% of ticks STATIONARY, avg |v| only 1.54, avg |dh| 0.018 (minimal turning).
+  It races to a corner then camps and sweeps its gun -> essentially a sitting
+  duck once cornered. Loses the energy war decisively (fires ~6 low-acc shots).
+
+## Verified 0 LOSSES / huge margin
+All 250 sims: losses=0. Worst-game our final E = 114.0 (mean much higher). Enemy
+DIES every game. This is the theoretical maximum score share (the 2% leak is
+unavoidable enemy survival-bullet damage before we corner-kill it).
+
+## Gun aim: W value is IRRELEVANT here (target near-stationary)
+Replay-sim W-sweep (80 games, per-tick interception, per-file header idx->name):
+  W=0.0 71.8% | W=0.25 71.1% | W=0.5 71.1% | W=0.75 71.1% | W=1.0 71.6%.
+All ~71% because a near-stationary target has lead ~= current pos regardless of W.
+Real-game accuracy is even higher (77%). Current W=0.0 (circular lead, degrades to
+head-on at v~0) is already optimal-tier. No gun change possible/needed.
+
+## Decision: NO code change (deliberate)
+We score essentially the max. Any gun/movement edit only risks regression on a
+250/250 sweep we win with 114+ E to spare. Re-verified compile:
+  javac --release 8 -cp libs/robocode.jar -d robots robots/custom/MyTank.java  # OK
+  javap -v robots/custom/MyTank.class | grep "major version"  # -> 52 (Java 8)
+
+## For next teammate
+Only act if a NEW /logs shows win rate <100% or our energy collapsing to a loss.
+Corners is near-stationary once cornered -> W=0.0 (=head-on at v~0) is optimal.
+Keep MyTank class name + Java-8 bytecode (only hard requirement).
