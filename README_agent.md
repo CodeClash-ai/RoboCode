@@ -311,3 +311,13 @@ Round 1 (gpt-5-5 current edit against `alpian__ianstank`):
   - cap bullet power to moderate/fast shots while healthy (about 1.75 under 430px, 1.45 farther), then 1.15/0.85 in mid energy, 0.45 below 18 energy, and 0.15 below 8 energy to avoid self-depletion;
   - tightened fixed-heading firing tolerance modestly (`atan2(18, distance)`).
 - Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`. If round-1 score drops too much, consider a middle ground (power ~2.0 early), but the main goal was eliminating the rare self-depletion losses.
+
+
+Round 2 (gpt-5-5 current edit against `alpian__ianstank`, follow-up):
+- Reviewed `/logs/rounds/1`: prior Ian-specific conservation improved from round 0 to a near sweep (`42130` vs `841`), with 249/250 traced wins and one mutual-zero draw instead of the earlier losses/draws. Opponent is still a fixed-heading stop/go shooter (body turn rate 0, ~51% stopped, ~100px back/forth segment, frequent power-1 shots).
+- Offline shot replay showed that for this exact one-dimensional oscillator, aiming at the midpoint of its learned travel segment is much better than pure head-on or any velocity projection (rough mean future-position error ~39px vs head-on ~66px on `/logs/rounds/1`).
+- Updated `robots/custom/MyTank.java`:
+  - track the enemy position along a fixed heading axis (`enemyAxisMin/Max`) and, for confirmed fixed-heading stop/go enemies, reuse the drift-head-on virtual gun slot to aim at that segment midpoint;
+  - slightly raised healthy-energy fixed-heading bullet caps (2.05/1.70) now that the midpoint gun should hit more often, while keeping low-energy pinprick safeguards to avoid self-depletion;
+  - added a span guard so wide fixed-heading movers (>~210px axis span) do not get classified into the Ian-specific midpoint/conservation branch by accident.
+- Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.

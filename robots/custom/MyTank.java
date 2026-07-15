@@ -36,6 +36,11 @@ public class MyTank extends AdvancedRobot {
     private int stopGoEnemyScans = 0;
     private double enemyVelocityAvg = 0.0;
     private double enemyTurnRateAvg = 0.0;
+    private boolean haveEnemyAxis = false;
+    private double enemyAxisHeading = 0.0;
+    private double enemyAxisMin = 0.0;
+    private double enemyAxisMax = 0.0;
+    private int enemyAxisSamples = 0;
 
     // Lightweight virtual guns.  The latest opponent dodges enough that pure
     // circular prediction over-leads badly; keep rolling errors for several
@@ -106,6 +111,7 @@ public class MyTank extends AdvancedRobot {
                 : 0.0;
         enemyVelocityAvg = 0.84 * enemyVelocityAvg + 0.16 * e.getVelocity();
         enemyTurnRateAvg = 0.84 * enemyTurnRateAvg + 0.16 * scanTurnRate;
+        updateEnemyAxis(enemyX, enemyY, e.getHeadingRadians(), scanTurnRate);
 
         if (Math.abs(e.getVelocity()) < 0.05) {
             stationaryScans++;
@@ -374,7 +380,7 @@ public class MyTank extends AdvancedRobot {
             // while healthy, then fall to energy-positive pinpricks instead of dying
             // with repeated power-3 misses.
             if (getEnergy() > 42) {
-                power = Math.min(power, distance < 430 ? 1.75 : 1.45);
+                power = Math.min(power, distance < 430 ? 2.05 : 1.70);
             } else if (getEnergy() > 18) {
                 power = Math.min(power, distance < 380 ? 1.15 : 0.85);
             } else if (getEnergy() > 8) {
@@ -440,10 +446,10 @@ public class MyTank extends AdvancedRobot {
         } else if (crazyEnemyScans > 4) {
             gun = GUN_CIRCULAR;
         } else if (fixedHeadingStopGoEnemy()) {
-            // Fixed-heading stop/go movement has no body turn component.  Use the
-            // pure head-on gun with fast low-power bullets; the older drift variant
-            // was tuned for max-power farming and over-leads Ian's Tank jitter.
-            gun = GUN_HEAD_ON;
+            // Ian's Tank moves back and forth along one fixed body-heading line.
+            // Aim at the learned midpoint of that line segment (via the drift-head
+            // virtual gun slot) instead of chasing the current endpoint/jitter.
+            gun = GUN_DRIFT_HEAD_ON;
         } else if (activeStopGoShooter()) {
             // Current RegullarMonk traces: very frequent stops/reverses and
             // power-1 firing.  Offline shot replay favored head-on over linear,
@@ -609,7 +615,8 @@ public class MyTank extends AdvancedRobot {
                 && enemyFireCount > 1
                 && crazyEnemyScans <= 4
                 && Math.abs(enemyVelocityAvg) < 3.8
-                && Math.abs(enemyTurnRateAvg) < 0.004;
+                && Math.abs(enemyTurnRateAvg) < 0.004
+                && (!haveEnemyAxis || enemyAxisSamples < 20 || enemyAxisMax - enemyAxisMin < 210.0);
     }
 
     private boolean activeStopGoEnemy() {
@@ -719,11 +726,10 @@ public class MyTank extends AdvancedRobot {
             return new double[] {enemyX, enemyY};
         }
         if (gunType == GUN_DRIFT_HEAD_ON) {
-            // Fixed-heading stop/go bots in the current logs move a little farther
-            // along their body axis by bullet-arrival time than pure head-on, but
-            // full linear prediction badly over-leads their frequent stops/reverses.
-            // A tiny 5% projection keeps the robust head-on character while shaving
-            // a small amount off replay error with moderate/fast bullets.
+            if (fixedHeadingStopGoEnemy() && enemyAxisSamples > 18) {
+                return predictAxisMidpoint(enemyX, enemyY);
+            }
+            // Generic fallback: almost-head-on with a tiny velocity drift.
             double drift = limit(-0.45, 0.05 * velocity, 0.45);
             return projectClamped(enemyX, enemyY, heading, drift, bulletSpeed, 70);
         }
@@ -767,6 +773,41 @@ public class MyTank extends AdvancedRobot {
             }
         }
         return new double[] {predictedX, predictedY};
+    }
+
+
+    private void updateEnemyAxis(double enemyX, double enemyY, double heading, double turnRate) {
+        // Fixed-heading stop/go opponents (current Ian's Tank) oscillate on a
+        // one-dimensional line.  Aiming at the learned midpoint of that segment is
+        // far more stable than projecting the current burst velocity.
+        if (!haveEnemyAxis || Math.abs(Utils.normalRelativeAngle(heading - enemyAxisHeading)) > 0.06
+                || Math.abs(turnRate) > 0.04) {
+            haveEnemyAxis = true;
+            enemyAxisHeading = heading;
+            double axis = enemyX * Math.sin(enemyAxisHeading) + enemyY * Math.cos(enemyAxisHeading);
+            enemyAxisMin = axis;
+            enemyAxisMax = axis;
+            enemyAxisSamples = 1;
+            return;
+        }
+        double axis = enemyX * Math.sin(enemyAxisHeading) + enemyY * Math.cos(enemyAxisHeading);
+        enemyAxisMin = Math.min(enemyAxisMin, axis);
+        enemyAxisMax = Math.max(enemyAxisMax, axis);
+        enemyAxisSamples++;
+    }
+
+    private double[] predictAxisMidpoint(double enemyX, double enemyY) {
+        double mid = (enemyAxisMin + enemyAxisMax) / 2.0;
+        double ux = Math.sin(enemyAxisHeading);
+        double uy = Math.cos(enemyAxisHeading);
+        double px = -Math.cos(enemyAxisHeading);
+        double py = Math.sin(enemyAxisHeading);
+        double perp = enemyX * px + enemyY * py;
+        double predictedX = ux * mid + px * perp;
+        double predictedY = uy * mid + py * perp;
+        return new double[] {
+                limit(18.0, predictedX, getBattleFieldWidth() - 18.0),
+                limit(18.0, predictedY, getBattleFieldHeight() - 18.0)};
     }
 
     public void onHitByBullet(HitByBulletEvent e) {
