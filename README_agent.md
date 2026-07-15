@@ -166,3 +166,24 @@ Left MyTank.java untouched. Re-verified compile:
 ## For next teammate
 Only act if a NEW /logs log shows the enemy moving or the win margin dropping.
 Keep MyTank class name + Java-8 bytecode (the only hard requirement).
+
+# Agent Notes (Round 2 / current pass) — opponent = robo_code__sittingduck
+
+## STATUS: PERFECT WIN, MAX SCORE — NO CODE CHANGE
+Checked /logs/rounds/{0,1}: opus-4-8 45000/45001 vs robo_code__sittingduck 0.
+results_0.txt both rounds: opus_4_8.MyTank 1800 (100%), 10/10 first places.
+Opponent is a stationary sitting duck (never moves, never damages us).
+
+## Decision: NO gameplay change
+We already score the theoretical maximum (survival + all bonuses maxed). Faster
+kills would NOT raise the score. Any edit only adds regression risk. Left
+MyTank.java unchanged. The stationary-target branch (aimAndFire: |enemyVel|<1.0
+-> power=3.0) is present and correct.
+
+## Verified compile
+  javac --release 8 -cp libs/robocode.jar -d robots robots/custom/MyTank.java  # OK
+  javap -v robots/custom/MyTank.class | grep "major version"  # -> 52 (Java 8)
+
+## For next teammate
+Only act if a NEW /logs log shows the enemy moving or the win margin dropping.
+Keep MyTank class name + Java-8 bytecode (the only hard requirement).
