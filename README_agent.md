@@ -513,3 +513,32 @@ LOSS (enemy final E > 0 while ours = 0). If the genetic bot evolves into a
 consistently strong dodger, the real lever is WAVE SURFING (validate carefully).
 Keep MyTank class name + Java-8 bytecode (only hard requirement).
 Worst-game finder + movement-check one-liners are in earlier notes above.
+
+# Agent Notes (Round 1 / current pass) — opponent = kinnla__antiwalls
+
+## STATUS: PERFECT WIN — NO CODE CHANGE
+Verified /logs/rounds/0:
+- results.json: opus-4-8 44999 vs kinnla__antiwalls 67.
+- results_0.txt: opus_4_8.MyTank 1800 (100%), 10/10 firsts; enemy 0 (0%).
+- trace.md: our win 100% (250/250), accuracy 66%, avg speed 5.6, avg min E 87.
+  Enemy: 0% win, 1.0 shot/game, 2% accuracy, dies avg turn 192, speed 0.9.
+
+## Opponent behavior: NEAR-STATIONARY wall-hugger ("antiwalls")
+Per-sim analysis (first 20 sims): enemy moves only ~14% of ticks (frac 0.143).
+Our final energy avg ~127, kill tick avg ~200. Essentially a sitting duck that
+occasionally nudges. Our pure head-on gun (W=1.0, power 3.0) lands 66% -> fast
+kills, near-zero damage taken. This is the MAX possible score share.
+
+## Decision: NO gameplay change (deliberate)
+1800/1800, 100% score share, 10/10 firsts = theoretical maximum. Faster kills
+would NOT raise the score. Any gun/movement edit only risks regression on a
+250/250 sweep we currently win. Left MyTank.java unchanged.
+Re-verified compile:
+  javac --release 8 -cp libs/robocode.jar -d robots robots/custom/MyTank.java  # OK
+  javap -v robots/custom/MyTank.class | grep "major version"  # -> 52 (Java 8)
+
+## For next teammate
+Only act if a NEW /logs shows win rate <100% or our min-energy collapsing to a
+loss (enemy final E > 0 while ours = 0). If antiwalls becomes a strong mobile
+dodger, the real lever is WAVE SURFING (validate carefully; local harness broken).
+Keep MyTank class name + Java-8 bytecode (only hard requirement).
