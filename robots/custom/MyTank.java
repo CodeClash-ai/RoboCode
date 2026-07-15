@@ -279,6 +279,12 @@ public class MyTank extends AdvancedRobot {
             // safe to keep the short-flight damped stop/go exchange instead of
             // falling into the old RegullarMonk conservation orbit.
             preferredDistance = 275.0;
+        } else if (mediumStopGoShooter()) {
+            // Gruffalo-style opponent in the current logs: many stops / low-turn
+            // bursts, repeated medium-power shots, and the damped averaged gun is
+            // clearly better than head-on.  Stay close enough for short bullet
+            // flights, but not quite as close as the almost harmless stop/go farmers.
+            preferredDistance = 300.0;
         } else if (activeStopGoShooter()) {
             // RegullarMonk-style bots stop/reverse constantly but fire repeated
             // weak bullets.  They are easiest to hit with fast head-on shots;
@@ -482,6 +488,18 @@ public class MyTank extends AdvancedRobot {
             } else {
                 power = Math.min(power, 0.45);
             }
+        } else if (mediumStopGoShooter()) {
+            // Current Gruffalo traces use frequent medium-power fire, but our orbit
+            // dodges it well and the main lost score is long rounds.  Keep high
+            // pressure with the wall/stop-go averaged predictor while preserving a
+            // low-energy escape hatch in the rare 900+ tick game.
+            if (getEnergy() > 34 && distance < 720) {
+                power = Math.max(power, distance < 560 ? 3.0 : 2.35);
+            } else if (getEnergy() > 16) {
+                power = Math.min(Math.max(power, 1.45), 2.05);
+            } else {
+                power = Math.min(power, 0.45);
+            }
         } else if (activeStopGoShooter()) {
             // RegullarMonk-like active stop/go shooters made us lose games by
             // self-depleting with repeated power-3 misses.  Head-on replay is
@@ -567,6 +585,11 @@ public class MyTank extends AdvancedRobot {
             // zero, and better for slow rolls), then return to the damped averaged
             // gun for fast bursts.
             gun = Math.abs(e.getVelocity()) <= 3.25 ? GUN_LINEAR : GUN_AVERAGED;
+        } else if (mediumStopGoShooter()) {
+            // Gruffalo-style medium-power stop/go shooter: offline replay strongly
+            // favors the damped averaged predictor (wallavg) over head-on, so do not
+            // let the generic activeStopGoShooter conservation branch force head-on.
+            gun = GUN_AVERAGED;
         } else if (activeStopGoShooter()) {
             // Current RegullarMonk traces: very frequent stops/reverses and
             // power-1 firing.  Offline shot replay favored head-on over linear,
@@ -772,6 +795,27 @@ public class MyTank extends AdvancedRobot {
                 && (virtualSamples < 18 || virtualGunError[GUN_AVERAGED] < 62.0 || bestGunError() < 58.0);
     }
 
+    private boolean mediumStopGoShooter() {
+        // kylebennett__gruffalo in the current logs is stop-heavy and low-turn like
+        // RegullarMonk, but it fires mostly medium (~power-2) bullets and trace
+        // replay favors our damped averaged gun.  Keep this out of the older
+        // low-power/head-on conservation branch, which was intended for weak
+        // power-1 evasive shooters that caused self-depletion.
+        return stopGoEnemyScans > 8
+                && enemyFireCount > 3
+                && enemyFirePowerSamples > 2
+                && enemyFirePowerAvg > 1.45
+                && enemyFirePowerAvg <= 2.25
+                && crazyEnemyScans <= 4
+                && Math.abs(enemyVelocityAvg) < 3.6
+                && Math.abs(enemyTurnRateAvg) < 0.070
+                && !fixedHeadingStopGoEnemy()
+                && !fixedHeadingLineEnemy()
+                && !heavyStopGoShooter()
+                && !fastWallCruiser()
+                && (virtualSamples < 18 || virtualGunError[GUN_AVERAGED] < 70.0 || bestGunError() < 66.0);
+    }
+
     private boolean activeStopGoShooter() {
         // RegullarMonk-style movement in the latest logs: half the time stopped,
         // small low-turn bursts, and many weak shots.  Treat it separately from
@@ -782,6 +826,7 @@ public class MyTank extends AdvancedRobot {
                 && enemyFireCount > 3
                 && !fixedHeadingStopGoEnemy()
                 && !heavyStopGoShooter()
+                && !mediumStopGoShooter()
                 && !fastWallCruiser()
                 && crazyEnemyScans <= 4
                 && Math.abs(enemyVelocityAvg) < 3.8
@@ -839,7 +884,7 @@ public class MyTank extends AdvancedRobot {
         // often.  Do not wait for many virtual-wave samples before switching out
         // of the old "harmless wall target" max-power close-orbit mode.
         return wallEnemyScans > 4 && enemyFireCount > 3 && stopGoEnemyScans <= 12
-                && !heavyStopGoShooter() && !fastWallCruiser();
+                && !heavyStopGoShooter() && !mediumStopGoShooter() && !fastWallCruiser();
     }
 
     private double bestGunError() {
@@ -943,7 +988,7 @@ public class MyTank extends AdvancedRobot {
         }
         if (gunType == GUN_AVERAGED && !dangerousWallEnemy()
                 && (wallEnemyScans > 4 || (stopGoEnemyScans > 8
-                        && (harmlessLowFireEnemy() || activeStopGoEnemy() || heavyStopGoShooter())))
+                        && (harmlessLowFireEnemy() || activeStopGoEnemy() || heavyStopGoShooter() || mediumStopGoShooter())))
                 && !(stopGoEnemyScans <= 8 && straightEnemyScans > 12 && harmlessLowFireEnemy()
                         && (Math.abs(enemyVelocityAvg) > 3.5 || Math.abs(velocity) > 5.0))) {
             // A harmless wall-bound or recent stop/go bot often alternates between

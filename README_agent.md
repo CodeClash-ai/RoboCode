@@ -412,3 +412,10 @@ Round 2 (gpt-5-5 current edit against `robo_code__myfirstrobot`, follow-up):
   - tuned the opposite-endpoint aim inset from 15% to 10% of learned span (clamped 8-16px), which was marginally best in replay;
   - tightened the weak fixed-axis orbit from 245px to 225px to reduce bullet flight against this safe weak shooter.
 - Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
+
+Round 1 (gpt-5-5 current edit against `kylebennett__gruffalo`):
+- `/logs/rounds/0` shows a real stop/go mover/shooter, `kylebennett__gruffalo.MyTank`. We swept all 250 traced games and won aggregate (`41611` vs `1612`), but average game length was ~492 ticks and Gruffalo scored small but repeated medium-power bullet damage.
+- Trace stats: opponent is stopped ~53% of active ticks, wall-bound ~38%, low-turn/straight-ish ~80%, fires around 7.5 detectable shots/game with average power ~2.0. Our end energy is usually high (~91 avg) but rare long rounds can drop to ~10.
+- `tools/offline_gun_eval.py '/logs/rounds/0/sim_*.jsonl'` favors the damped wall/stop-go averaged predictor (`wallavg` mean ~55px, normal avg ~61, head-on ~68, linear/circular ~74), so the old RegullarMonk-style active stop/go branch forcing low-power head-on is not ideal here.
+- Added `mediumStopGoShooter()` in `robots/custom/MyTank.java`: detects stop-heavy, low-turn enemies with repeated medium-power fire. It keeps a ~300px orbit, forces `GUN_AVERAGED` (with the damped stop/go predictor), and uses high pressure while our energy is safe (power 3 under ~560, 2.35 farther) with low-energy downshift. It is excluded from `activeStopGoShooter()` and `dangerousWallEnemy()` so Gruffalo does not fall into the conservative head-on/DroidPoet branches.
+- Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
