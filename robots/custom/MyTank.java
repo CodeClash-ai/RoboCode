@@ -238,11 +238,11 @@ public class MyTank extends AdvancedRobot {
         // inward; too close we open out.  wallSmooth then bends the path away
         // from the battlefield edges before we commit to it.
         double preferredDistance;
-        if (crazyEnemyScans > 4) {
+        if (crazyEnemyScans > 3) {
             // team488__meow has a Crazy-like high-speed turn pattern but is much
             // more predictable than sample.Crazy.  Tighten only after virtual waves
             // confirm low circular error, preserving the safer old Crazy spacing.
-            preferredDistance = (virtualSamples > 14 && virtualGunError[GUN_CIRCULAR] < 85.0) ? 275.0 : 305.0;
+            preferredDistance = (virtualSamples > 14 && virtualGunError[GUN_CIRCULAR] < 85.0) ? 260.0 : 305.0;
         } else if (weakFixedAxisOscillator()) {
             // Current Tarektank-style target is a one-dimensional 100px
             // oscillator with a weak fixed-heading gun.  Move closer than the
@@ -387,7 +387,7 @@ public class MyTank extends AdvancedRobot {
         if (fastWallCruiser() && getEnergy() > 14 && distance < 820) {
             power = Math.max(power, distance < 650 ? 3.0 : 2.55);
         }
-        if (crazyEnemyScans > 4) {
+        if (crazyEnemyScans > 3) {
             // High-speed continuous turners are easier to hit with faster,
             // moderate-power circular shots.  For this round's meow opponent the
             // circular virtual gun settles far below the old sample.Crazy errors;
@@ -395,7 +395,7 @@ public class MyTank extends AdvancedRobot {
             // better expected damage and should finish the very safe match faster.
             boolean easyCircularTurner = virtualSamples > 14 && virtualGunError[GUN_CIRCULAR] < 85.0;
             if (easyCircularTurner && getEnergy() > 45) {
-                power = Math.max(power, distance < 620 ? 3.0 : 2.55);
+                power = Math.max(power, distance < 680 ? 3.0 : 2.55);
             } else if (easyCircularTurner && getEnergy() > 22) {
                 power = Math.min(Math.max(power, distance < 460 ? 2.35 : 1.95), 2.55);
             } else if (getEnergy() > 16) {
@@ -510,7 +510,7 @@ public class MyTank extends AdvancedRobot {
         int gun = chooseGun();
         if (stationaryScans > 5) {
             gun = GUN_HEAD_ON;
-        } else if (crazyEnemyScans > 4) {
+        } else if (crazyEnemyScans > 3) {
             gun = GUN_CIRCULAR;
         } else if (fixedHeadingStopGoEnemy()) {
             // Fixed-heading oscillators use the drift-head-on virtual gun slot for
