@@ -232,6 +232,13 @@ public class MyTank extends AdvancedRobot {
             driveAwayFrom(absBearing, 285.0);
             return;
         }
+        if (straightStopGoLinearEnemy() && e.getDistance() < 245.0) {
+            // Exterminador fires mostly power-3 when it gets a close stop/go lock.
+            // Keep enough separation that our orbit has lateral room and we do not
+            // trade point-blank 16-damage hits while pinned near a wall.
+            driveAwayFrom(absBearing, 285.0);
+            return;
+        }
         if (straightEnemyScans > 2 && harmlessLowFireEnemy() && e.getDistance() < 310.0) {
             // Hugbot/simple harmless runners can cross our orbit at full speed before
             // the narrow rammer detector fully confirms.  Open the gap early and keep
@@ -302,6 +309,13 @@ public class MyTank extends AdvancedRobot {
             // RamFire-like opponents try to close directly.  Keep a short bullet
             // flight but maintain just enough spacing to avoid long pin loops.
             preferredDistance = 260.0;
+        } else if (straightStopGoLinearEnemy()) {
+            // Exterminador-style targets spend about half their time stopped but
+            // otherwise run long, nearly straight segments.  Virtual replay says
+            // full linear prediction is much better than damped stop/go averaging;
+            // keep a moderate exchange: close enough for linear hits, but wider than
+            // the old 260-275px band that let power-3 stop/go shots trade too well.
+            preferredDistance = 315.0;
         } else if (easyHeadOnStopGoEnemy()) {
             // Cliffbot2-style stop/go movers are weak and the virtual guns show
             // near-head-on beating the damped averaged gun.  Keep a very close
@@ -475,7 +489,19 @@ public class MyTank extends AdvancedRobot {
                 power = Math.min(power, 1.25);
             }
         }
-        if (weakFixedAxisOscillator()) {
+        if (straightStopGoLinearEnemy()) {
+            // Current Exterminador traces: long straight/stop runs where linear
+            // prediction is clearly best.  Press hard while energy is abundant,
+            // but avoid the rare self-depletion losses seen when long games keep
+            // spending max-power bullets after our energy has fallen.
+            if (getEnergy() > 38 && distance < 720) {
+                power = Math.max(power, distance < 600 ? 3.0 : 2.45);
+            } else if (getEnergy() > 18) {
+                power = Math.min(Math.max(power, 1.25), 1.85);
+            } else {
+                power = Math.min(power, getEnergy() < 9 ? 0.15 : 0.45);
+            }
+        } else if (weakFixedAxisOscillator()) {
             // Tarektank-like: fixed heading, short learned line segment, and
             // repeated weak power-1 shots.  The drift/axis gun is stable here,
             // so max-pressure bullets beat the older low-power conservation
@@ -654,6 +680,11 @@ public class MyTank extends AdvancedRobot {
             // virtual-error gate prevents overriding the averaged gun on MarkIV /
             // Terminator-style stop-go bots where damping is better.
             gun = GUN_HEAD_ON;
+        } else if (straightStopGoLinearEnemy()) {
+            // Exterminador-style stop/straight movement should not fall into the
+            // generic damped stop-go or high-power-shooter head-on branches once
+            // virtual waves show linear is winning.
+            gun = GUN_LINEAR;
         } else if (highPowerStopGoDodger()) {
             // The current Ultron traces strongly favor head-on: it stops/reverses
             // during bullet flight, so linear/circular/averaged over-lead badly.
@@ -814,6 +845,30 @@ public class MyTank extends AdvancedRobot {
                 && !fastWallCruiser();
     }
 
+    private boolean straightStopGoLinearEnemy() {
+        // andrekorol__exterminador in the current logs looks stop/go at a glance,
+        // but its moving portions are long low-turn straight runs.  The generic
+        // stop/go damped gun under-leads/averages those runs, and the broad
+        // high-power-shooter safety can misread our own bullet hits as enemy fire.
+        // Require virtual evidence that linear beats both averaged and head-on so
+        // MarkIV/Terminator/Gruffalo/Ultron-style stop-go shooters keep their
+        // specialized branches.
+        return straightEnemyScans > 8
+                && stopGoEnemyScans > 6
+                && wallEnemyScans <= 4
+                && crazyEnemyScans <= 4
+                && !fixedHeadingStopGoEnemy()
+                && !fixedHeadingLineEnemy()
+                && !fastWallCruiser()
+                && !lowFireRammer()
+                && enemySpeedAvg > 2.2
+                && enemySpeedAvg < 5.4
+                && Math.abs(enemyTurnRateAvg) < 0.040
+                && virtualSamples > 14
+                && virtualGunError[GUN_LINEAR] + 4.0 < virtualGunError[GUN_AVERAGED]
+                && virtualGunError[GUN_LINEAR] + 8.0 < virtualGunError[GUN_HEAD_ON];
+    }
+
     private boolean harmlessLowFireEnemy() {
         // Claptrap/Tirolio/Antiwalls-style opponents may show a few
         // energy drops from stray shots or wall/collision bookkeeping, but are
@@ -907,7 +962,8 @@ public class MyTank extends AdvancedRobot {
                 && Math.abs(enemyTurnRateAvg) < 0.075
                 && !fixedHeadingStopGoEnemy()
                 && !fixedHeadingLineEnemy()
-                && !fastWallCruiser();
+                && !fastWallCruiser()
+                && !straightStopGoLinearEnemy();
     }
 
     private boolean activeHighPowerShooter() {
@@ -919,6 +975,7 @@ public class MyTank extends AdvancedRobot {
                 && !fixedHeadingStopGoEnemy()
                 && !fixedHeadingLineEnemy()
                 && !fastWallCruiser()
+                && !straightStopGoLinearEnemy()
                 && crazyEnemyScans <= 4;
     }
 
@@ -976,6 +1033,7 @@ public class MyTank extends AdvancedRobot {
                 && !heavyStopGoShooter()
                 && !mediumStopGoShooter()
                 && !fastWallCruiser()
+                && !straightStopGoLinearEnemy()
                 && crazyEnemyScans <= 4
                 && Math.abs(enemyVelocityAvg) < 3.8
                 && Math.abs(enemyTurnRateAvg) < 0.035;
