@@ -271,14 +271,10 @@ public class MyTank extends AdvancedRobot {
         // vs pez__leachpmc (STATIONARY): we hit at every range, so keep power
         // high through our ~240px orbit zone for fast kills (fewer total ticks
         // exposed). Taper only in the truly-far low-relevance zone.
-        // vs alexjamesmacpherson__wilde: our hit rate is ~99% at 100-300px, 76% at
-        // 300-400px, 56% at 400-500px vs this predictable lead-gun mover. Every
-        // bucket out to 500px clears the 33% net-energy break-even, so keep power
-        // HIGH through our ~320px orbit and out to 450px for fast kills + max
-        // bullet-damage share (we win the energy war decisively here).
-        if (dist < 250)       power = 3.0;   // near-certain hit + big damage
-        else if (dist < 400)  power = 3.0;   // ~90% hit at our ~320px orbit
-        else if (dist < 500)  power = 2.0;   // 56% hit: still net-positive
+        if (dist < 160)       power = 3.0;   // point-blank: high hit + big damage
+        else if (dist < 250)  power = 2.6;
+        else if (dist < 380)  power = 2.2;   // still fast kills if pushed out
+        else if (dist < 500)  power = 1.5;
         else if (dist < 600)  power = 1.0;
         else                  power = 0.5;
 
@@ -350,7 +346,7 @@ public class MyTank extends AdvancedRobot {
         // (distance-based, kept net-positive) still guard the crazy-bot regression.
         // Chose W=0.85: strongly toward head-on (physics: slow target -> head-on best),
         // hedged just short of pure 1.0 since replay is biased by the reactive enemy path.
-        double W = 0.25;  // vs alexjamesmacpherson__wilde: LEAD-gun moderate mover (avgV 4.16, movefrac 0.66). Replay-sim W-sweep over 50 sims / 845 fire events: W=0.25 hits 54.7% vs W=0.0 47.2% vs W=0.5 52.4% vs W=1.0 37.6%. Clean peak at 0.25 -- slightly-less-than-full lead for this moderate mover.
+        double W = 0.0;  // vs pez__poet: FAST moderate-curve mover (movefrac 0.68, avgV 4.84, avgdh 0.056, engages ~195px) with a LEAD gun (offset 0.306). W-sweep 2 slices: W=0.0 ~0.53 vs W=0.9 ~0.33 -- full lead clearly best (fast mover). Anti-bias: fired W=0.9 yet W=0.0 wins big. Was 0.9 (dodgebot2 leftover).
         // [roleksii] double W = 0.5;
         // [wallspoetas] double W = 0.9;
         // [maximbot] double W = 1.0;  // vs mgalushka__maximbot: MODERATE near-straight mover (movefrac 0.68, avgV 4.51, avg|dh| 0.022, engages ~240px). W-sweep (2 slices, 80 games each) robustly peaks at HEAD-ON: W=1.0 ~0.55 vs W=0.5 ~0.35 vs W=0.0 ~0.39. Damage model W=1.0 dmg +47pct AND net energy far higher. Near-straight moderate mover -> head-on optimal (matches florian2/gruffalo/ultron/hugbot). Was 0.5 (leftover from kcanida pikachu heavy-spinner avgdh 0.149 -- wrong profile here).
@@ -665,22 +661,12 @@ public class MyTank extends AdvancedRobot {
         // FIX: pull inward HARDER from farther out and hold ~120px so more ticks land in the
         // 100-200px WIN zone (and dip toward the 0-100px crush zone). Its shots get dodged at
         // range but not up close -> closing is the decisive lever (confirmed by R1's flip).
-        // ==== TUNING vs alexjamesmacpherson__wilde (LEAD-gun moderate mover) ====
-        // MEASURED (round-0 250 sims): enemy gun aims with a strong LEAD (median
-        // offset 0.69 rad -> aims where we WILL be), avg |v| 4.16, moving 66% of
-        // ticks. Enemy hit density on us DROPS sharply with range: 0-100px 50/1k,
-        // 100-200px 45/1k, 200-300px 20/1k, 300-400px 7/1k, 400-500px 1.5/1k.
-        // Our OWN gun stays ~99% accurate at 100-300px and 76% at 300-400px vs its
-        // predictable path. So orbiting WIDER is strictly better: we keep near-
-        // full accuracy while the enemy's hits fall ~6x. The old ~120px target
-        // (dodgebot2 leftover) camped us in the enemy's kill zone -> our avg
-        // engagement was ~186px and the 1 loss + all close games happened there.
-        // Target ~320px: still 76-99% hit for us but far fewer enemy hits.
-        if (enemyDistance > 400)      rangeBias = -0.9; // pull in toward ~320px
-        else if (enemyDistance > 340) rangeBias = -0.4;
-        else if (enemyDistance < 220) rangeBias = 0.7;  // push out of enemy kill zone
-        else if (enemyDistance < 290) rangeBias = 0.3;  // approach ~320px from inside
-        else                          rangeBias = 0.0;  // hold ~320px tangential
+        if (enemyDistance > 300)      rangeBias = -1.2; // charge inward hard
+        else if (enemyDistance > 200) rangeBias = -0.95;// keep pulling into the win zone
+        else if (enemyDistance > 140) rangeBias = -0.55;// approach ~120px
+        else if (enemyDistance < 75)  rangeBias = 0.7;  // don't ram/get too close
+        else if (enemyDistance < 110) rangeBias = 0.2;  // hold ~120px
+        else                          rangeBias = -0.1;
         double desiredDir = absBearing + (Math.PI / 2 + rangeBias) * moveDirection;
 
         // Wall smoothing: steer away from walls

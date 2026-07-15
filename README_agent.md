@@ -5841,3 +5841,51 @@ We dominate. The wider orbit should reduce our rare losses and raise score share
 If a new opponent appears, re-run the gun-offset + hit-density analysis and retune
 orbit distance (wider vs deadlier close-range gun) and dodge-on-fire (higher for
 LEAD guns, lower for HEAD-ON guns).
+
+# Agent Notes (Round 2 / current pass) — opponent = alexjamesmacpherson__wilde — REVERTED R1 WIDER-ORBIT REGRESSION
+
+## CRITICAL: R1's wider-orbit change LOST badly — reverted to the R0 (winning) config
+Opponent = alexjamesmacpherson__wilde (FAST NEAR-STRAIGHT mover, avgV 4.17,
+movefrac 0.65, avg|dh| 0.012, with a LEAD gun offset ~0.69 rad). INDEX both rounds
+i=0=wilde, i=1=opus. Cross-round MATCH results (results.json winner = opus both,
+but the R1 change was a big REGRESSION):
+- R0 (CLOSE orbit ~120px target/~190px achieved + power 3.0/<160 2.6/<250 2.2/<380
+  1.5/<500 1.0/<600 0.5, W=0.0 full lead, dodge 0.30 anti-lead-gun): opus 41431 vs
+  wilde 5246 (89% share). Full 250-sim sweep: 1 LOSS, 0 close, ourFE mean 102.3,
+  killtick 327.
+- R1 (prior teammate changed to WIDER orbit ~320px + power 3.0 out to 400px): opus
+  33263 vs wilde 8643 — our score DROPPED, enemy score UP 65pct. Full 250-sim sweep:
+  44 LOSSES, 67 close(<20E), ourFE mean 47.6, killtick 680 (games run 2x LONGER).
+
+## ROOT CAUSE of the R1 regression: wider orbit = 2x slower kills = lead gun connects
+The R1 teammate's premise ("enemy hit density 50/1k close, drops to 7/1k at 300px,
+our accuracy holds 99%") was WRONG — it was based on a BIASED R0 replay and a
+mis-counted hit density (counted fires/small drops as hits). MEASURED UNBIASED
+(R0, enemy energy drops >3.5 = real hits on us):
+  0-100px 4.9/1k | 100-200px 3.8/1k (most ticks) | 200-300px 1.2/1k | 300-400px 1.9
+The real close-range enemy hit density is only ~4-5/1k, NOT 50. Orbiting wider gave
+almost no defensive benefit but DOUBLED kill time (327->680), giving wilde's lead
+gun far more shots -> 44 losses. Classic "movement change backfires" (README warns
+this repeatedly). The FAST kill (close orbit) is what beats a lead gun here: fewer
+total ticks exposed dominates.
+
+## THIS PASS: full-file revert to commit 1220dbc (R0 winning config)
+Verified `diff` vs 1220dbc = IDENTICAL. Close-orbit rangeBias (charge inward to
+~120px, hold ~120-190px), power tiers 3.0/<160 2.6/<250 2.2/<380 1.5/<500 1.0/<600
+0.5, W=0.0 full linear lead (correct for a FAST NEAR-STRAIGHT mover — dh 0.012;
+W-sweep replay says head-on but that's the biased-replay trap, and W=0.0 won
+249/250 REAL), dodge-on-fire 0.30 (anti-LEAD-gun). Backup of R1 (bad) source:
+/tmp/MyTank_r1_bad.java. Compiles Java 8 (major version 52), rc=0.
+
+## For next teammate
+Only act if a NEW /logs shows the MATCH lost or win rate collapsing. wilde is a
+FAST NEAR-STRAIGHT LEAD-gun mover -> KEEP W=0.0 full lead + CLOSE orbit (~120-190px)
++ dodge 0.30. Do NOT widen the orbit (R1 proved it doubles kill time -> lead gun
+out-trades us -> 44 losses). Do NOT switch to head-on off the W-sweep replay (biased;
+W=0.0 won 249/250 REAL). The close orbit's fast kill is the decisive lever vs a lead
+gun. If you want to try ONE micro-experiment for the R0 1-loss/close games, a MODEST
+push to ~200-250px (200-300px real enemy density 1.2/1k vs 100-200px 3.8/1k) MIGHT
+help IF kill speed is preserved (keep power 3.0 at 200-300px) — but validate the
+killtick does NOT rise (that's what killed R1). Always re-check
+`head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING first.
+Keep MyTank class name + Java-8 bytecode (only hard requirement).
