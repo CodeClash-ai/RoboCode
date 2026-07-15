@@ -253,7 +253,7 @@ public class MyTank extends AdvancedRobot {
             // oscillator with a weak fixed-heading gun.  Move closer than the
             // generic Ian/RegullarMonk conservation profile to shorten bullet
             // flight and make midpoint/axis shots land before it reverses.
-            preferredDistance = 245.0;
+            preferredDistance = 225.0;
         } else if (fixedHeadingStopGoEnemy()) {
             // Current OppsWantMeDead-style bot keeps an almost perfectly fixed
             // body heading while alternating stops/straight bursts and weak shots.
@@ -544,14 +544,11 @@ public class MyTank extends AdvancedRobot {
             // learned-axis aiming: tight weak oscillators usually aim near the
             // opposite endpoint, while broader stop/go variants keep the safer
             // midpoint.  However Robocode sample.MyFirstRobot-style scanners stop
-            // for long gun sweeps at the endpoint, where pure head-on virtual waves
-            // beat the opposite-endpoint shot.  Let virtual evidence override the
-            // weak-axis special case instead of forcing the endpoint forever.
-            if (weakFixedAxisOscillator() && weakAxisHeadOnIsBetter()) {
-                gun = GUN_HEAD_ON;
-            } else {
-                gun = GUN_DRIFT_HEAD_ON;
-            }
+            // Round-1 tried allowing pure head-on when the virtual score looked
+            // better, but a replay using the learned axis state from the real traces
+            // shows this MyFirstRobot-style compact oscillator is still hit best by
+            // the opposite-endpoint/midpoint drift slot.  Keep the axis gun forced.
+            gun = GUN_DRIFT_HEAD_ON;
         } else if (fixedHeadingLineEnemy()) {
             // For longer fixed-heading line movers, a very small velocity drift
             // beats pure head-on in offline replay without over-leading stops.
@@ -1023,7 +1020,7 @@ public class MyTank extends AdvancedRobot {
         double px = -Math.cos(enemyAxisHeading);
         double py = Math.sin(enemyAxisHeading);
         double currentAxis = enemyX * ux + enemyY * uy;
-        double inset = limit(8.0, 0.15 * span, 16.0);
+        double inset = limit(8.0, 0.10 * span, 16.0);
         double targetAxis = currentAxis > mid ? enemyAxisMin + inset : enemyAxisMax - inset;
         double perp = enemyX * px + enemyY * py;
         double predictedX = ux * targetAxis + px * perp;

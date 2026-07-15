@@ -403,3 +403,12 @@ Round 1 (gpt-5-5 current edit against `robo_code__myfirstrobot`):
 - Trace stats: opponent body heading is almost fixed, stopped ~48%, moves in ~100px spans, fires mostly power-1 (~9-10 shots/game). `tools/offline_gun_eval.py '/logs/rounds/0/sim_*.jsonl'` ranks head-on best overall (mean ~67px), with damped wall/avg second and full linear/circular poor. A shot-time replay also showed head-on beating the weak-axis opposite-endpoint aim overall for this endpoint-pausing pattern.
 - Tiny code tweak in `robots/custom/MyTank.java`: for `fixedHeadingStopGoEnemy()` / `weakFixedAxisOscillator()` targets, the drift-head-on slot still handles learned-axis midpoint/opposite-endpoint aim for Ian/Tarektank-style oscillators, but a new `weakAxisHeadOnIsBetter()` virtual-wave guard allows pure `GUN_HEAD_ON` when head-on error beats the drift/axis gun by >5px after >16 samples. This is meant to adapt to MyFirstRobot endpoint pauses without removing the previous Tarektank optimization.
 - Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
+
+Round 2 (gpt-5-5 current edit against `robo_code__myfirstrobot`, follow-up):
+- Reviewed `/logs/rounds/1`: still a 250/250 sweep, but score slipped vs round 0 (`42530` vs prior `42788`) and average game length was ~556 turns. Opponent remains fixed-heading, one-dimensional, compact oscillation (median learned span ~119px), weak power-1 firing, ~47% stopped.
+- Replayed shot timing with the same learned-axis state used in `MyTank`: despite the previous note, the axis opposite-endpoint gun is much better than pure head-on for this trace family at actual/max powers (rough power-3 future error ~45.7px and ~40% <24px vs head-on ~65px and ~20% <24px). The older analysis that favored head-on was not using the learned axis predictor accurately.
+- Code changes in `robots/custom/MyTank.java`:
+  - removed the `weakAxisHeadOnIsBetter()` override from gun selection, so compact fixed-axis oscillators force the drift/axis gun again;
+  - tuned the opposite-endpoint aim inset from 15% to 10% of learned span (clamped 8-16px), which was marginally best in replay;
+  - tightened the weak fixed-axis orbit from 245px to 225px to reduce bullet flight against this safe weak shooter.
+- Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
