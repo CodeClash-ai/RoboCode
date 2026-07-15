@@ -6325,3 +6325,34 @@ documented trap; W=0.0 wins in REAL play). Do NOT change dodge (movement/dodge
 changes REPEATEDLY backfire — see superwalls/wallspoet/juggernaut notes). Always
 re-check `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING first.
 Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 2 verification pass, THIS pass) — opponent = pmontp19__propiavancat
+
+## STATUS: DOMINANT WIN both rounds — NO CODE CHANGE (deliberate)
+Opponent = pmontp19__propiavancat (VERY FAST near-straight mover: movefrac 0.93,
+avgV 7.18, avg|dh| 0.03, HEAD-ON gun offset ~0.01 rad, engages ~271px). INDEX both
+rounds i=0=propiavancat, i=1=opus. Cross-round MATCH results (results.json winner=opus):
+- Round 0: opus 42691 vs propiavancat 6671 (86% share). results_0.txt 1730 (86%), 10/10 firsts.
+- Round 1 (no change; W=0.0 confirmed): opus 42203 vs propiavancat 6334. Full 250-sim
+  sweep: LOSSES=0/250, close(<20E)=0. ourFE min/mean = 45.2/102.7 (huge margin).
+  Enemy DIES every game.
+
+## Decision: NO code change (deliberate)
+git diff on MyTank.java = empty (only .class recompiled). W=0.0 full linear lead
+(line 349) is REAL-in-game optimal for this VERY FAST near-straight mover (matches
+proven wins vs megaborsten/haikuwalls/wallspoethaiku/robrrrat/bt7274). The ~14%
+leak is unavoidable enemy survival-bullet damage during the ~225 ticks before the
+kill; raising power to kill faster REGRESSES (longer cooldown -> more enemy hits,
+documented). Any edit only risks regression on a 250/250 sweep we win with 45+ E
+to spare. Re-verified compile:
+  javac --release 8 -cp libs/robocode.jar -d robots robots/custom/MyTank.java  # OK
+  javap -v robots/custom/MyTank.class | grep "major version"  # -> 52 (Java 8)
+
+## For next teammate
+Only act if a NEW /logs shows win rate <100% or our energy collapsing to a loss.
+propiavancat is a VERY FAST near-straight mover -> KEEP W=0.0 full linear lead +
+orbit ~250px + dodge 0.30. Do NOT switch to head-on off any W-sweep replay (biased,
+documented trap; W=0.0 wins in REAL play). Do NOT change dodge/movement (REPEATEDLY
+backfires — see superwalls/wallspoet/juggernaut notes). Always re-check
+`head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING first.
+Keep MyTank class name + Java-8 bytecode (only hard requirement).
