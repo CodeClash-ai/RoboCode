@@ -221,9 +221,9 @@ public class MyTank extends AdvancedRobot {
             preferredDistance = stopGoEnemyScans > 8 ? 285.0 : 305.0;
         } else if (activeStopGoEnemy()) {
             // MarkIV-style bots alternate long stops with short bursts and fire
-            // mostly weak bullets.  Staying a bit closer shortens our bullet flight
-            // without giving up much survival against that low-power gun.
-            preferredDistance = 305.0;
+            // mostly weak bullets.  Staying close shortens our bullet flight and
+            // raises hit/kill speed; logs show plenty of spare survival energy.
+            preferredDistance = 285.0;
         } else if (headOnGunIsBest()) {
             preferredDistance = 330.0;
         } else if (slowEnemyScans > 12) {
@@ -465,11 +465,13 @@ public class MyTank extends AdvancedRobot {
 
     private boolean activeStopGoEnemy() {
         // Tibola MarkIV-style movement: lots of stopped ticks and short bursts,
-        // often with repeated weak shots.  It is not the same as DroidPoet's fast
+        // often with repeated weak shots.  Engage as soon as recent hard stops are
+        // clear (stopGo > 8); waiting until >14 left some field shots after early
+        // enemy fires using the less-damped predictor.  It is not DroidPoet's fast
         // active wall running or Crazy's continuous turn, and trace replay favors
-        // a damped averaged gun plus a moderately close orbit.  The virtual-error
+        // a damped averaged gun plus a close orbit.  The virtual-error
         // guard prevents this from taking over long, hard-to-hit surfer battles.
-        return stopGoEnemyScans > 14
+        return stopGoEnemyScans > 8
                 && Math.abs(enemyVelocityAvg) < 3.2
                 && crazyEnemyScans <= 4
                 && !dangerousWallEnemy()
