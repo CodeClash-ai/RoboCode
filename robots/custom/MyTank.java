@@ -528,17 +528,18 @@ public class MyTank extends AdvancedRobot {
         if (gunType == GUN_HEAD_ON) {
             return new double[] {enemyX, enemyY};
         }
-        if (wallEnemyScans > 4 && gunType == GUN_AVERAGED && !dangerousWallEnemy()
+        if (gunType == GUN_AVERAGED && !dangerousWallEnemy()
+                && (wallEnemyScans > 4 || (stopGoEnemyScans > 8 && harmlessLowFireEnemy()))
                 && !(stopGoEnemyScans <= 8 && straightEnemyScans > 12 && harmlessLowFireEnemy()
                         && (Math.abs(enemyVelocityAvg) > 3.5 || Math.abs(velocity) > 5.0))) {
-            // A harmless wall-bound bot often alternates between max-speed bursts
-            // and hard stops/reverses.  Damping avoids over-leading those weak
-            // opponents.  However the current it_simple traces show long, clean,
-            // fairly fast wall runs where this wall-damped shot under-leads; let
-            // sustained fast/straight low-fire wall runners use the normal
-            // averaged predictor below (or the existing linear override when the
-            // virtual gun confirms linear is best).  Slow CTBot-style wall snippets
-            // still get the damping that replay favored for them.
+            // A harmless wall-bound or recent stop/go bot often alternates between
+            // max-speed bursts and hard stops/reverses.  Damping avoids over-leading
+            // those weak opponents.  The current Terminator traces show this helps
+            // even during brief field excursions after hard stops, not just while
+            // the target is inside the wall margin.  However it_simple/Antiwalls
+            // style clean edge runs can need less damping; the exception above and
+            // the linear virtual-gun override still let fast straight low-fire runs
+            // use fuller prediction when there have not been recent stops.
             velocity = limit(-2.2, 0.25 * velocity + 0.35 * enemyVelocityAvg, 2.2);
             turnRate = 0.0;
         } else if (gunType == GUN_AVERAGED) {
