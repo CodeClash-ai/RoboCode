@@ -10630,3 +10630,109 @@ at this accuracy level, mirroring exactly why round 12 had to reverse round
    than usual — would be especially valuable now if a genuine wave-surfing
    dodge is ever attempted, since that's exactly the kind of change that's
    hard to validate purely from post-hoc log analysis.
+
+## Round 96 update (this round) — 2nd consecutive round vs admiralrasmussen__wavesurfing, confirmed stable, no changes
+
+### Context
+Both `/logs/rounds/0/` and `/logs/rounds/1/` exist this round, both real
+combat against `admiralrasmussen__wavesurfing` — same opponent round 95's
+notes describe (this is now the 2nd consecutive round facing this rung, no
+code change happened between round 95 and this round). Round 0 here matches
+round 95's own baseline exactly (99% win, 247/250, 27% accuracy, avg speed
+6.3, avg walls/game 0.6, avg rams/game 5.2, avg min energy 69, games avg 784
+turns, max 1831). Round 1 (2nd independent sample): **99% win rate
+(248/250)**, 29% accuracy, avg speed 6.3, avg walls/game 0.5, avg rams/game
+4.8, avg min energy 73, games avg 759 turns, max 1847 — essentially
+identical to round 95's baseline (same long-game, low-accuracy, high-ram
+signature consistent with this being a genuine wave-surfing/evasive
+opponent, per round 95's hypothesis), no regression, no drift. **2 losses**
+in round 1 (down slightly from round 0/round 95's 3), 0 ties in either.
+
+### Validation performed
+1. `python3 tools/analyze_freezes.py /logs/rounds/1 --threshold 20 | grep -i
+   sonnet` -> **1 finding**: a short (20-tick) benign position-frozen
+   pattern in a game we won — nowhere near the rounds 34-36 catastrophic
+   hundreds-of-ticks/game-ending pattern, and far fewer/shorter findings
+   than round 95's own baseline (2 short findings). Confirms the escape-mode
+   mechanism (rounds 20/23/25/34-37/40) and round 47/48's radial-blend
+   movement fix are both still fully healthy — now 48 consecutive rounds of
+   clean validation across 15+ different opponents with no catastrophic/
+   game-costing freeze, including against this harder, more-evasive
+   opponent.
+2. `python3 tools/analyze_power_accuracy.py /logs/rounds/1 --bucket-width
+   0.5` -> sanity check: 41.6 shots/game combined vs `trace.md`'s
+   41.8+1.0=42.8 (within ~3%, tool still trustworthy per round 28's
+   tick-step fix). `sonnet_5`'s script-derived overall accuracy (24.4%) is
+   consistent with round 95's own script-derived-vs-trace.md gap pattern
+   (trace.md reports 29% here) and with round 95's `swing(P,p)` analysis
+   showing our bullet-power tuning is still comfortably net-positive even at
+   this lower accuracy (breakeven is ~12-13% for our power range, well below
+   the observed 24-29%).
+3. `javac -Xlint:all -cp libs/robocode.jar -d robots
+   robots/custom/MyTank.java` compiles clean (exit 0, no errors/warnings).
+   `.class` up to date.
+4. `diff archive/round1_backups/MyTank.java.before_round47_radial_fix
+   robots/custom/MyTank.java` — confirmed round 47's radial-blend fix (and
+   nothing else since) is exactly what's currently live (32-line diff,
+   exactly the expected radial-blend block); `MyTank.java` is 1232 lines,
+   unchanged from round 47 onward through round 95.
+
+### What I did this round (or rather, chose NOT to do)
+Given a 2nd consecutive result closely matching round 95's own baseline
+(99% win rate both samples, huge ~35x+ score margins, same characteristic
+long-game/low-accuracy/high-ram signature consistent with a genuine
+wave-surfing opponent, clean freeze-detector output, tooling sanity checks
+green, and round 95's `swing(P,p)` math already confirming our current
+bullet-power tuning remains net-positive at this lower accuracy level), I
+made **no changes to `MyTank.java`** this round — consistent with this
+file's very long-established pattern (rounds 6, 13, 15, 21, 22, 26, 27, 28,
+29, 32, 33, 38, 39, 41, 42, 48-95) of not touching already-working code
+without a clear, actionable signal of underperformance. Two consecutive
+~99%-win/similar-loss-count samples against the same harder opponent is
+good evidence this is a stable, if slightly less dominant than usual,
+matchup rather than a worsening trend — no reason yet to attempt the
+higher-risk "build a real wave-surfing dodge for our own bot" idea round 95
+flagged as the natural next step if losses ever climbed further; they
+didn't (2-3 out of 250, i.e. ~1%, both rounds).
+
+### Suggestions for next teammate
+1. **First step, as always**: check `/logs/rounds/<N>/trace.md` (or
+   `results.json` + per-`sim_*.jsonl` `winner` fields if `trace.md` is
+   missing, per round 68's note) for the actual opponent this round, and run
+   `python3 tools/analyze_freezes.py /logs/rounds/<N> --threshold 20 | grep -i
+   sonnet` as the standard regression check (should print nothing or only
+   short/benign findings, per rounds 48-96's clean baseline).
+2. If `admiralrasmussen__wavesurfing` reappears a 3rd time, treat ~99% win /
+   ~1% loss rate / 24-29% accuracy / avg rams~5/game / avg game length
+   ~750-800 turns as the stable baseline for this matchup. If the loss rate
+   climbs meaningfully above this (e.g. into the 3-5%+ range) across another
+   sample or two, that would be the first real signal to seriously consider
+   implementing an actual wave-surfing dodge for our own bot (the
+   single most significant unimplemented defensive idea in this file's
+   history, suggested since round 1, only partially addressed so far by
+   round 16's simpler reactive "dodge on fire" juke and round 47/48's
+   radial-blend orbit-distance fix) rather than continuing to just monitor.
+3. `alpian__ianstank` (rounds 43-44's corner-camping opponent) and
+   `pez__gf1` (rounds 11-12, ~14% tie rate from mutual energy attrition, the
+   *other* toughest opponent in this file's history) both remain outstanding
+   high-value direct re-tests of the accumulated fix stack — neither has
+   reappeared in a very long time.
+4. If a genuinely different/tougher opponent shows up with new symptoms, the
+   diagnostic playbook accumulated across rounds 18/25/31/33/38/43-95 is
+   well-documented above: check (a) freeze/escape-mode health via
+   `analyze_freezes.py`, (b) opponent's position-range vs. our own
+   (corner-camper detection), (c) whether our distance-to-enemy converges
+   toward `effectivePreferredDistance` over time (round 47's radial-blend fix
+   should now handle this generally), (d) energy-delta tracing for the
+   self-inflicted-attrition signature, and (e) round 12's `swing(P,p)`
+   formula to sanity-check whether current bullet-power tuning is still net-
+   positive at the observed accuracy before considering any throttle-based
+   change (per the round-11-vs-12 cautionary history).
+5. Local headless battle-runner: still unresolved after 95+ rounds of
+   attempts (see round 6's section for the most detailed known blocker,
+   `RepositoryManager.loadSelectedRobots` not seeing a freshly-reloaded
+   repository within the same call). Still the single highest-leverage infra
+   fix available if a future teammate has a larger step budget to spend on it
+   than usual — would be especially valuable now if a genuine wave-surfing
+   dodge is ever attempted, since that's exactly the kind of change that's
+   hard to validate purely from post-hoc log analysis.
