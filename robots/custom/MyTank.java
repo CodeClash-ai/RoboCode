@@ -28,7 +28,10 @@ public class MyTank extends AdvancedRobot {
     private long lastScanTime = -1000;
     private long lastDirectionChangeTime = -1000;
     private int stationaryScans = 0;
+    private int slowEnemyScans = 0;
     private int enemyFireCount = 0;
+    private double enemyVelocityAvg = 0.0;
+    private double enemyTurnRateAvg = 0.0;
 
     public void run() {
         setBodyColor(new Color(18, 24, 34));
@@ -66,10 +69,21 @@ public class MyTank extends AdvancedRobot {
         double radarTurn = Utils.normalRelativeAngle(absBearing - getRadarHeadingRadians());
         setTurnRadarRightRadians(radarTurn * 2.0);
 
+        double scanTurnRate = haveEnemyHeading
+                ? Utils.normalRelativeAngle(e.getHeadingRadians() - lastEnemyHeading)
+                : 0.0;
+        enemyVelocityAvg = 0.84 * enemyVelocityAvg + 0.16 * e.getVelocity();
+        enemyTurnRateAvg = 0.84 * enemyTurnRateAvg + 0.16 * scanTurnRate;
+
         if (Math.abs(e.getVelocity()) < 0.05) {
             stationaryScans++;
         } else {
             stationaryScans = 0;
+        }
+        if (Math.abs(e.getVelocity()) <= 3.25) {
+            slowEnemyScans++;
+        } else {
+            slowEnemyScans = 0;
         }
 
         doMovement(e, absBearing);
@@ -116,7 +130,8 @@ public class MyTank extends AdvancedRobot {
         // Orbit perpendicular, with a distance-control offset.  Far away we cut
         // inward; too close we open out.  wallSmooth then bends the path away
         // from the battlefield edges before we commit to it.
-        double distanceOffset = limit(-0.62, (e.getDistance() - PREFERRED_DISTANCE) / 430.0, 0.55);
+        double preferredDistance = slowEnemyScans > 12 ? 335.0 : PREFERRED_DISTANCE;
+        double distanceOffset = limit(-0.62, (e.getDistance() - preferredDistance) / 430.0, 0.55);
         double desired = absBearing + moveDirection * (Math.PI / 2.0 - distanceOffset);
         desired = wallSmooth(desired, moveDirection);
         // If we are already in the danger band near an edge, prioritize getting
@@ -157,8 +172,14 @@ public class MyTank extends AdvancedRobot {
         // kill reduces exposure.  Moving opponents keep the conservative ladder.
         if (stationaryScans > 5 && getEnergy() > 12) {
             power = 3.0;
+        } else if (slowEnemyScans > 12 && getEnergy() > 18 && distance < 560) {
+            // The current recorded opponent is a very slow stop-and-go shooter.
+            // Once a target has proven it cannot exceed about speed 3, heavier
+            // bullets trade a little travel time for much faster damage and a
+            // larger bullet bonus.  Fast/unknown movers keep the safer ladder.
+            power = 3.0;
         }
-        if (getEnergy() < 22 && distance > 260 && stationaryScans <= 5) {
+        if (getEnergy() < 22 && distance > 260 && stationaryScans <= 5 && slowEnemyScans <= 12) {
             power = Math.min(power, 1.35);
         }
         if (getEnergy() < 9) {
@@ -172,6 +193,15 @@ public class MyTank extends AdvancedRobot {
         double predictedHeading = e.getHeadingRadians();
         double velocity = e.getVelocity();
         double turnRate = haveEnemyHeading ? Utils.normalRelativeAngle(e.getHeadingRadians() - lastEnemyHeading) : 0.0;
+        if (slowEnemyScans > 12 && stationaryScans <= 5) {
+            // Stop-and-go bots alternate between zero and low velocity.  A small
+            // exponential average is a better future estimate than assuming the
+            // current tick's full stop or short burst continues for the whole
+            // bullet flight.  Clamp to keep this conservative for generic slow
+            // opponents.
+            velocity = limit(-3.0, 0.45 * velocity + 0.55 * enemyVelocityAvg, 3.0);
+            turnRate = limit(-0.09, 0.35 * turnRate + 0.65 * enemyTurnRateAvg, 0.09);
+        }
 
         // Circular prediction when the enemy is consistently turning, linear
         // prediction otherwise.  Clamp at the wall, because many bots turn or
