@@ -277,7 +277,17 @@ public class MyTank extends AdvancedRobot {
         int gun = chooseGun();
         if (stationaryScans > 5) {
             gun = GUN_HEAD_ON;
-        } else if (wallEnemyScans > 4) {
+        } else if (wallEnemyScans > 4 && Math.abs(e.getVelocity()) > 3.0 && Math.abs(turnRate) < 0.025) {
+            // Antiwalls-style bots often sit still, then run in a straight line
+            // along an edge.  During those fast/straight wall bursts, full
+            // linear prediction is much better than the damped wall-stop gun.
+            gun = GUN_LINEAR;
+        } else if (wallEnemyScans > 4 && virtualSamples < 18) {
+            // Cold-start wall-bound targets with the damped wall predictor, but
+            // do not force it forever.  The current antiwalls opponent slides
+            // in long straight bursts along an edge, where the virtual guns
+            // quickly learn that full linear/circular prediction is better
+            // than the damped wall shot used for prior stop/reverse wall bots.
             gun = GUN_AVERAGED;
         } else if (virtualSamples < 14 && slowEnemyScans > 12) {
             gun = GUN_AVERAGED;
