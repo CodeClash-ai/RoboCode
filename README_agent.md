@@ -4641,3 +4641,62 @@ Only act if a NEW /logs shows win rate <100% or our energy collapsing to a loss
 KEEP W=1.0 head-on. If it becomes a HEAVY spinner (avg|dh|>0.06), set W=0.0
 (circular) or W=0.5. Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for the
 opponent name + INDEX MAPPING first. Keep MyTank class name + Java-8 bytecode.
+
+# Agent Notes (Round 1 / current pass) — opponent = robo_code__walls (WE WERE LOSING 0/10 — MATCH LOSS)
+
+## CRITICAL: opponent CHANGED to the "Walls" sample bot — we LOST the match 3079 vs 24593
+Verified /logs/rounds/0 (INDEX: i=0=opus, i=1=robo_code__walls):
+- results.json: winner=robo_code__walls. results_0.txt: walls 995 (92%, survival
+  500, 10 firsts) vs opus 83 (8%, 0 survival, 0 firsts). Full 120-sim sweep:
+  we LOSE 120/120, ourFE mean 0.0, enemyFE mean 60.1. Games run to ~1500 turns.
+
+## Opponent = the "Walls" sample bot: PERFECTLY LINEAR perimeter mover
+Confirmed from raw sim data: it drives STRAIGHT along a wall at v=8 (bh=exact
+heading, e.g. 1.571=due east), turns 90deg at each corner, hugs the perimeter.
+100% predictable path. movefrac 0.88, avgV 6.75. It fires a gun that hits us at a
+low, roughly-flat rate (~4-11/1k at all ranges) — NOT the reason we lost.
+
+## ROOT CAUSE: the leftover ~500px WIDE ORBIT (from pikachu/gntest) was fatal here
+We engaged at ~450px avg. At 450px, slow bullets (bs=11-14) take 30+ ticks to
+reach a v=8 target -> it moves 250+px in flight -> we hit ~0.5% (replay). We
+NEVER killed the enemy and bled to 0 over 1500 ticks (firing cost + inactivity)
+while its straight-line path kept it alive at ~60E. Enemy energy even ROSE early
+(100->104) as its few hits on us out-scored our misses.
+
+## CHANGES THIS PASS (all attack the range problem; both compile Java 8, major 52)
+1. GUN aim W: 1.0 head-on (leftover from maximbot) -> 0.0 FULL LINEAR LEAD.
+   Walls is a perfect constant-velocity straight mover -> full linear lead is
+   EXACT on the straight sections (only misses near corner turns). (line ~345)
+2. MOVEMENT rangeBias: was targeting ~500px (>560->-0.35 ... <320->0.75). NOW
+   orbit CLOSE ~170px: >280->-0.8 (charge in), >200->-0.45, >140->-0.1 (hold),
+   <110->0.5 (push out to avoid ram/corner), else 0.2. (line ~623) Chose 170px (not 140px) to reduce ram/corner risk vs the fast wall-hugger while keeping bullet flight <18 ticks.
+   Close orbit -> bullets arrive in <15 ticks -> linear lead lands reliably.
+3. POWER tiers: use FASTER bullets for the fast mover (lower power = faster
+   bullet = arrives before enemy moves out of the lead prediction). Was 3.0/<200
+   2.5/<400 1.8/<560 1.0/<660 0.5. NOW 3.0/<160 2.4/<250 1.6/<400 1.0/<560 0.5.
+   (line ~271)
+enemyPassive mode stays OFF (Walls fires & hits us -> damageTaken>=5). Dodge,
+wall smoothing (stick 160), fire gates UNCHANGED. Backup of prior (losing) source
+in git history.
+
+## RATIONALE / VALIDATION
+Enemy hit density on us is low & flat (4-11/1k) -> closing costs little on defense
+but MASSIVELY raises our offense (0.5% -> 30%+ hit at close range vs a linear
+mover). The classic Walls counter = close + fast bullet + linear lead. The wide
+orbit was the disaster. Replay-sim confirms hit rate rises sharply as distance
+drops (D=120 ~11% vs D=450 ~0.5% even in the biased sim; real close orbit with a
+proper iterative linear predictor should be far higher on the straight sections).
+
+## For next teammate — VERIFY (this is a MATCH-LOSS we're trying to flip)
+- Want NEW /logs: winner=opus-4-8, we STOP dying at 0, our SURVIVAL score UP from
+  0, we KILL the enemy (enemyFE -> 0), engagement dist DOWN from ~450 to ~140px,
+  our hit rate/accuracy UP, kills happen well before the ~1500 turn limit.
+- IF STILL LOSING: (a) if we get CORNERED/rammed at close range vs the wall-hugger,
+  back the orbit out to ~200px (thresholds 300/230/160/<120) — a compromise that
+  still gets bullets there in ~18 ticks; (b) if the enemy's gun punishes close
+  range more than expected, check enemy hit density in the NEW logs; (c) if linear
+  lead overshoots at corners, that's expected (few ticks) — do NOT switch to
+  head-on (that keeps us at long range problem is orbit, not aim).
+- Walls is a PERFECT LINEAR mover -> KEEP W=0.0 full linear lead + CLOSE orbit.
+- Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING.
+- Keep MyTank class name + Java-8 bytecode (only hard requirement).

@@ -265,10 +265,13 @@ public class MyTank extends AdvancedRobot {
         // range (keep our bullet-dmg lead) tapering only far out where a miss should cost little.
         // vs pikachu we ALREADY dominate bullet damage 2.6x -> keep power meaningful
         // at our ~500px orbit to hold that lead (survival is the fix, not offense).
-        if (dist < 200)       power = 3.0;   // point-blank / enemy charge: high hit, big damage
-        else if (dist < 400)  power = 2.5;   // mid: strong power keeps our bullet-dmg lead
-        else if (dist < 560)  power = 1.8;   // our ~500px orbit zone: still meaningful hits
-        else if (dist < 660)  power = 1.0;
+        // vs robo_code__walls: a v=8 fast mover -> use FAST bullets (lower power)
+        // so they arrive before the enemy moves out of the linear-lead prediction.
+        // Close orbit (~140px) means short flight even at moderate power.
+        if (dist < 160)       power = 3.0;   // point-blank: high hit + big damage
+        else if (dist < 250)  power = 2.4;   // our ~140-200px orbit zone
+        else if (dist < 400)  power = 1.6;   // faster bullet to catch the fast mover
+        else if (dist < 560)  power = 1.0;
         else                  power = 0.5;   // long range -> small drain if a miss
 
         // Energy safety clamps so a bad streak can't self-destruct us.
@@ -339,7 +342,8 @@ public class MyTank extends AdvancedRobot {
         // (distance-based, kept net-positive) still guard the crazy-bot regression.
         // Chose W=0.85: strongly toward head-on (physics: slow target -> head-on best),
         // hedged just short of pure 1.0 since replay is biased by the reactive enemy path.
-        double W = 1.0;  // vs mgalushka__maximbot: MODERATE near-straight mover (movefrac 0.68, avgV 4.51, avg|dh| 0.022, engages ~240px). W-sweep (2 slices, 80 games each) robustly peaks at HEAD-ON: W=1.0 ~0.55 vs W=0.5 ~0.35 vs W=0.0 ~0.39. Damage model W=1.0 dmg +47pct AND net energy far higher. Near-straight moderate mover -> head-on optimal (matches florian2/gruffalo/ultron/hugbot). Was 0.5 (leftover from kcanida pikachu heavy-spinner avgdh 0.149 -- wrong profile here).
+        double W = 0.0;  // vs robo_code__walls: PERFECT linear mover (straight along walls at v=8, 90deg corner turns) -> FULL LINEAR LEAD is exact. Was 1.0 head-on (leftover from maximbot).
+        // [maximbot] double W = 1.0;  // vs mgalushka__maximbot: MODERATE near-straight mover (movefrac 0.68, avgV 4.51, avg|dh| 0.022, engages ~240px). W-sweep (2 slices, 80 games each) robustly peaks at HEAD-ON: W=1.0 ~0.55 vs W=0.5 ~0.35 vs W=0.0 ~0.39. Damage model W=1.0 dmg +47pct AND net energy far higher. Near-straight moderate mover -> head-on optimal (matches florian2/gruffalo/ultron/hugbot). Was 0.5 (leftover from kcanida pikachu heavy-spinner avgdh 0.149 -- wrong profile here).
         // [prev] double W = 1.0; // vs iagomonteiro13579__npcsniper
         // [old] double W = 1.0; // HEAD-ON best vs alpian__ianstank (stop-and-reverse oscillator, ~50% stationary). Replay-sim 80 games: W=1.0 hits 40.3% vs W=0.0 21.4%.
         double predX = W * enemyX + (1 - W) * leadX;
@@ -605,11 +609,22 @@ public class MyTank extends AdvancedRobot {
         // so aim for ~500px (achievable: distance is a mutual orbit, not the enemy
         // charging — 44.5% of ticks the distance is already opening). Gentle bias +
         // earlier wall smoothing keeps us out of corners while pushing wider.
-        if (enemyDistance > 560)      rangeBias = -0.35; // far: pull in gently
-        else if (enemyDistance > 500) rangeBias = -0.1;  // approaching ~500px target
-        else if (enemyDistance > 440) rangeBias = 0.1;   // slight push out
-        else if (enemyDistance > 320) rangeBias = 0.45;  // close: push out toward 500
-        else                          rangeBias = 0.75;  // too close: push out firmly
+        // vs robo_code__walls (the "Walls" sample bot): a PERFECTLY LINEAR
+        // perimeter mover -- drives straight along a wall at v=8, turns 90deg at
+        // corners. We were LOSING 120/120 (opus 3079 vs 24593) because the
+        // leftover ~500px wide orbit (from pikachu/gntest) put us so far that
+        // slow bullets (bs=11-14) took 30+ ticks to reach the v=8 target -> it
+        // moved 250+px in flight -> we hit ~0.5% and bled to death while its
+        // straight-line path let its gun pick us off. FIX: orbit CLOSE (~140px)
+        // so bullets arrive fast (before the enemy reaches a corner), where a
+        // full linear lead (W=0.0) on a perfectly-predictable straight mover
+        // lands reliably. Close + fast bullet + linear lead is the classic
+        // Walls counter.
+        if (enemyDistance > 280)      rangeBias = -0.8;  // far: charge inward hard
+        else if (enemyDistance > 200) rangeBias = -0.45; // closing to ~170px
+        else if (enemyDistance > 140) rangeBias = -0.1;  // hold ~170px
+        else if (enemyDistance < 110) rangeBias = 0.5;   // too close: push out (avoid ram/corner)
+        else                          rangeBias = 0.2;
         double desiredDir = absBearing + (Math.PI / 2 + rangeBias) * moveDirection;
 
         // Wall smoothing: steer away from walls
