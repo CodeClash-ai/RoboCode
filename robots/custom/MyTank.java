@@ -27,6 +27,7 @@ public class MyTank extends AdvancedRobot {
     private boolean haveEnemyHeading = false;
     private long lastScanTime = -1000;
     private long lastDirectionChangeTime = -1000;
+    private int stationaryScans = 0;
 
     public void run() {
         setBodyColor(new Color(18, 24, 34));
@@ -63,6 +64,12 @@ public class MyTank extends AdvancedRobot {
         // Narrow radar lock with overshoot in the direction we need to turn.
         double radarTurn = Utils.normalRelativeAngle(absBearing - getRadarHeadingRadians());
         setTurnRadarRightRadians(radarTurn * 2.0);
+
+        if (Math.abs(e.getVelocity()) < 0.05) {
+            stationaryScans++;
+        } else {
+            stationaryScans = 0;
+        }
 
         doMovement(e, absBearing);
         doGun(e, absBearing, enemyX, enemyY);
@@ -124,7 +131,14 @@ public class MyTank extends AdvancedRobot {
         } else {
             power = 1.45;
         }
-        if (getEnergy() < 22 && distance > 260) {
+        // The recorded opponent (infinitylock) is a stationary radar/gun locker.
+        // Once a target has sat still for several scans, use maximum power even
+        // outside knife range: direct/circular prediction is exact and the faster
+        // kill reduces exposure.  Moving opponents keep the conservative ladder.
+        if (stationaryScans > 5 && distance < 680 && getEnergy() > 12) {
+            power = 3.0;
+        }
+        if (getEnergy() < 22 && distance > 260 && stationaryScans <= 5) {
             power = Math.min(power, 1.35);
         }
         if (getEnergy() < 9) {

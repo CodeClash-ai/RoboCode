@@ -38,3 +38,9 @@ Round 3 note (current edit):
   - when already near an edge, prioritizes driving toward the battlefield center;
   - `onHitWall` now drives toward center instead of a fixed `setBack`/turn that could keep us pinned.
 - Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
+
+Round 2 current update:
+- Reviewed `/logs/rounds/0`: every result file was a 10/10 win, with max normal bullet/survival score (1800 per 10-round match) against `wouterjoosse__infinitylock.MyTank`.
+- The opponent in traces remains stationary (velocity 0, fixed body/gun heading) and does not appear to fire; our bot kills it reliably with predictive shots.
+- Added `stationaryScans` detection in `robots/custom/MyTank.java`. If the enemy has been motionless for >5 scans, the gun now uses power 3.0 out to range 680 while energy is safe, reducing kill time/exposure against infinitylock/SittingDuck-style opponents. Moving enemies still use the previous conservative power ladder.
+- Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
