@@ -1939,3 +1939,45 @@ Re-verified compile:
 Only act if a NEW /logs shows win rate <100% or our energy collapsing to a loss.
 Corners is near-stationary once cornered -> KEEP W=0.0. Keep MyTank class name +
 Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 1 / current pass) — opponent = it_economics__ite_florian2
+
+## STATUS: 249/250 win (round 0), 95% share — TUNED GUN W 0.0 -> 1.0 (head-on)
+Round 0 result: opus-4-8 42572 vs it_economics__ite_florian2 2423. results_0.txt:
+opus_4_8.MyTank 1703 (95%), 10/10 firsts; enemy 96 (5%). The single non-win
+(sim_151) was NOT a loss: we were WINNING (ourE 85.4 vs enemyE 6.0) but the round
+hit the 409-turn limit before we finished the kill -> enemy survived. Faster kills
+convert that to a full win + more score.
+
+## Opponent = SLOW, NEAR-STRAIGHT-LINE mover (barely fires)
+Per-sim analysis (250 games, header maps idx->name, enemy=non-'opus'):
+- moving only 29% of ticks, avg |v| 1.61, avg |dh| 0.016 (near-straight),
+  engage ~324px. Fires rarely: enemy hit density only ~1-2/1000 ticks at EVERY
+  distance (near-harmless gun). Loses the energy war decisively.
+
+## CHANGE 1: gun W 0.0 -> 1.0 (head-on). THE key fix.
+The gun was left at W=0.0 (full CIRCULAR lead) from the prior team488__meow match
+(a FAST curving dodger). That is WRONG for this slow near-straight mover. Replay-
+sim W-sweep (per-tick interception over recorded paths, TWO independent 80-game
+slices), MONOTONIC toward head-on:
+  slice A: W0.0 48.9% W0.25 50.4 W0.5 52.5 W0.75 55.4 W1.0 58.0
+  slice B: W0.0 50.0% W0.5 52.9 W0.75 55.8 W1.0 60.3
+Head-on best by ~10 points (a slow near-stationary target -> any lead overshoots).
+
+## CHANGE 2: orbit ~260px -> ~200px (rangeBias 290/220 -> 230/170)
+Enemy barely fires (hit density ~1-2/1k at ALL distances; 200-300px 1.72 is
+actually HIGHER than 100-200px 1.23). Our head-on hit rate by distance: 100-200px
+86%, 200-300px 47%, 300-400px 33%. So orbiting closer is BOTH safer AND far more
+accurate -> faster kills -> converts the turn-limit non-win + raises score share.
+
+## Compile verified: javac --release 8 ... -> major version 52 (Java 8), rc=0.
+
+## For next teammate
+- VERIFY new /logs: want win rate 100% (the sim_151 turn-limit non-win GONE),
+  killtick DOWN, score share UP from 95%. If share DROPPED or new losses appear,
+  the closer orbit may have exposed us -> push orbit back (rangeBias 270/200) or
+  revert W (unlikely). florian2 is SLOW/straight -> KEEP W=1.0 head-on.
+- If opponent changes to a FAST curving dodger, set W=0.0 (circular) again and
+  orbit back out ~260px (that beat team488__meow 100%). Re-run the W-sweep first:
+  the replay tools are in tools/ (replay_wsweep.py etc). Never flat power 3.0 at
+  long range vs a fast dodger. Keep MyTank class name + Java-8 bytecode.

@@ -280,7 +280,7 @@ public class MyTank extends AdvancedRobot {
         // (distance-based, kept net-positive) still guard the crazy-bot regression.
         // Chose W=0.85: strongly toward head-on (physics: slow target -> head-on best),
         // hedged just short of pure 1.0 since replay is biased by the reactive enemy path.
-        double W = 0.0;  // full CIRCULAR lead (leadX/leadY already circular-predicted) vs team488__meow. Was 1.0 head-on for stationary/oscillator foes; circular wins for this fast curving mover.
+        double W = 1.0;  // HEAD-ON best vs it_economics__ite_florian2 (SLOW near-straight mover, avg speed 1.6, avg turn 0.016). Replay-sim 2 slices monotonic: W=1.0 58-60pct hit vs W=0.0 49-50pct. Was 0.0 (circular) for fast curving team488__meow.
         // [old] double W = 1.0; // HEAD-ON best vs alpian__ianstank (stop-and-reverse oscillator, ~50% stationary). Replay-sim 80 games: W=1.0 hits 40.3% vs W=0.0 21.4%.
         double predX = W * enemyX + (1 - W) * leadX;
         double predY = W * enemyY + (1 - W) * leadY;
@@ -364,8 +364,8 @@ public class MyTank extends AdvancedRobot {
         // ~4x FEWER enemy hits. This directly attacks the 18/250 losses (enemy
         // out-trades us at close range where its gun is deadly).
         double rangeBias = 0.0;
-        if (enemyDistance > 290) rangeBias = -0.5;       // pull in toward ~260px
-        else if (enemyDistance < 220) rangeBias = 0.5;   // push out if too close
+        if (enemyDistance > 230) rangeBias = -0.5;       // pull in toward ~200px (florian2 barely fires, ~1-2 hits/1k at all ranges; our head-on hit rate 47pct@250 vs 86pct@150 -> orbit closer for faster kills + more score share)
+        else if (enemyDistance < 170) rangeBias = 0.5;   // push out if too close
 
         double desiredDir = absBearing + (Math.PI / 2 + rangeBias) * moveDirection;
 
