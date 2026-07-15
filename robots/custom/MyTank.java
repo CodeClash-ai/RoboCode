@@ -34,6 +34,8 @@ public class MyTank extends AdvancedRobot {
 
     // Movement
     private int moveDirection = 1;
+    private double moveAmountCurrent = 150; // stop-and-go: current segment distance (anti-lead-gun)
+    private long lastStopGoChange = 0;
     private double lastEnemyEnergy = 100;
 
     // Circular targeting: track enemy turn rate
@@ -411,6 +413,11 @@ public class MyTank extends AdvancedRobot {
         // 300px (conserve to outlast). Tighter alignment for distant shots so only
         // high-confidence bullets are spent on this hard-to-hit spinner.
         if (dist > 400 && getEnergy() < enemyEnergy) allowFire = false;  // R3: fight ~260px, only gate truly-far shots when behind
+        // R4 vs berendbotje: pair stop-and-go movement with fire discipline. Our
+        // real hit rate is only 14.6%% (below the 33%% break-even) so mid-range shots
+        // when BEHIND on energy are net-negative bleed that lost us 197/250 sims.
+        // Hold fire past 200px when behind (still fight hard <200px where we hit ~40-80%%).
+        if (dist > 200 && getEnergy() < enemyEnergy - 8) allowFire = false;
         // Tighter alignment for distant shots (bullet spread grows with range).
         double alignThresh = (dist > 300) ? 0.06 : (dist > 200 ? 0.09 : 0.13);
 
@@ -730,8 +737,23 @@ public class MyTank extends AdvancedRobot {
 
         double turn = Utils.normalRelativeAngle(desiredDir - getHeadingRadians());
 
-        // If turn is > 90deg, drive backwards instead (smoother)
-        double moveAmount = 150;
+        // R4 vs berendbotje: STOP-AND-GO to defeat its LEAD gun (offset ~0.41 rad,
+        // it hits us 27.6%% while we hit only 14.6%% -> we bled to 0 in 197/250 sims
+        // over R0-R3). A lead gun aims at enemyPos + ourVelocity*bulletTime; a
+        // STEADY full-speed orbit is exactly what it predicts well. By randomly
+        // varying our segment distance (sometimes stopping, sometimes full speed)
+        // every 8-18 ticks, the enemy's lead prediction over/undershoots -> its
+        // accuracy should collapse. This is the classic anti-lead-gun movement that
+        // no prior round tried (R1 orbit-wide, R2 flee/conserve, R3 close-aggressive
+        // all LOST). Applied ONLY vs a firing lead-gunner (enemyPassive off).
+        if (getTime() - lastStopGoChange >= 8 + (int)(Math.random() * 10)) {
+            double r = Math.random();
+            if (r < 0.28)      moveAmountCurrent = 0;                    // full STOP (defeats lead)
+            else if (r < 0.55) moveAmountCurrent = 20 + Math.random() * 40;  // slow crawl
+            else               moveAmountCurrent = 100 + Math.random() * 80; // fast dash
+            lastStopGoChange = getTime();
+        }
+        double moveAmount = moveAmountCurrent;
         if (Math.abs(turn) > Math.PI / 2) {
             turn = Utils.normalRelativeAngle(turn + Math.PI);
             moveAmount = -moveAmount;

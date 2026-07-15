@@ -6591,3 +6591,46 @@ Backup of R2 (losing) source: /tmp/MyTank_r2.java.
 - The only robust further lever vs its lead gun is WAVE SURFING (high-risk, harness
   broken, trust /logs). Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for
   opponent + INDEX MAPPING first. Keep MyTank class name + Java-8 bytecode.
+
+# Agent Notes (Round 4 / current pass) — opponent = johan_adriaans__berendbotje — STOP-AND-GO ANTI-LEAD-GUN MOVEMENT (was LOSING all 4 rounds)
+
+## CRITICAL: we LOST all 4 prior rounds (opus 17538/18665/21533/18286 vs 29907/30088/36850/31310).
+R1 (orbit ~320px), R2 (flee ~380px + conserve), R3 (close-aggressive) ALL LOST.
+Full R3 sweep: 48 wins / 197 losses, ourFE mean 7.8, enemyFE 42.4. We DIE FIRST.
+
+## ROOT CAUSE (measured R3, DECISIVE): enemy LEAD gun out-accuracies us 2x, we over-fire 2.4x
+- Enemy: fires 18/game at 27.6%% accuracy, LEAD gun (offset 0.41 rad). Deals 64.7/game.
+- Us: fire 43/game at only 14.6%% accuracy (spray at a hard target). Deal 49.8, cost 61 energy firing.
+- Enemy = FAST HEAVY spinner (avgV 4.5, avgdh 0.12, stops 23%% / full-speed 35%%, bimodal).
+- We take heavy damage EARLY (t80-240: lose ~70E while enemy loses ~20) then bleed to 0.
+- Our steady orbit (|v| mean 6.13, only 13 reversals/483 ticks) is exactly what a LEAD gun predicts.
+
+## CHANGES THIS PASS (both attack the losing dynamic; compile Java 8 major 52)
+1. STOP-AND-GO movement (line ~749, the KEY untried anti-lead-gun lever): every
+   8-18 ticks pick a NEW random segment distance — 28%% STOP (moveAmount=0), 27%%
+   slow crawl (20-60px), 45%% fast dash (100-180px). A lead gun aims at
+   enemyPos+ourVel*bulletTime; randomizing our velocity makes its lead shots
+   over/undershoot -> its 27.6%% accuracy should collapse. NO prior round tried this
+   (R1-R3 all tuned orbit DISTANCE, not velocity predictability).
+   Field: moveAmountCurrent, lastStopGoChange (uses getTime(), NOT the never-
+   incremented turnCount — that was a latent bug I avoided).
+2. FIRE DISCIPLINE (line ~420): hold fire past 200px when behind on energy by >8
+   (our 14.6%% hit is below the 33%% break-even -> mid-range shots when behind are
+   net-negative bleed). Still fight HARD <200px (we hit ~40-80%% there). This cuts
+   our 2.4x over-firing self-bleed without the R2 fleeing mistake.
+Gun W=0.0 circular UNCHANGED (replay W-sweep is a narrow 0.24-0.32 band; aim is NOT
+the lever — DEFENSE is). Orbit ~260px moderate bias UNCHANGED. dodge 0.30 UNCHANGED.
+
+## For next teammate — VERIFY (this is a MATCH-LOSS we're trying to flip)
+- Want NEW /logs: winner=opus-4-8, the 197 losses REDUCED, enemy accuracy DOWN from
+  27.6%%, our survival score UP, ourFE mean UP from 7.8, our fires/game DOWN from 43.
+- IF STILL LOSING: (a) if stop-and-go made us MORE hittable (a stationary tank is
+  easy for a HEAD-ON gun, but this enemy is a LEAD gun so stops should help) ->
+  check enemy accuracy in new logs; if it ROSE, reduce the STOP fraction (0.28->0.15)
+  and raise crawl/dash; (b) if we became too passive (survive but lose bullet-dmg
+  share) -> loosen the fire gate (dist>250 instead of >200); (c) the fire gate is
+  GLOBAL — if a future opponent regresses, scope it behind an enemy-profile flag.
+  (d) The only robust further lever vs a lead gun is true WAVE SURFING (track enemy
+  bullet waves, move to min-danger GF) — high-risk, harness broken, trust /logs.
+- Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING.
+- Keep MyTank class name + Java-8 bytecode (only hard requirement).
