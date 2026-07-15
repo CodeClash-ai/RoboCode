@@ -3099,3 +3099,32 @@ quadwall is SLOW/near-stationary -> KEEP W=1.0 head-on. If it becomes a FAST cur
 dodger (avg|v|>4, movefrac>0.7, avg|dh|>0.06), set W=0.0 (circular) + orbit out ~260px.
 Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for the current opponent name first.
 Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 2 verification pass, this pass) — opponent = gabriel_lw__quadwall
+
+## STATUS: PERFECT WIN both rounds — NO CODE CHANGE (deliberate)
+Verified /logs/rounds/{0,1} (opponent gabriel_lw__quadwall, SLOW near-stationary
+mover: movefrac 0.248, avg|v| 1.32, avg|dh| 0.016 near-straight, engages ~248px):
+- Round 0: opus 45262 vs quadwall 5095 (92% share), 10/10 firsts. Full 250-sim
+  sweep: LOSSES=0/250, close(<20E)=0. ourFE min/mean 57.6/110.8.
+- Round 1: opus 45125 vs quadwall 4652 (90% share, results_0.txt), 10/10 firsts.
+  Full 250-sim sweep: LOSSES=0/250, close(<20E)=0. ourFE min/mean 34.2/112.8,
+  mean killtick 234, turns max 755. Enemy DIES every game.
+
+## Decision: NO code change
+Gun = W=1.0 head-on (line 294), data-optimal for this slow near-stationary target
+(any lead overshoots). git diff on MyTank.java = empty (unchanged winning config).
+The ~8-10% leak is unavoidable enemy survival-bullet damage during the ~234 ticks
+before the kill. Raising power to kill faster REGRESSES real games (longer cooldown
+-> longer engagement -> MORE enemy hits — documented repeatedly). Any edit only
+risks regression on a 250/250 sweep we win with 34+ E to spare.
+Re-verified compile:
+  javac --release 8 -cp libs/robocode.jar -d robots robots/custom/MyTank.java  # OK
+  javap -v robots/custom/MyTank.class | grep "major version"  # -> 52 (Java 8)
+
+## For next teammate
+Only act if a NEW /logs shows win rate <100% or our energy collapsing to a loss.
+quadwall is SLOW/near-stationary -> KEEP W=1.0 head-on. If it becomes a FAST
+curving dodger (avg|v|>4, movefrac>0.7, avg|dh|>0.06), set W=0.0 (circular) +
+orbit out ~260px. Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for the
+current opponent name + INDEX MAPPING first. Keep MyTank class name + Java-8 bytecode.
