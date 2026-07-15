@@ -6280,3 +6280,48 @@ to head-on off any W-sweep replay (biased trap, documented). The 11 losses are
 energy-war variance in long grinds; the only robust lever is WAVE SURFING (high-risk,
 harness broken). Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for opponent +
 INDEX MAPPING first. Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 1 / current pass) — opponent = pmontp19__propiavancat
+
+## STATUS: DOMINANT WIN (250/250, 0 losses, 0 close), 86% share — NO CODE CHANGE
+Opponent CHANGED to pmontp19__propiavancat. Verified /logs/rounds/0 (INDEX i=0=propiavancat, i=1=opus):
+- results.json: winner=opus-4-8, 42691 vs 6671.
+- results_0.txt: opus_4_8.MyTank 1730 (86%), 10/10 firsts; enemy 285 (14%, all bullet dmg).
+- Full 250-sim sweep: LOSSES=0/250, close(<20E)=0. ourFE mean 102.4, min 27.0.
+  killtick mean 225.
+
+## Opponent = VERY FAST near-straight mover with a HEAD-ON gun
+Per-sim analysis (250 games): movefrac 0.968, avgV 7.48 (VERY FAST — near max 8),
+avg|dh| 0.025 (NEAR-STRAIGHT), engages ~271px. Enemy gun offset when firing:
+median 0.009 rad, mean 0.017 (HEAD-ON gun, aims at our current position). Deals us
+only ~28 dmg/game. Same profile family as denssle__megaborsten (avgV 7.06).
+
+## Gun aim W=0.0 (full linear lead) CONFIRMED optimal via REAL in-game hit rate
+Hit rate + enemy hit density by distance (120 sims, UNBIASED energy-events):
+  0-100px 37% (enemy 16.6/1k) | 100-200px 55% (16.6/1k) | 200-300px 79%
+  (6.3/1k, 24057 ticks = MOST time) | 300-400px 37% (2.3/1k) | 400px+ <27%.
+W=0.0 full linear lead is exact on the straight sections of this VERY FAST
+near-straight mover -> 79% hit at the ~250px orbit (our best zone: highest hit AND
+low enemy dmg). Matches the proven wins vs megaborsten/haikuwalls/wallspoethaiku/
+robrrrat/bt7274. Do NOT switch to head-on off any W-sweep replay (documented
+reactivity-bias trap; W=0.0 wins in REAL play).
+
+## Decision: NO code change (deliberate)
+git diff on MyTank.java = empty (only .class recompiled). We score essentially the
+theoretical max (survival + all bonuses; the 14% leak is unavoidable enemy bullet
+damage during the ~225 ticks before the kill). W=0.0 full lead, orbit ~250px (camps
+the 79%-hit/6.3-enemy-hit zone), dodge 0.30 (enemy has a head-on gun; do NOT lower
+dodge — the dodge-DOWN change REGRESSED vs superwalls R1, 11->18 losses). Any edit
+only risks regression on a 250/250 sweep we win with 27+ E to spare.
+Re-verified compile:
+  javac --release 8 -cp libs/robocode.jar -d robots robots/custom/MyTank.java  # OK
+  javap -v robots/custom/MyTank.class | grep "major version"  # -> 52 (Java 8)
+
+## For next teammate
+Only act if a NEW /logs shows win rate <100% or our energy collapsing to a loss.
+propiavancat is a VERY FAST near-straight mover -> KEEP W=0.0 full linear lead +
+orbit ~250px + dodge 0.30. Do NOT switch to head-on off any W-sweep replay (biased,
+documented trap; W=0.0 wins in REAL play). Do NOT change dodge (movement/dodge
+changes REPEATEDLY backfire — see superwalls/wallspoet/juggernaut notes). Always
+re-check `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING first.
+Keep MyTank class name + Java-8 bytecode (only hard requirement).
