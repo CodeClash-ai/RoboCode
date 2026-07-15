@@ -30,6 +30,8 @@ public class MyTank extends AdvancedRobot {
     private int stationaryScans = 0;
     private int slowEnemyScans = 0;
     private int enemyFireCount = 0;
+    private double enemyFirePowerAvg = 0.0;
+    private int enemyFirePowerSamples = 0;
     private int wallEnemyScans = 0;
     private int straightEnemyScans = 0;
     private int crazyEnemyScans = 0;
@@ -188,6 +190,10 @@ public class MyTank extends AdvancedRobot {
         boolean likelyRamDrop = e.getDistance() < 90.0 && enemyDrop > 0.52 && enemyDrop < 0.68;
         if (enemyDrop > 0.09 && enemyDrop <= 3.01 && !likelyRamDrop) {      // likely enemy bullet
             enemyFireCount++;
+            enemyFirePowerAvg = enemyFirePowerSamples == 0
+                    ? enemyDrop
+                    : 0.82 * enemyFirePowerAvg + 0.18 * enemyDrop;
+            enemyFirePowerSamples++;
             reverseDirection();
         }
 
@@ -234,6 +240,12 @@ public class MyTank extends AdvancedRobot {
         double preferredDistance;
         if (crazyEnemyScans > 4) {
             preferredDistance = 305.0;
+        } else if (weakFixedAxisOscillator()) {
+            // Current Tarektank-style target is a one-dimensional 100px
+            // oscillator with a weak fixed-heading gun.  Move closer than the
+            // generic Ian/RegullarMonk conservation profile to shorten bullet
+            // flight and make midpoint/axis shots land before it reverses.
+            preferredDistance = 245.0;
         } else if (fixedHeadingStopGoEnemy()) {
             // Current OppsWantMeDead-style bot keeps an almost perfectly fixed
             // body heading while alternating stops/straight bursts and weak shots.
@@ -376,7 +388,19 @@ public class MyTank extends AdvancedRobot {
                 power = Math.min(power, 1.25);
             }
         }
-        if (fixedHeadingStopGoEnemy()) {
+        if (weakFixedAxisOscillator()) {
+            // Tarektank-like: fixed heading, short learned line segment, and
+            // repeated weak power-1 shots.  The drift/axis gun is stable here,
+            // so max-pressure bullets beat the older low-power conservation
+            // profile and should cut the long 500+ tick farming rounds.
+            if (getEnergy() > 28) {
+                power = Math.max(power, distance < 620 ? 3.0 : 2.65);
+            } else if (getEnergy() > 12) {
+                power = Math.min(Math.max(power, 1.35), 2.0);
+            } else {
+                power = Math.min(power, 0.45);
+            }
+        } else if (fixedHeadingStopGoEnemy()) {
             // Ian's Tank / OppsWantMeDead-style fixed-heading stop/go shooters fire
             // steadily while barely turning their body.  Head-on is best, but logs
             // for Ian's Tank showed max-power spraying can self-deplete in long
@@ -553,7 +577,7 @@ public class MyTank extends AdvancedRobot {
             // Low-power/drift shots are cheap, but fixed-heading stop/go targets
             // are narrow in the direction that matters.  Tighten aim modestly,
             // without becoming stricter than the generic hard-to-hit tolerance.
-            tolerance = Math.min(tolerance, Math.atan2(18.0, distance));
+            tolerance = Math.min(tolerance, Math.atan2(weakFixedAxisOscillator() ? 34.0 : 18.0, distance));
         }
         if (getGunHeat() == 0
                 && Math.abs(getGunTurnRemainingRadians()) < tolerance && getEnergy() > 0.25) {
@@ -591,6 +615,20 @@ public class MyTank extends AdvancedRobot {
         // active until repeated firing proves otherwise; dangerousWallEnemy()
         // takes over after several shots for DroidPoet-like perimeter gunners.
         return enemyFireCount <= 2;
+    }
+
+    private boolean weakFixedAxisOscillator() {
+        // alpian__tarektank in the current logs runs back and forth along one
+        // unchanging heading over a compact ~100px segment and fires mostly
+        // power-1 bullets.  Separate it from broader fixed-heading stop/go
+        // shooters where previous max-power spraying caused self-depletion.
+        return fixedHeadingStopGoEnemy()
+                && enemyAxisSamples > 24
+                && haveEnemyAxis
+                && enemyAxisMax - enemyAxisMin > 42.0
+                && enemyAxisMax - enemyAxisMin < 125.0
+                && enemyFirePowerSamples > 0
+                && enemyFirePowerAvg <= 1.35;
     }
 
     private boolean fastWallCruiser() {
