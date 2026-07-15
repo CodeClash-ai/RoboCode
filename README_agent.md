@@ -3903,3 +3903,89 @@ diff/revert if next round's numbers look worse.
    repository within the same call). Still the single highest-leverage infra
    fix available if a future teammate has a larger step budget to spend on it
    than usual.
+
+## Round 32 update (this round) — validated round 31's WALL_MARGIN fix, no code changes
+
+### Context
+Both `/logs/rounds/0/` and `/logs/rounds/1/` exist this round, both real combat
+against `tibola__markiv` (same opponent round 31's notes describe). Round 0
+here matches round 31's own pre-fix baseline exactly (99% win, 2 losses, avg
+walls/game 3.3, score 43084 vs 1677). Round 1 here is the REAL match result of
+round 31's `WALL_MARGIN` widening (70 -> 95): **100% win rate (250/250)**,
+**ZERO losses** (down from 2), avg walls/game dropped **3.3 -> 2.6**, avg
+rams/game roughly flat (1.7 -> 1.6), avg min energy up slightly (71 -> 74).
+This is a clean, unambiguous validation — round 31's hypothesis (a larger
+wall-avoidance margin gives the tank's simultaneous turn+translate more room
+to actually re-aim away from the wall before reaching the boundary, at high
+velocity) held up in a real match, converting both of round 31's losses into
+wins with no observed downside (no ram/energy/accuracy regression to speak
+of).
+
+### Validation performed
+1. `python3 tools/analyze_freezes.py /logs/rounds/1 --threshold 20 | grep -i
+   sonnet` -> **zero findings**. Confirms all prior wall-standoff/radar-
+   freeze/stuck-ramming fixes (rounds 3/4/14/19/20/23/24/25/26) are still
+   holding, and the wider `WALL_MARGIN` didn't introduce any new stuck
+   pattern (e.g. clamping too aggressively and fighting the orbit logic).
+2. `python3 tools/analyze_power_accuracy.py /logs/rounds/1 --bucket-width
+   0.5` -> sanity check 32.1 shots/game combined vs `trace.md`'s
+   22.2+11.0=33.2 — within ~3%, tool still trustworthy (round 28's tick-step
+   fix holding). Merged 2.5-3.0 power bucket accuracy: **28.5%** — closely
+   matches round 31's own 28.2% finding for this *same* opponent
+   (`tibola__markiv`), reinforcing round 31's tentative read that this
+   opponent's low accuracy in that bucket is likely opponent-specific/
+   situational (it moves conservatively but returns real, hard-hitting
+   power-3 shots when it does fire, a genuinely different profile from the
+   `it_economics__ite_*` opponents in rounds 28-29 where the same bucket
+   hit 55-64%). Two consistent samples now for `tibola__markiv` specifically
+   (28.2%, 28.5%) vs two consistent samples for the `it_economics` rung
+   (55-64%) — this looks like a real opponent-dependent effect, not noise,
+   so round 30's 3.0->2.9 power cap change should probably be judged
+   per-matchup rather than universally reverted/kept; it remains low-cost
+   either way (2.9 vs 3.0 barely changes damage output, per round 30's own
+   notes) so no action taken.
+3. `javac -Xlint:all -cp libs/robocode.jar -d robots
+   robots/custom/MyTank.java` compiles clean, no errors/warnings. `.class`
+   up to date. `MyTank.java` unchanged from round 31 (980 lines).
+
+### What I did this round (or rather, chose NOT to do)
+Given a fully healthy, clearly-improved result (100% win, 0 losses, 0 ties,
+0 freeze findings, walls/game down to its best level in the recent-rounds
+history, tooling sanity checks green) directly validating round 31's change
+with no observed downside, I made **no further changes to `MyTank.java`**
+this round — consistent with this file's long-established pattern (rounds
+6, 13, 15, 21, 22, 26, 27, 28, 29) of not touching already-working code
+without a fresh, clear signal of underperformance. There is no urgent bug or
+regression to chase this round; round 31's fix is the story, and it's a
+clean win.
+
+### Suggestions for next teammate
+1. **First step, as always**: check `/logs/rounds/<N>/trace.md` for the
+   actual opponent this round, and run
+   `python3 tools/analyze_freezes.py /logs/rounds/<N> --threshold 20 | grep -i
+   sonnet` as the standard regression check (should print nothing).
+2. If `tibola__markiv` reappears again, treat round 32's numbers (100% win,
+   0 losses, walls/game 2.6, merged 2.5-3.0 bucket accuracy ~28%) as the
+   current healthy baseline for this specific matchup.
+3. If a genuinely NEW opponent appears, run `analyze_power_accuracy.py` and
+   keep tracking whether the merged 2.5-3.0 power bucket's accuracy is
+   opponent-dependent (low ~28% for `tibola__markiv`-style conservative/
+   hard-hitting opponents; high 55-64% for `it_economics__ite_*`-style
+   weaker, more constant-firing opponents) — if a clear pattern by opponent
+   TYPE emerges across several more samples, it might be worth making the
+   finishing/press-advantage power cap conditional on some opponent-behavior
+   signal (e.g. opponent's own average shot power or aggression) rather than
+   a flat 2.9, but this needs more data first (currently only 2 opponents x
+   2 samples each = 4 total data points, split cleanly by opponent — decent
+   signal but not enough to safely generalize a new rule from).
+4. `pez__gf1` (rounds 11-12, ~14% tie rate from mutual energy attrition)
+   remains the toughest opponent in this file's history and the single most
+   valuable target for directly re-testing the many stuck-ramming/energy-
+   management/dodge-on-fire/wall-margin changes accumulated since round 12 —
+   still hasn't reappeared after 20 rounds.
+5. Local headless battle-runner: still unresolved after 31+ rounds of
+   attempts (see round 6's section for the most detailed known blocker,
+   `RepositoryManager.loadSelectedRobots` not seeing a freshly-reloaded
+   repository within the same call). Still the single highest-leverage infra
+   fix available if a future teammate has a larger step budget to spend on it
+   than usual.
