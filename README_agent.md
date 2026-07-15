@@ -4413,3 +4413,52 @@ Relaxed far-fire gates to 600/640px so we still fight at our 530px orbit.
 ## NEXT TEAMMATE: if we regress, the orbit-wider (530px) change is the main bet.
 If losses go UP, try orbit ~450px (between old 370 and new 530). If bullet-dmg
 share drops too much, raise the 1.5 tier at 560px back toward 2.0.
+
+# Agent Notes (Round 2 / current pass) — opponent = josephjeon__gntest
+
+## STATUS: R1's orbit-wider (370->530px) + W=0.0 + tiered-power change WORKED BIG
+Cross-round MATCH results (results.json, opponent FIXED = josephjeon__gntest):
+- R0 (aggressive close-orbit config): WON 26867 vs 16527 (62% share).
+- R1 (prior teammate: orbit ~530px, W=0.0 full lead, distance-tiered power): WON
+  36723 vs 9409 (80% share!). enemy score nearly HALVED. Full 250-sim sweep:
+  243/250 wins, 7 losses (all energy-war/hit-rate VARIANCE at ~340-514px, behind
+  on energy 41-86% of ticks), ourFE mean 76.7 (up from ~25). Huge improvement.
+
+## Opponent = FAST curving mover (avgV 6.39, 74% full speed, avg|dh| 0.083) with an
+## AGGRESSIVE HEAD-ON gun (fires ~29/game, gun offset ~0.022 rad). Mutual slugfest
+## (~5-7% both ways) decided by SURVIVAL (our top score component) + bullet dmg.
+
+## KEY UNBIASED SIGNAL (round-1 enemy-hit-density by distance, its ACTUAL hits on us):
+##   0-100px 25.4/1k | 100-200 12.9 | 200-300 11.1 | 300-400 5.4 | 400-500 5.4 |
+##   500-600 5.1 | 600-700 2.4/1k (HALVES beyond 600px!)
+## Our (lag-corrected) hit rate stays high (~90%) out to 600-700px -> pushing orbit
+## into the 600px+ zone cuts enemy hits with minimal offensive cost. Same direction
+## that cut enemy score in half in round 1 (370->530px).
+
+## CHANGE THIS PASS (movement + power, MODEST 30px push; gun aim UNCHANGED at W=0.0)
+1. MOVEMENT orbit ~530px -> ~560px. rangeBias thresholds 620/540/500/<480 ->
+   650/580/540/<520. Nudges into the lower-enemy-hit zone. Kept MODEST (not 580px)
+   to limit wall-hug risk: field is 800x600, at 530px we already wall-hug 12% of
+   ticks and only reach >=600px 8.3% of ticks. A big push would force wall-hugging
+   (deadly vs a head-on gun -> we'd be near-stationary = easy target).
+2. POWER tiers shifted wider to keep meaningful power at the new orbit: 3.0/<200,
+   2.0/<480, 1.5/<610, 0.8/<690, 0.4/else (was <450/<560/<640).
+3. FIRE GATES (hold fire when behind on energy) pushed out 600/640 -> 650/690px
+   and align-tighten point 480 -> 540px so our ~560px orbit shots still fire.
+Gun W=0.0 (full linear lead, confirmed optimal for this fast constant-velocity
+mover), dodge, enemyPassive mode, energy-war taper (dist>300 when behind) UNCHANGED.
+enemyPassive stays OFF (gntest deals real damage). Compiles Java 8 (major 52).
+
+## For next teammate — VERIFY
+- Want NEW /logs: winner=opus-4-8, share held/raised above R1's 80%, sim wins
+  above 243/250, ourFE mean above 76.7, enemy score below 9409. The bet: slightly
+  wider orbit reaches the 2.4/1k zone -> fewer enemy hits -> more survival score.
+- IF IT REGRESSED (share drop / more losses): the wider orbit likely caused MORE
+  wall-hugging (near-stationary = easy for its head-on gun). REVERT to R1 config:
+    rangeBias 620/540/500/<480, power 3.0/<200 2.0/<450 1.5/<560 0.8/<640 0.4,
+    fire gates 600/640, align 480. That config WON 80% share. git prior = 2205fa8.
+- gntest is a FAST curving mover with a HEAD-ON gun -> KEEP W=0.0 full lead + wide
+  orbit + STEADY tangential motion (do NOT raise dodge — head-on gun, reversing
+  is counterproductive per dominatorx note). The remaining lever is WAVE SURFING
+  (high-risk, harness broken). Always re-check `head -1 /logs/rounds/0/sim_0.jsonl`
+  for opponent + INDEX MAPPING first. Keep MyTank class name + Java-8 bytecode.

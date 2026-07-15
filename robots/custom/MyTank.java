@@ -264,9 +264,9 @@ public class MyTank extends AdvancedRobot {
         // shots (enemy closing in) are ~80pct hit. Use strong power up close, moderate at our orbit
         // range (keep our bullet-dmg lead) tapering only far out where a miss should cost little.
         if (dist < 200)       power = 3.0;   // point-blank / enemy charge: high hit, big damage
-        else if (dist < 450)  power = 2.0;   // mid: moderate power keeps bullet-dmg lead without heavy bleed
-        else if (dist < 560)  power = 1.5;   // our orbit zone (~530px): lower drain per miss, still meaningful hits
-        else if (dist < 640)  power = 0.8;
+        else if (dist < 480)  power = 2.0;   // mid: moderate power keeps bullet-dmg lead without heavy bleed
+        else if (dist < 610)  power = 1.5;   // our orbit zone (~560px): lower drain per miss, still meaningful hits
+        else if (dist < 690)  power = 0.8;
         else                  power = 0.4;   // long range -> smallest drain if a miss
 
         // Energy safety clamps so a bad streak can't self-destruct us.
@@ -365,16 +365,16 @@ public class MyTank extends AdvancedRobot {
         // hit even at 500-600px) and we win the energy war decisively, so only gate
         // the truly long, low-hit shots (>550px) when we're behind on energy.
         boolean allowFire = true;
-        if (dist > 600 && getEnergy() < enemyEnergy) allowFire = false;
+        if (dist > 650 && getEnergy() < enemyEnergy) allowFire = false;
         // In the grind-loss state (behind on energy) don't waste far low-hit
         // shots (400px+ hit rate ~20% = net-negative); conserve to outlast.
         // vs tannerrogalsky__tannerbot1: our hit rate CRASHES beyond 320px (8%),
         // so when behind on energy in a grind, hold fire past 320px (was 400px) to
         // stop the net-negative bleed that caused the 34 grind losses; conserve to
         // outlast the energy-conserving foe / close to the ~230px net-positive zone.
-        if (dist > 640 && getEnergy() < enemyEnergy) allowFire = false;  // josephjeon: orbit ~530px is our fighting zone; only gate truly-far shots when behind
+        if (dist > 690 && getEnergy() < enemyEnergy) allowFire = false;  // josephjeon: orbit ~560px is our fighting zone; only gate truly-far shots when behind
         // Tighter alignment for distant shots (bullet spread grows with range).
-        double alignThresh = (dist > 480) ? 0.10 : 0.13;
+        double alignThresh = (dist > 540) ? 0.10 : 0.13;
 
         // ===== PASSIVE-ENEMY CONSERVATION MODE (vs admiralrasmussen__wavesurfing) =====
         // This opponent is a wave surfer that fires ZERO bullets and never rams:
@@ -584,10 +584,15 @@ public class MyTank extends AdvancedRobot {
         // beyond 500px and 18/1k beyond 600px. Orbit MUCH WIDER (~530px) to escape its accuracy
         // (our own hit rate is ~flat/low at all ranges vs this hard-to-hit mover, so distance costs us
         // almost nothing offensively but slashes damage taken). Steady tangential motion beats a head-on gun.
-        if (enemyDistance > 620)      rangeBias = -0.9;  // very far: firm inward pull
-        else if (enemyDistance > 540) rangeBias = -0.35; // approaching target ~530px
-        else if (enemyDistance > 500) rangeBias = 0.0;   // in the low-enemy-hit zone, orbit clean
-        else if (enemyDistance < 480) rangeBias = 0.6;   // too close: push out toward 530px
+        // ROUND-2 vs josephjeon__gntest (this pass): round-1 data shows enemy hit
+        // density HALVES from ~5.1/1k at 500-600px to ~2.4/1k at 600-700px, while our
+        // own (lag-corrected) hit rate stays high (~90%) out to 600-700px. So push the
+        // orbit a bit WIDER (~560px target) to reach the 600px+ low-enemy-hit zone with
+        // minimal offensive cost. Same direction that cut enemy score in half in round 1.
+        if (enemyDistance > 650)      rangeBias = -0.9;  // very far: firm inward pull
+        else if (enemyDistance > 580) rangeBias = -0.35; // approaching target ~560px
+        else if (enemyDistance > 540) rangeBias = 0.0;   // in the low-enemy-hit zone, orbit clean
+        else if (enemyDistance < 520) rangeBias = 0.6;   // too close: push out toward 560px
         double desiredDir = absBearing + (Math.PI / 2 + rangeBias) * moveDirection;
 
         // Wall smoothing: steer away from walls
