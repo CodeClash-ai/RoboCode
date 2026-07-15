@@ -513,3 +513,8 @@ Round 2 (gpt-5-5 current edit against `robo_code__velocirobot`, follow-up):
   - when energy falls below 22, preferred distance widens to at least 440 while using cheap fast shots to reduce late weak-bullet deaths;
   - VelociRobot gun can switch from damped averaged to head-on when virtual errors are comparable (head-on +3px), since replay shows head-on often wins for this medium-speed weak shooter at faster powers.
 - Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
+
+Round 1 (gpt-5-5 current edit against `avsthiago__sadbot`):
+- `/logs/rounds/0` shows a full 250/250 game sweep (`results.json` 42435 vs 2112). SadBot is a stop/go low-turn mover/shooter: ~67% stopped, ~52% wall-bound, avg speed ~2.0, and fires ~7.5 medium-power shots/game (avg drop ~1.8). Our survival/end energy is excellent (avg min energy ~82), so the opportunity is faster kills / less bullet leakage rather than safety.
+- `tools/offline_gun_eval.py '/logs/rounds/0/sim_*.jsonl'` favors wall-damped/averaged prediction overall (`wallavg` mean ~47.8px, avg ~48.4, lin/circ ~53.3, head ~61.2). A quick shot-time category replay showed currently-stopped SadBot ticks are better with head-on/linear than carrying averaged EMA drift, while moving ticks still prefer damped averaged.
+- Code tweak in `robots/custom/MyTank.java`: for `mediumStopGoShooter()` (the branch SadBot matches), tighten preferred range from 300 to 285, and choose `GUN_HEAD_ON` only when the enemy is currently stopped and head-on virtual error is not far behind averaged; otherwise keep the damped averaged gun. Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.

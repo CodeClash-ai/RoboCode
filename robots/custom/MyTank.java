@@ -401,11 +401,11 @@ public class MyTank extends AdvancedRobot {
             // falling into the old RegullarMonk conservation orbit.
             preferredDistance = 275.0;
         } else if (mediumStopGoShooter()) {
-            // Gruffalo-style opponent in the current logs: many stops / low-turn
-            // bursts, repeated medium-power shots, and the damped averaged gun is
-            // clearly better than head-on.  Stay close enough for short bullet
-            // flights, but not quite as close as the almost harmless stop/go farmers.
-            preferredDistance = 300.0;
+            // Gruffalo/SadBot-style opponents: many stops / low-turn bursts and
+            // repeated medium-power shots.  Current SadBot traces leave us with a
+            // large energy surplus, so tighten the exchange slightly to shorten
+            // max-power bullet flight while keeping more room than harmless farmers.
+            preferredDistance = 285.0;
         } else if (activeStopGoShooter()) {
             // RegullarMonk-style bots stop/reverse constantly but fire repeated
             // weak bullets.  They are easiest to hit with fast head-on shots;
@@ -826,10 +826,18 @@ public class MyTank extends AdvancedRobot {
             // gun for fast bursts.
             gun = Math.abs(e.getVelocity()) <= 3.25 ? GUN_LINEAR : GUN_AVERAGED;
         } else if (mediumStopGoShooter()) {
-            // Gruffalo-style medium-power stop/go shooter: offline replay strongly
-            // favors the damped averaged predictor (wallavg) over head-on, so do not
-            // let the generic activeStopGoShooter conservation branch force head-on.
-            gun = GUN_AVERAGED;
+            // Medium-power stop/go shooters usually prefer the damped averaged gun
+            // while moving, but the current SadBot traces pause for long endpoint
+            // shots; at those currently-stopped ticks, head-on/linear lands more
+            // often than carrying EMA drift from the previous burst.  Guard with a
+            // loose virtual-error check so Gruffalo-like movers still keep averaged
+            // if head-on is clearly losing overall.
+            if (Math.abs(e.getVelocity()) < 0.15
+                    && virtualGunError[GUN_HEAD_ON] <= virtualGunError[GUN_AVERAGED] + 18.0) {
+                gun = GUN_HEAD_ON;
+            } else {
+                gun = GUN_AVERAGED;
+            }
         } else if (activeStopGoShooter()) {
             // Current RegullarMonk traces: very frequent stops/reverses and
             // power-1 firing.  Offline shot replay favored head-on over linear,
