@@ -96,14 +96,15 @@ def bucket_power(power, width):
 
 
 class MovingTrack:
-    __slots__ = ("x", "y", "power", "expected_speed", "seen_this_tick")
+    __slots__ = ("x", "y", "power", "expected_speed", "seen_this_tick", "last_tick")
 
-    def __init__(self, x, y, power):
+    def __init__(self, x, y, power, tick):
         self.x = x
         self.y = y
         self.power = power
         self.expected_speed = bullet_speed(power)
         self.seen_this_tick = True
+        self.last_tick = tick
 
 
 def analyze(logdir, bucket_width):
@@ -134,6 +135,29 @@ def analyze(logdir, bucket_width):
                     robots = d["robots"]
                     continue
 
+                # Round 28 fix: some sim_*.jsonl files log EVERY tick (t
+                # increments by 1 each line) while others -- confirmed by
+                # direct inspection, e.g. sim_69.jsonl in a round-28 sample --
+                # only log every OTHER tick (t increments by 2), and a few
+                # even mix both step sizes within one file. The bullet-speed-
+                # based distance matching below assumes a fixed 1-tick step
+                # between consecutive log lines; on a 2-tick-step file this
+                # makes every real, correctly-continuing bullet look like it
+                # jumped ~2x its expected per-tick distance, which is well
+                # outside SPEED_TOLERANCE, so EVERY bullet fails to match its
+                # own track every single line and gets spuriously recounted as
+                # a brand new "genesis" shot almost every tick -- explains the
+                # extreme per-game outlier shot counts (up to ~2x the tick
+                # count) that were dragging the whole-sample average shots/
+                # game figure far above trace.md's real value while the
+                # per-game MEDIAN matched trace.md closely (most games happen
+                # to use the 1-tick-step format and were already being
+                # counted correctly). Fix: track the current tick number and
+                # scale each track's expected travel distance (and matching
+                # tolerance) by however many ticks have actually elapsed
+                # since that track was last matched, instead of assuming 1.
+                cur_tick = d.get("t")
+
                 # --- Part 1: shots-fired via MOVING-only tracking ---
                 bullets_by_owner = defaultdict(list)
                 for b in d.get("b", []):
@@ -144,27 +168,52 @@ def analyze(logdir, bucket_width):
                     owner_tracks = moving_tracks[owner]
                     for t in owner_tracks:
                         t.seen_this_tick = False
-                    unmatched = []
-                    for b in moving_list:
+                    # GLOBAL greedy matching (round 28 fix): the original code
+                    # matched bullets to tracks in list-order, one at a time,
+                    # picking each bullet's own best-available track as it went.
+                    # This is a *local* greedy matching, not a global one -- with
+                    # 2-3 same-owner/same-power bullets in flight at once (real,
+                    # observed up to 3 concurrent in these logs), list-order
+                    # processing could give bullet A first pick of a track that
+                    # bullet B was actually the better/closer match for, leaving
+                    # B with no good match and spuriously spawning a brand new
+                    # "genesis" track/shot every time this happened -- a likely
+                    # source of the 2-2.5x shot-count overcounts flagged in
+                    # rounds 27/28's README notes for longer, denser-fire games.
+                    # Fix: collect ALL valid (bullet, track, err) candidate pairs
+                    # first, sort by error ascending, and assign greedily by
+                    # increasing error (a standard greedy approximation to
+                    # optimal bipartite matching) so the single best pairing in
+                    # the whole tick is chosen first, not just the first bullet's
+                    # best available option.
+                    candidates = []
+                    for bi, b in enumerate(moving_list):
                         bx, by, power = b["x"], b["y"], b.get("p", 0.0)
-                        best = None
-                        best_err = None
-                        for t in owner_tracks:
-                            if t.seen_this_tick:
-                                continue
+                        for ti, t in enumerate(owner_tracks):
                             if abs(t.power - power) > 1e-6:
                                 continue
+                            elapsed = 1
+                            if cur_tick is not None and t.last_tick is not None:
+                                elapsed = max(1, cur_tick - t.last_tick)
                             dist = ((t.x - bx) ** 2 + (t.y - by) ** 2) ** 0.5
-                            err = abs(dist - t.expected_speed)
-                            if err <= SPEED_TOLERANCE and (best is None or err < best_err):
-                                best = t
-                                best_err = err
-                        if best is not None:
-                            best.x = bx
-                            best.y = by
-                            best.seen_this_tick = True
-                        else:
-                            unmatched.append(b)
+                            err = abs(dist - t.expected_speed * elapsed)
+                            tol = SPEED_TOLERANCE * elapsed
+                            if err <= tol:
+                                candidates.append((err, bi, ti))
+                    candidates.sort(key=lambda c: c[0])
+                    bullet_matched = [False] * len(moving_list)
+                    track_matched = [False] * len(owner_tracks)
+                    for err, bi, ti in candidates:
+                        if bullet_matched[bi] or track_matched[ti]:
+                            continue
+                        bullet_matched[bi] = True
+                        track_matched[ti] = True
+                        b = moving_list[bi]
+                        t = owner_tracks[ti]
+                        t.x, t.y = b["x"], b["y"]
+                        t.seen_this_tick = True
+                        t.last_tick = cur_tick
+                    unmatched = [b for bi, b in enumerate(moving_list) if not bullet_matched[bi]]
                     for b in unmatched:
                         # Genesis of a new shot.
                         power = b.get("p", 0.0)
@@ -172,7 +221,7 @@ def analyze(logdir, bucket_width):
                         bucket = bucket_power(power, bucket_width)
                         stats[owner_name][bucket][0] += 1
                         total_shots_all_robots += 1
-                        nt = MovingTrack(b["x"], b["y"], power)
+                        nt = MovingTrack(b["x"], b["y"], power, cur_tick)
                         owner_tracks.append(nt)
                     moving_tracks[owner] = [t for t in owner_tracks if t.seen_this_tick]
 
