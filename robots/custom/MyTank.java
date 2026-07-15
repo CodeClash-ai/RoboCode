@@ -208,7 +208,29 @@ public class MyTank extends AdvancedRobot {
         // Orbit perpendicular, with a distance-control offset.  Far away we cut
         // inward; too close we open out.  wallSmooth then bends the path away
         // from the battlefield edges before we commit to it.
-        double preferredDistance = (crazyEnemyScans > 4 ? 305.0 : (dangerousWallEnemy() ? 335.0 : ((straightEnemyScans > 16 && harmlessLowFireEnemy() && wallEnemyScans <= 4) ? 310.0 : ((straightEnemyScans > 4 && harmlessLowFireEnemy()) ? 275.0 : (wallEnemyScans > 4 ? (stopGoEnemyScans > 8 ? 285.0 : 305.0) : (headOnGunIsBest() ? 330.0 : (slowEnemyScans > 12 ? 285.0 : PREFERRED_DISTANCE)))))));
+        double preferredDistance;
+        if (crazyEnemyScans > 4) {
+            preferredDistance = 305.0;
+        } else if (dangerousWallEnemy()) {
+            preferredDistance = 335.0;
+        } else if (straightEnemyScans > 16 && harmlessLowFireEnemy() && wallEnemyScans <= 4) {
+            preferredDistance = 310.0;
+        } else if (straightEnemyScans > 4 && harmlessLowFireEnemy()) {
+            preferredDistance = 275.0;
+        } else if (wallEnemyScans > 4) {
+            preferredDistance = stopGoEnemyScans > 8 ? 285.0 : 305.0;
+        } else if (activeStopGoEnemy()) {
+            // MarkIV-style bots alternate long stops with short bursts and fire
+            // mostly weak bullets.  Staying a bit closer shortens our bullet flight
+            // without giving up much survival against that low-power gun.
+            preferredDistance = 305.0;
+        } else if (headOnGunIsBest()) {
+            preferredDistance = 330.0;
+        } else if (slowEnemyScans > 12) {
+            preferredDistance = 285.0;
+        } else {
+            preferredDistance = PREFERRED_DISTANCE;
+        }
         // Against the current GF-style opponent our gun struggles mostly due
         // to long bullet flight, while its own gun almost never connects.  Once
         // virtual guns report a hard-to-hit mover, tighten the orbit a bit to
@@ -279,11 +301,10 @@ public class MyTank extends AdvancedRobot {
             // energy on heavier bullets: its own hit rate is tiny, and the
             // shorter rounds are worth the slightly slower bullet speed.
             power = Math.max(power, distance < 360 ? 3.0 : (distance < 520 ? 2.8 : 2.35));
-        } else if (slowEnemyScans > 8 && getEnergy() > 12 && distance < 720) {
-            // The current recorded opponent is a very slow stop-and-go shooter.
-            // Once a target has proven it cannot exceed about speed 3, heavier
-            // bullets trade a little travel time for much faster damage and a
-            // larger bullet bonus.  Fast/unknown movers keep the safer ladder.
+        } else if ((slowEnemyScans > 8 || activeStopGoEnemy()) && getEnergy() > 12 && distance < 720) {
+            // Slow and stop/go opponents give up enough predictable time that
+            // heavier bullets trade a little travel time for much faster damage and
+            // a larger bullet bonus.  Fast/unknown movers keep the safer ladder.
             power = 3.0;
         }
         boolean hardToHitMover = virtualSamples > 28 && bestGunError() > 72.0 && stationaryScans <= 5 && slowEnemyScans <= 12;
@@ -383,6 +404,10 @@ public class MyTank extends AdvancedRobot {
             // quickly learn that full linear/circular prediction is better
             // than the damped wall shot used for prior stop/reverse wall bots.
             gun = GUN_AVERAGED;
+        } else if (activeStopGoEnemy()) {
+            // Current Tibola/MarkIV traces show the damped averaged predictor is
+            // better than full linear/circular for repeated stop-then-burst motion.
+            gun = GUN_AVERAGED;
         } else if (virtualSamples < 14 && slowEnemyScans > 12) {
             gun = GUN_AVERAGED;
         }
@@ -436,6 +461,19 @@ public class MyTank extends AdvancedRobot {
         // active until repeated firing proves otherwise; dangerousWallEnemy()
         // takes over after several shots for DroidPoet-like perimeter gunners.
         return enemyFireCount <= 2;
+    }
+
+    private boolean activeStopGoEnemy() {
+        // Tibola MarkIV-style movement: lots of stopped ticks and short bursts,
+        // often with repeated weak shots.  It is not the same as DroidPoet's fast
+        // active wall running or Crazy's continuous turn, and trace replay favors
+        // a damped averaged gun plus a moderately close orbit.  The virtual-error
+        // guard prevents this from taking over long, hard-to-hit surfer battles.
+        return stopGoEnemyScans > 14
+                && Math.abs(enemyVelocityAvg) < 3.2
+                && crazyEnemyScans <= 4
+                && !dangerousWallEnemy()
+                && (virtualSamples < 28 || bestGunError() < 70.0 || slowEnemyScans > 8);
     }
 
     private boolean dangerousWallEnemy() {
@@ -529,7 +567,7 @@ public class MyTank extends AdvancedRobot {
             return new double[] {enemyX, enemyY};
         }
         if (gunType == GUN_AVERAGED && !dangerousWallEnemy()
-                && (wallEnemyScans > 4 || (stopGoEnemyScans > 8 && harmlessLowFireEnemy()))
+                && (wallEnemyScans > 4 || (stopGoEnemyScans > 8 && (harmlessLowFireEnemy() || activeStopGoEnemy())))
                 && !(stopGoEnemyScans <= 8 && straightEnemyScans > 12 && harmlessLowFireEnemy()
                         && (Math.abs(enemyVelocityAvg) > 3.5 || Math.abs(velocity) > 5.0))) {
             // A harmless wall-bound or recent stop/go bot often alternates between
