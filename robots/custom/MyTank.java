@@ -175,7 +175,12 @@ public class MyTank extends AdvancedRobot {
 
     private void doMovement(ScannedRobotEvent e, double absBearing) {
         double enemyDrop = lastEnemyEnergy - e.getEnergy();
-        if (enemyDrop > 0.09 && enemyDrop <= 3.01) {      // likely enemy bullet
+        // Enemy energy drops usually mean it fired, but at point-blank range a
+        // robot collision/ram costs exactly about 0.6 energy.  Treating those
+        // as bullets made close stationary-spawn fights reverse every tick and
+        // could pin us in a Fire-style ram loop.  Ignore that ram signature.
+        boolean likelyRamDrop = e.getDistance() < 90.0 && enemyDrop > 0.52 && enemyDrop < 0.68;
+        if (enemyDrop > 0.09 && enemyDrop <= 3.01 && !likelyRamDrop) {      // likely enemy bullet
             enemyFireCount++;
             reverseDirection();
         }
@@ -187,13 +192,13 @@ public class MyTank extends AdvancedRobot {
         // stationary bot (sample.Fire in the current traces), stopping here can
         // pin both robots together in a ram loop until a draw.  Always open a
         // safe gap from close stationary targets before entering farm mode.
-        if (stationaryScans > 5 && e.getDistance() < 180.0) {
+        if (stationaryScans > 5 && e.getDistance() < 260.0) {
             double away = absBearing + Math.PI;
-            if (!insideBattlefield(projectX(getX(), away, 170.0), projectY(getY(), away, 170.0), WALL_MARGIN + 18.0)) {
+            if (!insideBattlefield(projectX(getX(), away, 230.0), projectY(getY(), away, 230.0), WALL_MARGIN + 18.0)) {
                 away = Math.atan2(getBattleFieldWidth() / 2.0 - getX(), getBattleFieldHeight() / 2.0 - getY());
             }
             setMaxVelocity(8.0);
-            driveAlongAngle(away, 180.0);
+            driveAlongAngle(away, 240.0);
             return;
         }
         if (stationaryScans > 10 && enemyFireCount == 0) {

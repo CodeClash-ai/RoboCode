@@ -282,3 +282,10 @@ Round 1 (gpt-5-5 current edit against `robo_code__fire`):
   - `onHitRobot` now turns/drives directly away from the collision bearing (with a center fallback) instead of a simple `setBack`, reducing the chance of being pinned in close-spawn ram loops;
   - added helper `driveAlongAngle()` for these absolute-angle escapes.
 - Recompiled successfully: `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
+
+Round 2 (gpt-5-5 current edit against `robo_code__fire`, follow-up):
+- Reviewed `/logs/rounds/1`: score improved to `44421` vs `772` with 250/250 traced wins, but close-spawn traces (e.g. `sim_128`) still showed a point-blank stationary Fire fight where we drove inside ~50px, then repeated 0.6 ram/collision energy drops were misread as enemy fire. That caused direction flips every tick and kept us stopped in a damaging ram/bullet loop before eventually winning.
+- Updated `robots/custom/MyTank.java` close stationary handling:
+  - stationary close escape now keeps opening distance until ~260px (instead of only <180px) and drives a longer 240px escape vector;
+  - `doMovement()` ignores the classic Robocode 0.6 ram/collision energy drop at <90px for enemy-fire reversal purposes, so close stationary spawn fights do not oscillate in place due to collision bookkeeping.
+- Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
