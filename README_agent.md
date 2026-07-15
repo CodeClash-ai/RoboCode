@@ -2701,3 +2701,43 @@ weight the REAL cross-round game result far above the replay hit numbers.
 The remaining lever if grinds return is WAVE SURFING (enemy gun 36% accurate) —
 high-risk, local harness broken, trust /logs only.
 Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 1 / current pass) — opponent = avsthiago__sadbot
+
+## KEY FINDING: opponent CHANGED to a SLOW lightly-curving mover — gun was misconfigured (W=0.25 leftover from FAST velocirobot)
+Round 0 result (BEFORE my change): opus-4-8 44617 vs avsthiago__sadbot 4656.
+results_0.txt: opus 1775 (90%), 10/10 firsts. Full 250-sim sweep: 249 wins,
+1 "loss" (sim_83) which is actually a TURN-LIMIT TIMEOUT — we were DOMINATING
+(our final E 104.7 vs enemy 8.4 at 281 turns) but the round ended before the
+kill. Faster kills convert it to a full win + more score.
+
+## Opponent profile (250 sims; header maps idx->name, enemy=non-'opus')
+- movefrac 0.36, avg |v| 2.0 (SLOW), avg |dh| 0.031 rad/tick (lightly curving),
+  engages ~229px. Loses the energy war decisively (min our final E 41, mean 106.5).
+  Kill tick mean 203. Games avg 354 turns (max 543).
+
+## CHANGE THIS PASS: gun aim W = 0.25 -> 1.0 (head-on)
+The gun was left at W=0.25 (partial lead) from the FAST velocirobot match. That
+is WRONG for this SLOW lightly-curving mover. W-sweep (per-tick interception over
+recorded paths, 2 independent 80-game slices), CLEAN MONOTONIC toward head-on:
+  slice A: W0.0 52.3% W0.25 52.9 W0.5 54.1 W0.75 59.0 W1.0 63.8
+  slice B: W0.0 52.5% W0.25 52.6 W0.5 53.3 W0.75 57.0 W1.0 64.3
+Head-on wins by ~11 points. NOTE: the replay is biased TOWARD the OLD aim (W=0.25,
+since the enemy path was reactive to our actual W=0.25 shots), yet head-on STILL
+wins big -> very strong signal it's correct (bias would favor W=0.25, not against).
+Damage/net-energy replay (120 games, distance-tiered power): W=0.25 dmg 22001
+net +4662 -> W=1.0 dmg 26556 (+21%) net +7251 (+55%). BOTH damage AND net energy
+UP -> no energy-war downside; faster kills convert the sim_83 turn-limit timeout.
+Power tiers (3.0/<300 2.4/<400 1.6/<550 1.0/else), movement (orbit ~150px w/
+graduated inward pull), energy-war taper, low-E clamps ALL UNCHANGED.
+Compiles Java 8 (major version 52), rc=0. Backup of prior source: /tmp/MyTank.bak.java.
+
+## For next teammate — VERIFY
+- Want NEW /logs win rate 100% (the sim_83 turn-limit timeout GONE), killtick DOWN
+  from 203, score share UP from 90%. If it DROPPED, sadbot may have become faster
+  -> re-run /tmp/wsweep.py (W-sweep, 2 slices) and lower W. sadbot is SLOW/lightly-
+  curving -> head-on (W=1.0) is data-optimal. If it becomes a FAST curving dodger
+  (avg|v|>5, movefrac>0.9, avg|dh|>0.06), set W=0.0 (circular) + orbit out ~260px.
+- Tool: /tmp/wsweep.py (W-sweep) and /tmp/dmg.py (damage/net-energy). Rebuild from
+  this note if lost. Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for the
+  current opponent name first. Keep MyTank class name + Java-8 bytecode.
