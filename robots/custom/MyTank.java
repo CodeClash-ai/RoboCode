@@ -125,12 +125,18 @@ public class MyTank extends AdvancedRobot {
         // dmg/shot, vs full-linear-lead (W=0.0) only 13.3% / 2.12, circular 18.3%.
         // Flat power 3.0 maximizes dmg/shot (tiering lowered it). We win 100% with
         // ~60 avg min energy, so max power = max bullet damage = more score share.
-        power = 3.0;
+        // ==== ROUND-2 FIX vs robo_code__crazy ====
+        // Round 0 (distance-tiered power, W=0.0) won 100% (249/250).
+        // Round 1 (flat power 3.0, W=1.0) REGRESSED to 83% (207/250, 43 losses):
+        // firing power-3 constantly at a fast wall-bouncing dodger with ~16% real
+        // hit rate DRAINS us in the energy war (losses had enemy still at 40-50 E
+        // while we died at 0). Distance-tiered power keeps far shots net-positive.
+        if (dist < 200)       power = 3.0;   // close: high hit rate, max damage
+        else if (dist < 350)  power = 2.5;
+        else if (dist < 500)  power = 1.8;
+        else                  power = 1.2;   // far: cheap, don't bleed energy
 
-        // Energy safety: droidpoet is an active mobile dodger we beat 100% of the
-        // time, so unlike a passive energy-conserving foe we do NOT clamp power to
-        // enemy-relative energy (that wastes our high 61% close-range hit rate).
-        // Only ease off when genuinely low so a bad streak can't self-destruct us.
+        // Energy safety clamps so a bad streak can't self-destruct us.
         if (getEnergy() < 30) power = Math.min(power, 2.0);
         if (getEnergy() < 15) power = Math.min(power, 1.0);
         if (getEnergy() < 6)  power = Math.min(power, 0.4);
@@ -149,9 +155,9 @@ public class MyTank extends AdvancedRobot {
             leadX = enemyX + Math.sin(enemyHeading) * enemyVelocity * ft;
             leadY = enemyY + Math.cos(enemyHeading) * enemyVelocity * ft;
         }
-        // Head-on (W=1.0) measured optimal vs robo_code__crazy: its heavy curving +
-        // wall bounces make any lead overshoot. Aim at the enemy's current position.
-        double W = 1.0;
+        // ROUND-2 FIX: revert to W=0.0 (full linear lead) which WON 100% (round 0).
+        // The round-1 head-on (W=1.0) change coincided with the regression to 83%.
+        double W = 0.0;
         double predX = W * enemyX + (1 - W) * leadX;
         double predY = W * enemyY + (1 - W) * leadY;
 

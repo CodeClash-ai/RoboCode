@@ -761,3 +761,45 @@ enemy's recorded future pos, 800x600 bounds. Samples every 2nd tick for speed
 - Keep MyTank class name + Java-8 bytecode (only hard requirement):
     javac --release 8 -cp libs/robocode.jar -d robots robots/custom/MyTank.java
     javap -v robots/custom/MyTank.class | grep "major version"  # -> 52
+
+# Agent Notes (Round 2 / current pass) — opponent = robo_code__crazy — REGRESSION FIX
+
+## CRITICAL: round 1 REGRESSED from 100% to 83% — REVERTED THE GUN
+This opponent = "Crazy" sample bot (fast wall-bouncing wide-arc mover, avg|v|~7,
+moves 95% of ticks, hits walls ~7.7x/game, curves hard).
+
+Real /logs results for THIS match:
+- ROUND 0 (played with droidpoet-r2 gun: W=0.0 full lead + distance-tiered power
+  3.0/2.5/1.8/1.2): WON 100% (249/250), score 38430 vs 1352 (92% share),
+  our avg min energy 60.
+- ROUND 1 (prior teammate changed gun to HEAD-ON W=1.0 + FLAT power 3.0 based on
+  a BIASED replay sim): REGRESSED to 83% (207/250, 43 losses, 11 draws!),
+  score 34327 vs 4196 (enemy tripled its score), our avg min energy dropped 60->34.
+  WHY: firing power-3 constantly at a fast dodger with ~16% real hit rate DRAINS
+  us in the energy war. In losses the enemy still had 40-50 E while we died at 0.
+  The replay sim was biased (enemy path was reactive to our OLD tiered-power shots)
+  and over-stated head-on's hit rate; the flat-power drain was the real effect.
+
+## FIX THIS PASS: reverted gun to the round-0 100%-win config
+- Aim W = 0.0 (full linear lead) — the config that WON 100%.
+- Power = distance-tiered 3.0(<200)/2.5(<350)/1.8(<500)/1.2(else) — keeps far
+  shots net-positive so we don't bleed energy vs this dodger.
+- Verified: code is FUNCTIONALLY IDENTICAL (comments aside) to git 1070275's
+  MyTank.java, which is the exact version that won round 0 at 100%.
+- Movement UNCHANGED (it was fine at 100% in round 0). Do NOT touch it.
+- Compiles Java 8, major version 52. Backup of round-1 (bad) version: /tmp/MyTank.bak.java.
+
+## LESSON: distrust the replay sim's absolute hit-rate numbers
+The replay sim uses the enemy's RECORDED path, which was REACTIVE to our actual
+shots — so it cannot fairly compare a different gun. The only trustworthy signal
+is the REAL /logs win rate. Round 0 (tiered power) = 100%; round 1 (flat power) =
+83%. That is decisive. Flat power 3.0 is a trap vs any energy-efficient fast
+dodger: net energy per power-3 shot at ~16% hit is strongly NEGATIVE.
+
+## For next teammate
+- KEEP this gun config unless a NEW /logs shows win rate <100%. If it drops,
+  first suspect any power increase. Never go flat power 3.0 vs a fast dodger.
+- The one round-0 loss (sim_1, 1340 turns) was a rare long energy-war grind; the
+  tiered gun still won 249/250. Movement/wave-surfing is the only further lever
+  but it's high-risk — validate carefully (local harness is broken; trust /logs).
+- Keep MyTank class name + Java-8 bytecode (only hard requirement).
