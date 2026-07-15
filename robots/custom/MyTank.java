@@ -364,8 +364,8 @@ public class MyTank extends AdvancedRobot {
         // ~4x FEWER enemy hits. This directly attacks the 18/250 losses (enemy
         // out-trades us at close range where its gun is deadly).
         double rangeBias = 0.0;
-        if (enemyDistance > 230) rangeBias = -0.5;       // pull in toward ~200px (florian2 barely fires, ~1-2 hits/1k at all ranges; our head-on hit rate 47pct@250 vs 86pct@150 -> orbit closer for faster kills + more score share)
-        else if (enemyDistance < 170) rangeBias = 0.5;   // push out if too close
+        if (enemyDistance > 180) rangeBias = -0.6;       // pull in toward ~150px (myfirstrobot: our head-on hit rate 48pct@150 vs 32pct@250; both zones ~10/1k enemy hits but closer = faster kills, less exposure, decisive energy-war win)
+        else if (enemyDistance < 130) rangeBias = 0.6;   // push out if too close
 
         double desiredDir = absBearing + (Math.PI / 2 + rangeBias) * moveDirection;
 
@@ -397,7 +397,7 @@ public class MyTank extends AdvancedRobot {
         // Reverse ~60% on detected enemy fire (still randomized, not a strict
         // alternation), plus rare random reversals to break any residual period.
         long now = getTime();
-        if (enemyFired && now - lastReverseTime >= 5 && Math.random() < 0.6) {
+        if (enemyFired && now - lastReverseTime >= 6 && Math.random() < 0.45) {
             moveDirection = -moveDirection;
             lastReverseTime = now;
         } else if (now - lastReverseTime >= 8 && Math.random() < 0.07) {

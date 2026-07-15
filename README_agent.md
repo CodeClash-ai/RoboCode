@@ -2022,3 +2022,45 @@ florian2 is SLOW/near-straight & barely fires -> KEEP W=1.0 head-on. If it becom
 a FAST curving dodger (avg|v| up, moving frac up, avg|dh|>0), set W=0.0 (circular)
 and orbit back out ~260px (that beat team488__meow 100%); re-run the W-sweep first.
 Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 1 / current pass) — opponent = robo_code__myfirstrobot
+
+## STATUS: 99% win (248/250), 87% share — TIGHTENED ORBIT to fix 2 grind losses
+Round 0 result: opus-4-8 45538 vs robo_code__myfirstrobot 4694. results_0.txt:
+opus 1726 (87%), 9/10 firsts (enemy got 1 first!). trace.md: win rate 99%
+(248/250), our accuracy only 29%, avg min E 63, games LONG (avg 605, max 2015).
+2 LOSSES: sim_0 (423t) and sim_78 (507t) — energy-war grinds at ~380-407px avg
+distance where we were behind on energy 81-98% of ticks and bled to 0.
+
+## Opponent = SLOW near-straight-line mover (avg|v| 2.47, avg|dh| 0.0087, 51%
+stationary). Fires ~12 low-power shots/game, avg only 4.2 dmg/hit (weak gun).
+Head-on (W=1.0) is data-optimal — kept unchanged.
+
+## ROOT CAUSE of the 2 losses: fighting at ~400px (net-negative energy zone)
+Measured OUR hit rate + enemy hit density by distance (150 games):
+  100-200px: hit 48%, enemy 10.6/1k, fire_net +60/1k, enemy_dmg 45/1k -> NET +15/1k
+  200-300px: hit 32%, enemy  9.7/1k, fire_net  -6/1k, enemy_dmg 41/1k -> NET -47/1k
+  300-400px: hit 18%, enemy  3.1/1k, fire_net -72/1k -> NET -85/1k
+100-200px is the ONLY net-energy-POSITIVE zone (48% hit >> 33% break-even). The
+2 losses got stuck at 400px (net -85/1k) and bled out. We orbited ~200px (mostly
+200-300px = -47/1k) which barely wins the war -> variance losses when pushed out.
+
+## CHANGE THIS PASS (movement only): orbit ~200px -> ~150px + calmer reversals
+1. rangeBias: pull-in threshold 230->180 (stronger -0.6 rad), push-out 170->130.
+   Target ~150px = the 48%-hit net-positive zone. Enemy gun is weak (4.2 dmg/hit)
+   so closing is low-risk and DOUBLES our hit rate vs 300-400px.
+2. Reversal on enemy-fire: 60%->45%, rate-limit 5->6 ticks. Fewer disruptive
+   reversals so we actually CLOSE the distance (was bouncing out to 400px in the
+   grind losses). Enemy fires rarely so heavy dodging wasn't buying much.
+Gun (W=1.0 head-on), power tiers (3.0/<300 2.4/<400 1.6/<550 1.0/else), fire
+gates, energy-war taper ALL UNCHANGED. Backup: /tmp/MyTank.bak.java (also git).
+Compiles Java 8 (major version 52), rc=0.
+
+## For next teammate — VERIFY
+- Want the 2 grind losses GONE (win rate 100%), our avg min-E UP from 63, games
+  SHORTER (avg <605), share UP from 87%. If a regression (new losses / share
+  drop), the close orbit may expose us more -> push orbit back to ~180px
+  (thresholds 210/150) or revert to /tmp/MyTank.bak.java (git prior, 99%).
+- myfirstrobot is SLOW/near-straight & weak-gunned -> KEEP W=1.0 head-on. If it
+  becomes a FAST curving dodger, set W=0.0 (circular) + orbit out ~260px.
+- Keep MyTank class name + Java-8 bytecode (only hard requirement).
