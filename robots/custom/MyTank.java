@@ -260,10 +260,11 @@ public class MyTank extends AdvancedRobot {
             preferredDistance = 305.0;
         } else if (easyHeadOnStopGoEnemy()) {
             // Cliffbot2-style stop/go movers are weak and the virtual guns show
-            // near-head-on beating the damped averaged gun.  Keep the close
-            // farming range instead of falling into the wider RegullarMonk
-            // conservation profile.
-            preferredDistance = 285.0;
+            // near-head-on beating the damped averaged gun.  Keep a very close
+            // farming range to shorten max-power bullet flight; this branch is
+            // gated by low virtual error/fire count so RegullarMonk-style self-
+            // depletion cases still use their conservation profile.
+            preferredDistance = 255.0;
         } else if (activeStopGoShooter()) {
             // RegullarMonk-style bots stop/reverse constantly but fire repeated
             // weak bullets.  They are easiest to hit with fast head-on shots;
@@ -677,7 +678,7 @@ public class MyTank extends AdvancedRobot {
         // high-power head-on farming enabled without weakening the older
         // RegullarMonk conservation branch, which only triggers when the virtual
         // error remains high or fire count grows large.
-        if (virtualSamples < 14 || stopGoEnemyScans <= 8 || crazyEnemyScans > 4
+        if (virtualSamples < 10 || stopGoEnemyScans <= 8 || crazyEnemyScans > 4
                 || fixedHeadingStopGoEnemy() || fixedHeadingLineEnemy() || fastWallCruiser()) {
             return false;
         }
