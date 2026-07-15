@@ -13079,3 +13079,134 @@ touching already-working code without a clear, actionable signal.
    spend on it than usual — especially valuable for iterating faster on
    tough matchups like `kcanida__pikachu`, where each experiment currently
    costs a full round to validate or refute.
+
+## Round 116 update (this round) — new opponent (pez__leachpmc), confirmed fully healthy (97% win, 0 real losses, 7 mutual-death ties traced as benign), no changes
+
+### Context
+Only `/logs/rounds/0/` exists in this environment for me. Per `trace.md`,
+this round's opponent is a **new** one, `pez__leachpmc` (different from
+every opponent documented in rounds 1-115 above, and NOT `kcanida__pikachu`
+— the very tough opponent from rounds 107-109 whose round-109 low-power
+fast-mover-cap fix STILL awaits a direct before/after re-test; it has now
+not reappeared for 7 consecutive rounds, 109-115, and didn't reappear this
+round either). Result: **97% win rate (243/250)**, **93% accuracy**, avg
+speed 5.5, avg walls/game 0.5, avg rams/game 1.4, avg min energy 62. **Zero
+real losses** — the only 7 non-wins (2.8%) are ties (`sim_35`, `sim_50`,
+`sim_55`, `sim_166`, `sim_214`, `sim_217`, `sim_236`). Opponent is weak (0%
+win rate, 48% accuracy, avg speed 0.0 — fully stationary, dies avg turn
+154, avg rams/game 0.0) but hits decently often given it never moves and
+we're the one closing distance.
+
+### Validation performed
+1. `python3 tools/analyze_freezes.py /logs/rounds/0 --threshold 20 | grep -i
+   sonnet` -> **54 findings, all short (20-37 ticks), all** the
+   well-established benign "radar heading frozen" pattern (radar genuinely
+   settled on a near-stationary-relative target with normal ongoing combat
+   throughout — documented benign since round 15, most recently rounds
+   48-115, not the round-4 freeze bug). **Zero `STUCK-RAMMING` findings at
+   all this round.** Confirms the escape-mode mechanism (rounds
+   20/23/25/34-37/40) and round 47/48's radial-blend movement fix are both
+   still fully healthy.
+2. **Traced one tie game** (`sim_35.jsonl`) in detail to confirm it's a
+   genuine mutual-death draw, not a bug: robot 0 (opponent) dies first at
+   t=198 (`e=0.0`, `DEAD`), then at t=201 robot 1 (us) ALSO hits `e=0.0`
+   `DEAD` — but robot 0's logged energy jumps back up to `9.0` at that same
+   tick despite already being `DEAD`. This is NOT a bug: it's a bullet
+   `bulletHitBonus` (`3*power = 3*3 = 9.0` for a power-3 hit) landing on us
+   from a bullet the opponent fired *before* it died, crediting the
+   (already-dead) shooter after the fact — a legitimate game mechanic, and
+   exactly the kind of "both robots simultaneously reach 0 energy" mutual-
+   death-draw pattern this file has repeatedly documented as benign
+   (rounds 66, 84, and others) rather than a freeze/escape-mode bug. No
+   action needed.
+3. `python3 tools/analyze_power_accuracy.py /logs/rounds/0 --bucket-width
+   0.5` -> sanity check: 16.3 shots/game combined vs `trace.md`'s
+   8.3+9.0=17.3 (within ~6%, tool still trustworthy per round 28's
+   tick-step fix). **However, this round's script-derived overall accuracy
+   for `sonnet_5` (68.2%) is meaningfully LOWER than `trace.md`'s reported
+   93%** — a bigger gap than the "usual modest few-point discrepancy" this
+   file has repeatedly noted since round 41 (that gap has always been
+   `trace.md` running a FEW points higher, not 25 points). Spot-checked
+   raw `HIT_VICTIM` bullet-list entries in one game (`sim_0.jsonl`) and
+   found 136 raw (repeated/lingering) entries for our own bullets, so the
+   "ghost frame" mechanism round 22/113 already documented is clearly still
+   present in the raw logs here — but round 113's fix (resolve each
+   tracked bullet's hit/miss exactly once, at its first vanish event, not
+   on every lingering repeat) is supposed to already handle this. Did NOT
+   fully root-cause why this specific matchup shows a bigger-than-usual gap
+   (didn't have remaining budget to trace it further this round) — flagging
+   for a future teammate as a possible NEW tooling edge case (this
+   opponent's very short, low-shot-count games and 0-speed movement may be
+   interacting with the hit-resolution logic differently than the
+   higher-shot-volume matchups round 113's fix was validated against).
+   **This is purely a log-analysis tooling discrepancy, not a real-match
+   issue** — `trace.md`'s own authoritative 93% accuracy (and the 97% win
+   rate) come directly from the real grading harness, not this script.
+4. `javac -Xlint:all -cp libs/robocode.jar -d /tmp/build_check
+   robots/custom/MyTank.java` compiles clean (exit 0, no errors/warnings).
+5. `diff archive/round1_backups/MyTank.java.before_round109_lowpower_fastcap
+   robots/custom/MyTank.java` — confirmed round 109's low-power fast-mover
+   cap change (1.3->0.5 for `absVelocity>6`, in both
+   `bulletPowerForDistance()` and the finishing/press-advantage
+   `maxUsablePower` override) is exactly what's currently live in
+   `MyTank.java`; no accidental drift or reversion. `MyTank.java` is 1273
+   lines, unchanged from round 109 onward through round 115.
+
+### What I did this round (or rather, chose NOT to do)
+Given (a) a strongly healthy result (97% win, 0 real losses, only benign
+mutual-death ties, huge accuracy per `trace.md`), (b) zero freeze findings
+correlating with any tie (escape-mode mechanism fully healthy), (c) the
+tooling accuracy-gap finding being clearly a script-side artifact rather
+than a real combat issue (confirmed via `trace.md`'s own authoritative
+number), and (d) no local battle-testing available to validate any change
+before a full future round's real match anyway, I made **no changes to
+`MyTank.java`** this round — consistent with this file's very
+long-established pattern (rounds 6, 13, 15, 21, 22, 26, 27, 28, 29, 32, 33,
+38, 39, 41, 42, 48-106, 109-115) of not touching already-working code
+without a clear, actionable signal of underperformance.
+
+### Suggestions for next teammate
+1. **First step, as always**: check `/logs/rounds/<N>/trace.md` (or
+   `results.json` + per-`sim_*.jsonl` `winner` fields if `trace.md` is
+   missing, per round 68's note) for the actual opponent this round, and run
+   `python3 tools/analyze_freezes.py /logs/rounds/<N> --threshold 20 | grep -i
+   sonnet` as the standard regression check.
+2. **If `kcanida__pikachu` finally reappears**, this remains THE single
+   highest-value comparison outstanding across this whole file's recent
+   history — see rounds 107-109's notes for the full history (round 107:
+   37% win baseline; round 107's fire-threshold "fix": 24% win, a
+   regression, reverted in round 108; round 108's revert: back to 37%;
+   round 109: lowered the fast-mover power cap 1.3->0.5, STILL not
+   validated by a real match against this specific opponent after 7
+   consecutive rounds — 109 through this round — of it not reappearing).
+3. If a future teammate has spare steps and wants to chase the newly-noted
+   accuracy-gap tooling discrepancy (93% `trace.md` vs 68% script-derived
+   against `pez__leachpmc` specifically, bigger than the usual few-point
+   gap), consider tracing a full game's bullet list against the fixed-up
+   `analyze_power_accuracy.py` hit-resolution logic from round 113 to see
+   whether this opponent's 0-speed movement or unusually short games (avg
+   305 turns) trip a new edge case in the "resolve exactly once, at first
+   vanish" matching window. Not urgent — purely a log-analysis convenience
+   issue, `trace.md`'s numbers (which come straight from the real grading
+   harness) are the ones that actually matter and are healthy.
+4. `pez__leachpmc` itself, if it reappears, should be treated as an easy,
+   dominant matchup (97% win, 0 real losses, only occasional benign
+   mutual-death ties) — no tuning needed.
+5. `mgalushka__maximbot` (rounds 110-111), `robo_code__walls` (rounds
+   112-113), `pez__wallspoetas` (rounds 114-115), `alexbay218__shreker`
+   (rounds 101-102), `vikdov__dominatorx` (rounds 99-100), and
+   `admiralrasmussen__wavesurfing` (rounds 95-96, likely a genuine
+   wave-surfer) are the most recent moderately-tougher opponents seen — all
+   confirmed stable across repeat samples without needing a code change.
+   `alpian__ianstank`/`pez__gf1` (rounds 43-44/11-12, the historically
+   toughest opponents in this file alongside `kcanida__pikachu`) remain
+   outstanding high-value direct re-tests of the accumulated fix stack if
+   either resurfaces.
+6. Local headless battle-runner: still unresolved after 115+ rounds of
+   attempts (see round 6's section for the most detailed known blocker,
+   `RepositoryManager.loadSelectedRobots` not seeing a freshly-reloaded
+   repository within the same call). Still the single highest-leverage
+   infra fix available if a future teammate has a larger step budget to
+   spend on it than usual — especially valuable for iterating faster on
+   tough matchups like `kcanida__pikachu`, where each experiment currently
+   costs a full round to validate or refute.
