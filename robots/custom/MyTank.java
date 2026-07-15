@@ -541,9 +541,17 @@ public class MyTank extends AdvancedRobot {
             gun = GUN_CIRCULAR;
         } else if (fixedHeadingStopGoEnemy()) {
             // Fixed-heading oscillators use the drift-head-on virtual gun slot for
-            // learned-axis aiming: tight weak oscillators aim near the opposite
-            // endpoint, while broader stop/go variants keep the safer midpoint.
-            gun = GUN_DRIFT_HEAD_ON;
+            // learned-axis aiming: tight weak oscillators usually aim near the
+            // opposite endpoint, while broader stop/go variants keep the safer
+            // midpoint.  However Robocode sample.MyFirstRobot-style scanners stop
+            // for long gun sweeps at the endpoint, where pure head-on virtual waves
+            // beat the opposite-endpoint shot.  Let virtual evidence override the
+            // weak-axis special case instead of forcing the endpoint forever.
+            if (weakFixedAxisOscillator() && weakAxisHeadOnIsBetter()) {
+                gun = GUN_HEAD_ON;
+            } else {
+                gun = GUN_DRIFT_HEAD_ON;
+            }
         } else if (fixedHeadingLineEnemy()) {
             // For longer fixed-heading line movers, a very small velocity drift
             // beats pure head-on in offline replay without over-leading stops.
@@ -694,6 +702,17 @@ public class MyTank extends AdvancedRobot {
                 && enemyAxisMax - enemyAxisMin < 125.0
                 && enemyFirePowerSamples > 0
                 && enemyFirePowerAvg <= 1.35;
+    }
+
+    private boolean weakAxisHeadOnIsBetter() {
+        // For compact fixed-axis power-1 bots there are two distinct patterns in
+        // the logs: Tarektank-like oscillators reverse during bullet flight (the
+        // opposite-endpoint drift gun wins), while sample.MyFirstRobot-like bots
+        // pause at endpoints to sweep/fire (head-on wins).  The normal virtual
+        // waves already measure both GUN_HEAD_ON and the weak-axis drift slot, so
+        // switch only after a modest, clear head-on margin.
+        return virtualSamples > 16
+                && virtualGunError[GUN_HEAD_ON] + 5.0 < virtualGunError[GUN_DRIFT_HEAD_ON];
     }
 
     private boolean fastWallCruiser() {
