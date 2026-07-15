@@ -53,6 +53,7 @@ public class MyTank extends AdvancedRobot {
     private long turnCount = 0;
     private double damageTaken = 0;      // total damage the enemy has dealt us (bullet+ram)
     private int myFireCount = 0;         // total shots we have fired
+    private boolean enemyPassive = false; // opponent deals ~0 damage (wave surfer)
 
     public void run() {
         setColors(Color.BLUE, Color.CYAN, Color.WHITE);
@@ -372,40 +373,41 @@ public class MyTank extends AdvancedRobot {
         // The wave surfer does 0 damage to us: if after a warmup we've taken almost
         // nothing, it's passive. Our ONLY threat is self-inflicted firing bleed.
         long t = getTime();
-        boolean enemyPassive = (t > 40) && (damageTaken < 5.0);
+        enemyPassive = (t > 40) && (damageTaken < 5.0);
         if (enemyPassive) {
-            // WINNING PLAN vs a non-firing wave surfer: SURVIVE to the turn limit.
-            // If both bots are alive at the end, the enemy gets NO last-survivor
-            // bonus (that is the only thing it beat us with) and BULLET DAMAGE
-            // decides. So bank a tiny bit of bullet damage with a few cheap,
-            // close, dead-on shots EARLY, then STOP FIRING ENTIRELY to guarantee
-            // we never bleed out. Total fire budget is strictly capped.
-            // The match is decided by the energy-differential showdown: whoever
-            // has MORE energy when both idle survives the inactivity drain. Since
-            // our real hit rate vs this perfect dodger is far below the 25% needed
-            // for firing to improve the differential, the guaranteed-safe rule is:
-            // only ever fire when we are STRICTLY AHEAD on energy by a safe margin,
-            // with cheap shots. Every cheap shot that LANDS lowers the enemy (good);
-            // every miss costs us <=0.5 but we only spend it while comfortably ahead,
-            // so we can NEVER be dragged below the enemy. This keeps us permanently
-            // above the enemy's energy -> we outlast it in the idle drain -> we win.
-            power = Math.min(power, (dist < 130) ? 0.5 : 0.3);
-            alignThresh = 0.04;
-            // Only take high-confidence close shots.
-            if (dist > 240) allowFire = false;
-            // Fire cheap close shots in EITHER of two safe situations:
-            //  (a) BANKING phase: while we still hold a big absolute reserve
-            //      (>75) we can afford to pump cheap shots to knock the enemy
-            //      down (each landed hit lowers it ~2; misses cost <=0.5). This
-            //      breaks the initial 100-vs-100 parity so we pull ahead.
-            //  (b) MAINTAIN phase: once we're strictly ahead by a safe margin,
-            //      keep firing to widen the lead.
-            // We stop firing when BOTH fail -> below 75 reserve AND not clearly
-            // ahead -> so we can never be dragged below the enemy. Result: we end
-            // the idle showdown with more energy than the enemy -> we outlast it.
-            boolean banking = getEnergy() > 75;
-            boolean ahead = getEnergy() > enemyEnergy + 15;
-            if (!banking && !ahead) allowFire = false;
+            // ROUND-3 vs admiralrasmussen__wavesurfing (non-firing wave surfer,
+            // deals ZERO damage). The match is decided by the Robocode INACTIVITY
+            // drain: after 450 ticks with no damage dealt, BOTH bots lose 0.1
+            // energy/tick and race to 0. Whoever has MORE energy when that race
+            // starts survives longer -> wins the last-survivor bonus. If we NEVER
+            // fire we tie at 100 vs 100 (a draw at best). To WIN we must end the
+            // active phase with MORE energy than the enemy -> we must LAND HITS
+            // (each hit: enemy loses ~6p-2, we gain net +2p -> relative swing 8p-2;
+            // each miss costs us p). Break-even hit rate = p/(8p-2): power 3 -> 14%,
+            // power 1 -> 17%, power 0.5 -> 25%.
+            // MEASURED real hit rate vs THIS perfect dodger by distance (250 games):
+            //   <100px ~100% | 100-150px 54% | 150-200px 20% | 200-250px 14% |
+            //   250px+ <7%. So firing is NET-POSITIVE only INSIDE ~150px, hugely
+            //   so inside 100px. Under the old code we fired mostly at 200-250px
+            //   (14% hit at low power = net-NEGATIVE) and bled ~1 energy behind ->
+            //   lost 180/250 by exactly that margin in the idle drain.
+            // FIX: close to POINT-BLANK and fire ONLY inside 150px (ideally <120px)
+            //   where hit rate crushes break-even. Ramming is FREE (enemy does 0
+            //   damage) and disrupts its surfing, so closing is pure upside.
+            //   Use power 2 up close (fast kill / big energy swing per hit) but only
+            //   when we still hold a reserve, tapering so a cold streak can't sink us.
+            alignThresh = 0.055;
+            if (dist > 150) {
+                allowFire = false;               // net-negative zone: hold fire, just close
+            } else if (dist < 100) {
+                power = 2.0;                     // ~100% hit here: max energy swing
+            } else {
+                power = 1.0;                     // 100-150px ~54% hit: still net-positive
+            }
+            // Safety floor: never fire ourselves below the enemy when not clearly
+            // winning. If we're behind and low, stop firing so the idle drain
+            // (which is symmetric) can't be lost by a self-inflicted deficit.
+            if (getEnergy() < 20 && getEnergy() <= enemyEnergy + 2) allowFire = false;
         }
 
         if (allowFire && getGunHeat() == 0 && Math.abs(gunTurn) < alignThresh
@@ -498,6 +500,35 @@ public class MyTank extends AdvancedRobot {
         // so closing to ~245px loses ~nothing on defense but RAISES our offense.
         // Stronger inward pull so we actually reach the 200-300px best-HR zone.
         double rangeBias = 0.0;
+        // ROUND-3 vs admiralrasmussen__wavesurfing (non-firing wave surfer):
+        // it deals ZERO damage, so getting close is pure upside (no risk) and our
+        // hit rate goes from ~14% at 240px to 54% at 130px to ~100% inside 100px.
+        // Drive HARD toward point-blank (~90px) to reach the net-positive fire
+        // zone. Ramming is free and disrupts its surfing. Nearly head-on inward
+        // pull when far so we actually close vs its evasion; hold ~90px when there.
+        if (enemyPassive) {
+            if (enemyDistance > 160)      rangeBias = -1.3;  // charge inward toward it
+            else if (enemyDistance > 110) rangeBias = -0.6;  // still closing to point-blank
+            else if (enemyDistance < 70)  rangeBias = 0.4;   // don't overshoot into it too hard
+            else                          rangeBias = -0.1;  // hold ~90px, slight inward
+            double desiredDirP = absBearing + (Math.PI / 2 + rangeBias) * moveDirection;
+            desiredDirP = wallSmoothing(getX(), getY(), desiredDirP, moveDirection);
+            double turnP = Utils.normalRelativeAngle(desiredDirP - getHeadingRadians());
+            double moveAmountP = 150;
+            if (Math.abs(turnP) > Math.PI / 2) {
+                turnP = Utils.normalRelativeAngle(turnP + Math.PI);
+                moveAmountP = -moveAmountP;
+            }
+            setTurnRightRadians(turnP);
+            setAhead(moveAmountP);
+            // minimal reversal churn so we keep closing; no anti-GF dodging needed
+            // (enemy fires 0 bullets). Occasional flip to avoid getting stuck.
+            long nowP = getTime();
+            if (nowP - lastReverseTime >= 25 && Math.random() < 0.05) {
+                moveDirection = -moveDirection; lastReverseTime = nowP;
+            }
+            return;
+        }
         if (enemyDistance > 450)      rangeBias = -1.1;  // far: strong inward pull to close
         else if (enemyDistance > 330) rangeBias = -0.7;  // mid-far: firm inward
         else if (enemyDistance > 260) rangeBias = -0.35; // approaching target ~245px
@@ -590,12 +621,16 @@ public class MyTank extends AdvancedRobot {
     }
 
     public void onHitRobot(HitRobotEvent e) {
-        // Ram collisions cost us 0.6 energy each.
-        damageTaken += 0.6;
-        // Ram some damage but mostly back off
-        moveDirection = -moveDirection;
-        if (e.isMyFault()) {
-            setBack(50);
+        // NOTE: ram collision damage (0.6 each) is SYMMETRIC and NOT the enemy's
+        // gun -- do NOT add it to damageTaken (that would falsely disable
+        // enemyPassive mode after repeated point-blank rams vs the wave surfer).
+        // In passive mode we WANT to stay point-blank (ramming is free + disrupts
+        // its surfing), so do NOT back off there.
+        if (!enemyPassive) {
+            moveDirection = -moveDirection;
+            if (e.isMyFault()) {
+                setBack(50);
+            }
         }
     }
 

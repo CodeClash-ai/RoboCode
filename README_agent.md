@@ -3732,3 +3732,63 @@ to death.
   final-E in the new logs to decide.
 - Check `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING first.
 - Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 3 / current pass) — opponent = admiralrasmussen__wavesurfing — POINT-BLANK REWRITE
+
+## SITUATION: still LOSING the match (R0 2125, R1 2501, R2 4508 vs enemy ~11-15k)
+R2 (conservation rewrite) improved us 2501->4508 and got 1/10 firsts, but we still
+lose. Root cause fully diagnosed this pass.
+
+## KEY MECHANIC: the Robocode INACTIVITY DRAIN decides this match
+Enemy = non-firing wave surfer: fires ZERO bullets, never rams -> deals us 0 damage.
+After 450 ticks with no damage dealt by anyone, BOTH bots lose 0.1 energy/tick and
+race to 0. Whoever has MORE energy when that race starts survives longer = wins the
+last-survivor bonus. Verified in sim_0: at t=200 we were 99.0 (we fired ONE -1.0
+shot) vs enemy 100.0; both then drained in lockstep and we hit 0 exactly ~10 ticks
+(=1 energy / 0.1) before the enemy. We lost 180/250 games by that tiny self-inflicted
+deficit. We WON 65/250 (games where we happened to land enough early hits to get ahead).
+
+## MEASURED our real hit rate vs this perfect dodger BY DISTANCE (250 R2 games,
+## matching fires to enemy-damage events with bullet travel time):
+##   <100px ~100% | 100-150px 54% | 150-200px 20% | 200-250px 14% | 250px+ <7%.
+## Break-even hit rate for winning the energy differential = p/(8p-2): p3=14%, p1=17%,
+## p0.5=25%. So firing is NET-POSITIVE only INSIDE ~150px (hugely so <100px). The old
+## code fired mostly at 200-250px (14% = net-NEGATIVE) -> bled the 1-energy deficit.
+
+## CHANGE THIS PASS (aim + movement, ONLY in enemyPassive mode)
+enemyPassive = (t>40 && damageTaken<5.0)  [now a class field, set in aimAndFire,
+read in doMovement]. When passive:
+1. MOVEMENT: charge to POINT-BLANK (~90px). rangeBias -1.3 when dist>160 (nearly
+   head-on inward), -0.6 to 110px, hold ~90px. Ramming is FREE (enemy does 0 damage)
+   and disrupts its surfing -> closing is pure upside. Minimal reversal churn (no
+   anti-GF dodging needed vs a 0-bullet enemy). Early `return` so the normal orbit
+   logic doesn't run.
+2. FIRE GATE: fire ONLY inside 150px. dist>150 -> allowFire=false (HOLD FIRE in the
+   net-negative zone so we can NEVER self-inflict the losing deficit). <100px ->
+   power 2.0 (~100% hit = huge energy swing). 100-150px -> power 1.0 (54% hit,
+   net-positive). Extra safety: don't fire below 20E unless clearly ahead.
+Normal (firing-enemy) gun/movement UNCHANGED -> SAFE vs every other opponent
+(enemyPassive stays false the moment it deals us >=5 damage).
+Compiles Java 8 (major version 52). Backup of prior source: /tmp/MyTank.bak.java.
+
+## WHY THIS SHOULD FLIP THE MATCH
+Old worst case: fire at range, miss, die 1 energy behind (the 180 losses).
+New worst case: can't close -> HOLD FIRE -> tie at ~100 vs ~100 (a draw, still
+better than a loss). New best/expected case: reach <150px where 54-100% of shots
+land -> we get well ahead on energy -> we win the idle-drain last-survivor race.
+The fire gate makes it IMPOSSIBLE to lose by self-inflicted bleed.
+
+## For next teammate — VERIFY (this is the matchup we're flipping)
+- Want NEW /logs: our finalE >= enemy's, we STOP dying first, we GAIN firsts and
+  score. If we still lose: (a) we may not be closing enough -> the enemy surfs away
+  faster than we close. Try stronger inward pull (rangeBias -1.5 when dist>160) or
+  DISABLE wall-smoothing during the charge (it may deflect us). (b) If closing but
+  still can't hit even <120px, the dodger is too good at point-blank -> fall back to
+  PURE no-fire (set allowFire=false always in passive) to guarantee a tie/draw
+  instead of a loss. (c) Check enemy's actual finalE in new logs to decide.
+- If opponent CHANGES: enemyPassive auto-disables once it deals >=5 damage, and the
+  normal gun (W per current tuning) + orbit take over. Always re-check
+  `head -1 /logs/rounds/0/sim_0.jsonl` for opponent name + INDEX MAPPING first.
+- Analysis: hit-rate-by-distance one-liner (match OUR energy drops 0.09..3.05 in
+  t<450 to enemy energy drops >0.9 within 2-30 ticks, bucket by dist at fire time).
+- Keep MyTank class name + Java-8 bytecode (only hard requirement).
