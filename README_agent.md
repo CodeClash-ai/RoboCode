@@ -252,3 +252,11 @@ Round 1 (gpt-5-5 current edit against `robo_code__regullarmonk`):
 - Offline shot replay over actual fire ticks favored head-on/low-power targeting for this opponent (head-on mean error ~65px at old powers; using faster ~1.2-1.6 bullets in replay brought head-on error down to ~52-55px, while linear/circular/averaged over-led). `tools/offline_gun_eval.py` also ranked head-on/wall-damped above full linear/circular.
 - Added `activeStopGoShooter()` in `robots/custom/MyTank.java`: after repeated enemy fires plus stop/go low-turn motion, use a wider ~455px orbit, force `GUN_HEAD_ON`, and cap bullet power to ~1.45/1.15/0.55 depending on our energy instead of continuing the generic slow/stop-go max-power farming. This is intended to reduce rare self-depletion losses against RegullarMonk while preserving high-power modes for harmless stop/go bots and DroidPoet-style wall runners.
 - Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
+
+Round 2 (gpt-5-5 current edit against `robo_code__regullarmonk`, follow-up):
+- Reviewed `/logs/rounds/1`: previous RegullarMonk-specific conservation improved survival slightly (195/250 vs 185/250) but reduced total score (`35728` vs `36230`) and made rounds much longer (~923 ticks avg vs ~771). Loss traces had us orbiting too wide (~448px avg in lost games), firing ~77 low-power bullets, then self-depleting while the opponent still had 20-40 energy.
+- Kept the active stop/go shooter signature and head-on gun (replay still says head-on is best), but retuned the branch in `robots/custom/MyTank.java`:
+  - active stop/go shooter orbit is now ~340px rather than 455px, matching the prior/high-scoring exchange range and shortening bullet flight;
+  - healthy-energy bullet cap is slightly more assertive at close/normal range (1.65 under 430px, 1.35 farther), with lower caps only when our energy drops;
+  - added a tighter firing tolerance for active stop/go shooter so even low-power conservation shots are not sprayed when the head-on gun is off.
+- This is an informed retune without local battle execution; recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.

@@ -214,9 +214,9 @@ public class MyTank extends AdvancedRobot {
         } else if (activeStopGoShooter()) {
             // RegullarMonk-style bots stop/reverse constantly but fire repeated
             // weak bullets.  They are easiest to hit with fast head-on shots;
-            // keep a wider orbit than the harmless stop/go farming mode so the
-            // power-1 gun has longer flight time and fewer point-blank hits.
-            preferredDistance = 455.0;
+            // stay near its usual 320-350px exchange band instead of drifting
+            // wide into long, low-damage self-depletion rounds.
+            preferredDistance = 340.0;
         } else if (dangerousWallEnemy()) {
             preferredDistance = 335.0;
         } else if (straightEnemyScans > 16 && harmlessLowFireEnemy() && wallEnemyScans <= 4) {
@@ -342,11 +342,11 @@ public class MyTank extends AdvancedRobot {
             // self-depleting with repeated power-3 misses.  Head-on replay is
             // best and lower-power bullets are both faster and much safer.
             if (getEnergy() > 42) {
-                power = Math.min(power, distance < 260 ? 1.85 : 1.45);
+                power = Math.min(power, distance < 430 ? 1.65 : 1.35);
             } else if (getEnergy() > 18) {
-                power = Math.min(power, 1.15);
+                power = Math.min(power, 1.05);
             } else {
-                power = Math.min(power, 0.55);
+                power = Math.min(power, getEnergy() < 9 ? 0.15 : 0.45);
             }
         }
         if (dangerousWallEnemy() && crazyEnemyScans <= 4 && !activeStopGoShooter()) {
@@ -449,6 +449,12 @@ public class MyTank extends AdvancedRobot {
             // Do not spray wide-angle shots at surfers/random movers.  Waiting
             // a tick for a cleaner gun angle saves energy and raises hit rate.
             tolerance = Math.min(tolerance, Math.atan2(17.0, distance));
+        }
+        if (activeStopGoShooter()) {
+            // RegullarMonk rounds are decided by long low-power exchanges; only
+            // spend even the small conservation bullets when the head-on gun is
+            // closely aligned.
+            tolerance = Math.min(tolerance, Math.atan2(15.0, distance));
         }
         if (getGunHeat() == 0
                 && Math.abs(getGunTurnRemainingRadians()) < tolerance && getEnergy() > 0.25) {
