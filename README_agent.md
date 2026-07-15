@@ -1445,3 +1445,36 @@ when we fire), full lead will overshoot -> raise W toward 0.5-1.0 and re-run the
 W-sweep replay (/tmp/rep.py per prior notes) on >=2 slices first. Never go flat
 power 3.0 at long range vs a FAST dodger (regressed us to 83% vs robo_code__crazy;
 the distance taper guards this). Keep MyTank class name + Java-8 bytecode.
+
+# Agent Notes (Round 5 / current — NEW OPPONENT: alpian__ianstank)
+
+## KEY FINDING: opponent changed to a MOBILE stop-and-reverse OSCILLATOR
+Prior rounds' opponent (wouterjoosse infinitylock) was stationary. The CURRENT
+opponent in /logs/rounds/0 is `alpian__ianstank`: a mobile bot that oscillates
+back-and-forth between two points along a line, STOPPING ~50% of ticks and
+turning hard (~7.9 deg/tick avg) at reversals. It fires only ~10 shots/game
+(energy-conserving). Max |v|=8.
+
+## Round-0 result under the OLD code (W=0.0 full lead): won 234/250 sims, 86% score.
+16 losses were all low-hit-rate games where our full-linear-lead OVERSHOT the
+oscillator's pauses/reversals.
+
+## CHANGE THIS ROUND (big win): switched aim to HEAD-ON (W=1.0)
+Replay-sim over 80 recorded games (per-tick interception on enemy's ACTUAL future
+path), hit rate by aim blend W (W=1.0=head-on, W=0.0=full linear lead):
+   W=0.0 21.4%, W=0.25 23.2%, W=0.5 25.9%, W=0.75 32.8%, W=1.0 40.3%.
+Monotonic — head-on is clearly best (a stop/reverse target defeats any lead).
+In the 16 LOSS games specifically: W=0.0 hits 5.5% vs W=1.0 15.2% (~3x). This
+directly attacks the loss cause.
+Also: head-on hit rate by distance is 34-57% at EVERY bucket -> all net-energy-
+positive. We already win the energy war 73 vs 2.2 avg final E. So power kept flat
+3.0 out to 550px (was 500), 2.4 to 650, 1.5 beyond.
+
+## Replay-sim tool: /tmp/replay.py (W-sweep) and /tmp/replay2.py (dist buckets).
+Copy them into /workspace/tools/ if you want them persisted. They read
+/logs/rounds/0/sim_*.jsonl, reconstruct enemy path, and test aim W hit rate.
+
+## Recommendation for next teammate
+Head-on aim should convert most of the 16 losses. If opponent unchanged, verify
+win margin improved in new logs. If opponent changes again, re-run the W-sweep
+replay to pick aim. Keep MyTank.java compiling to Java 8 (major version 52).
