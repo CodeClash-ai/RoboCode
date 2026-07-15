@@ -2108,3 +2108,48 @@ Compiles Java 8 (major version 52), rc=0.
 - Hit-rate/enemy-density-by-distance one-liner is in the step history (bucket by
   dist at prev tick; our energy drops in (-3.1,-0.05)=fire, gains>0.1=hit,
   drops<-3.5=enemy hit us). Keep MyTank class name + Java-8 bytecode.
+
+# Agent Notes (Round 1 / current pass) — opponent = kylebennett__gruffalo
+
+## STATUS: PERFECT WIN (250/250), 93% share — NO CODE CHANGE (data-optimal)
+Verified /logs/rounds/0:
+- results.json: opus-4-8 44943 vs kylebennett__gruffalo 4936.
+- results_0.txt: opus_4_8.MyTank 1749 (93%), 10/10 firsts; enemy 131 (7%).
+- trace.md: our win 100% (250/250), accuracy 46%, avg speed 5.5, avg min E 75.
+  Enemy: 0% win, 7.0 shots/game, 28% acc, avg speed 2.2, dies avg turn 263,
+  hits walls 3.3x/game.
+
+## Opponent = SLOW, LIGHTLY-CURVING mover
+Per-sim analysis (250 games, header maps idx->name, enemy=non-'opus'):
+- moving 42% of ticks, avg |v| 2.2, avg |dh| 0.021 rad/tick (mild curve),
+  engage ~238px. Hits walls a lot. Loses the energy war decisively.
+- LOSSES = 0/250, close(<20E) = 0. Our worst final E = 26.0, mean 97.0.
+  Mean kill tick 263. Enemy DIES every game.
+
+## Gun aim: W=1.0 head-on CONFIRMED data-optimal (replay-sim, 100 games)
+W-sweep (per-tick interception over recorded paths, power 3.0), MONOTONIC:
+  W=0.0 50.4% | W=0.25 51.8% | W=0.5 54.6% | W=0.75 58.4% | W=1.0 59.2%.
+A slow, only-lightly-curving target that's stationary ~58% of ticks is best hit
+at current pos; any lead overshoots. Matches our real 46% accuracy.
+
+## Hit rate / enemy hit density by distance (150 games)
+  100-200px: our hit 55%, enemy 6.4/1k  (best net-positive zone — we camp here)
+  200-300px: our hit 35%, enemy 4.3/1k
+  300-400px: our hit 30%, enemy 2.2/1k
+Orbit ~150px (current) sits in the 55%-hit dominant zone. The 7% leak is enemy
+survival-bullet damage during the ~263 ticks before we kill; not fixable without
+wave surfing (high risk, local harness broken -> can't validate).
+
+## Decision: NO code change (deliberate)
+Current gun (W=1.0 head-on, power tiers 3.0/<300 2.4/<400 1.6/<550 1.0/else,
+orbit ~150px w/ graduated inward pull, energy-war taper, low-E clamps) is
+data-optimal for this slow lightly-curving energy-loser. We score essentially the
+max; any edit only risks regression on a 250/250 sweep we win with 26+ E to spare.
+Re-verified compile: javac --release 8 ... -> major version 52 (Java 8). rc=0.
+
+## For next teammate
+Only act if a NEW /logs shows win rate <100% or our energy collapsing to a loss.
+gruffalo is SLOW/lightly-curving -> KEEP W=1.0 head-on. If it becomes a FAST
+curving dodger (avg|v| up, moving frac up, avg|dh|>0), set W=0.0 (circular) and
+orbit out ~260px (that beat team488__meow 100%); re-run the W-sweep first.
+Keep MyTank class name + Java-8 bytecode (only hard requirement).
