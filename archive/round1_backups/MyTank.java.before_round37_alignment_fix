@@ -269,48 +269,18 @@ public class MyTank extends AdvancedRobot {
             return;
         }
         lastEscapeReissueTick = getTime();
-        // Round 37 fix (see README_agent.md round 37 notes): round 36's dedupe
-        // fix stopped the stuck-tick counter from incrementing 2x per real tick,
-        // but real-match logs STILL showed permanent wall-stuck freezes (this
-        // environment's own round-1/round-2 data: 32-34% win rate, avg speed
-        // ~2.2, games ballooning to 900+ turns) with body heading (bh) visibly
-        // oscillating back and forth every tick by exactly the max per-tick turn
-        // rate (~0.1745 rad/tick at v=0), NEVER converging on escapeHeadingRad.
-        // Root cause: the OLD position-only stuck check below fires "no real
-        // progress" (position unchanged) even while the robot is legitimately
-        // mid-turn toward a perfectly good target heading -- of course position
-        // hasn't moved yet, it hasn't finished turning away from the wall to be
-        // ABLE to move without immediately re-colliding! With the old 3-tick
-        // threshold, escapeRotationSteps++ (rotating the target by 90 degrees,
-        // i.e. ~1.571 rad) fires roughly every 3 ticks, but completing a 90-
-        // degree turn from a standstill takes ~9 ticks at the ~0.1745 rad/tick
-        // max turn rate -- so the target heading always moves the goalposts
-        // long before the robot could ever physically reach the CURRENT one,
-        // guaranteeing perpetual thrashing and zero real progress, forever.
-        // Fix: only count a tick as "stuck" (for rotation-triggering purposes)
-        // if the robot is ALREADY ROUGHLY ALIGNED with the current target
-        // heading (i.e. genuinely done turning, not mid-turn) and STILL hasn't
-        // moved -- that's the only situation that actually indicates "this
-        // heading is physically blocked, try a different one". If we're still
-        // mid-turn, don't touch the stuck counter at all; let the turn finish.
+        // Round 23: detect no real progress (position essentially unchanged
+        // since the last time we reissued this command) and rotate the target
+        // heading by 90 degrees every 3 stuck ticks, cycling through all 4
+        // quadrants relative to the originally-computed escape direction. This
+        // is what actually breaks a mutual-lock deadlock where the 'ideal'
+        // away-from-enemy-and-wall heading happens to still be physically
+        // blocked (e.g. the enemy itself is sitting in that direction).
         double curX = getX();
         double curY = getY();
-        double headingErrForStuckCheck = escapeNoTurn ? 0.0
-                : robocode.util.Utils.normalRelativeAngle(
-                        escapeHeadingRad - getHeadingRadians());
-        boolean roughlyAligned = escapeNoTurn || Math.abs(headingErrForStuckCheck) < 0.25;
-        boolean noPositionProgress = !Double.isNaN(lastEscapeX)
-                && Math.hypot(curX - lastEscapeX, curY - lastEscapeY) < 2;
-        if (roughlyAligned && noPositionProgress) {
+        if (!Double.isNaN(lastEscapeX)
+                && Math.hypot(curX - lastEscapeX, curY - lastEscapeY) < 2) {
             escapeStuckTicks++;
-        } else if (!roughlyAligned) {
-            // Still actively turning toward the target -- not stuck, just not
-            // finished yet. Don't reset all the way to 0 on every single such
-            // tick either (that would let a robot that's ALMOST aligned but
-            // wobbling by noise keep resetting forever); a mild decay is enough.
-            if (escapeStuckTicks > 0) {
-                escapeStuckTicks--;
-            }
         } else {
             escapeStuckTicks = 0;
         }
@@ -659,7 +629,7 @@ public class MyTank extends AdvancedRobot {
             // re-drive into the same wall.
             moveDirection = -moveDirection;
             strafeTimer = 0;
-            beginEscape(angleToCenter, 60);
+            beginEscape(angleToCenter, 30);
             return;
         }
 
@@ -917,7 +887,7 @@ public class MyTank extends AdvancedRobot {
         double cx = getBattleFieldWidth() / 2.0;
         double cy = getBattleFieldHeight() / 2.0;
         double angleToCenter = Math.atan2(cx - getX(), cy - getY());
-        beginEscape(angleToCenter, 60);
+        beginEscape(angleToCenter, 30);
     }
 
     public void onHitRobot(HitRobotEvent e) {

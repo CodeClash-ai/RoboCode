@@ -4590,3 +4590,176 @@ this file's usual convention).
    than usual — this round's regression is exactly the kind of thing that
    would have been caught in minutes with working local battle-testing
    instead of requiring a full extra round to notice and diagnose from logs.
+
+## Round 37 update (this round) — found & fixed round 36's REMAINING wall-stuck bug: stuck-detector fired while still mid-turn
+
+### Context
+`/logs/rounds/0/`, `/logs/rounds/1/`, and `/logs/rounds/2/` all exist this
+round, all real combat against `andrekorol__oppswantmedead` (same opponent
+rounds 34-36's notes describe). Round 0 = round 34's pre-fix baseline (98%
+win, healthy). **Round 1 = round 35's fix (turn-based wall escape) — 32% win,
+catastrophic regression** (matches round 36's own description exactly).
+**Round 2 = round 36's "dedupe guard" fix — STILL 34% win rate, STILL
+catastrophic** (avg speed 2.3, avg min energy 30, games ballooning to avg 907
+turns, max 1459) — i.e. round 36's fix, despite a clear and correct-looking
+diagnosis, **did NOT actually fix the regression** in the real match that
+tested it. This round's environment gave a rare gift: 3 full rounds of before/
+during/after data for the exact same bug on the exact same opponent, all
+available simultaneously.
+
+### Investigation: round 36's dedupe fix was necessary but not sufficient
+Ran `python3 tools/analyze_freezes.py /logs/rounds/2 --threshold 20 | grep -i
+sonnet` -> **38 findings**, many spanning hundreds of ticks and several
+running all the way to the end of their game (i.e. the tank was stuck until
+it died) — confirms round 36's fix left the core problem intact. Traced
+`sim_0.jsonl` tick-by-tick (dumping x/y/bh/v/status/energy for our own robot)
+around its first `HIT_WALL` at t=28: position frozen at `(782.0, 212.8)` for
+90+ consecutive ticks, velocity pinned at exactly 0.0 throughout, **but body
+heading (`bh`) was visibly oscillating every single tick**, moving back and
+forth by almost exactly 0.349 rad every 2-tick log step (i.e. ~0.1745
+rad/tick — precisely the game's documented max turn rate at velocity 0, 10
+degrees/tick) in a repeating, NEVER-CONVERGING pattern (+,-,+,+,0,-,-,0,+,+,
+0,-,-,0,-,+,+,+,...).
+
+### Root cause found: the stuck-detector counts "haven't moved" ticks even while the robot is still legitimately mid-turn
+`reissueEscape()`'s stuck-detection (round 23, still present after round 36's
+dedupe fix) only ever checked **position** — "have I moved more than 2px
+since last call?" — completely ignoring whether the robot had actually
+finished turning toward the current target heading yet. Computed the actual
+turn required in this trace (`angleToCenter` from position `(782, 212.8)`
+toward a rough field-center guess): **~107 degrees**, which at the ~10
+deg/tick max turn rate genuinely requires **~11 ticks** to complete from a
+standing start. But the OLD code's rotation trigger (`escapeStuckTicks >= 3`,
+i.e. only 3 ticks) fired **long before** the robot could possibly have
+finished turning to the very first (perfectly good, correctly pointing away
+from the wall!) target heading — of course position hadn't moved yet, the
+tank hadn't finished turning enough to move without immediately re-colliding
+with the wall it was still substantially facing into. This misfired
+"rotate by 90 degrees" over and over, every ~3 ticks, forever moving the
+target heading before the robot could ever physically catch up to ANY of
+them — a perpetual goalpost-moving deadlock, 100% explaining the observed
+oscillating-heading/frozen-position signature. Round 36's dedupe fix (stop
+counting the SAME tick twice when multiple handlers call `reissueEscape()`)
+was a real, necessary bug — but it only halved the rotation trigger rate
+(from ~1.5 ticks per rotation back to ~3), which is still far too fast
+relative to the ~9-11 ticks a real 90-degree turn takes at max turn rate;
+the fundamental mismatch (rotating based on elapsed ticks with no regard for
+whether a turn had time to complete) was never actually addressed.
+
+### Fix applied (`robots/custom/MyTank.java`, `reissueEscape()`)
+Changed the stuck-tick counter to only increment when the robot is **BOTH**
+(a) roughly aligned with the current escape target heading (heading error
+`< 0.25` rad, i.e. genuinely done turning, not mid-turn) **AND** (b) still
+hasn't moved position-wise. If the robot is NOT yet aligned (still actively,
+legitimately turning toward a perfectly fine target), the counter is left
+alone / mildly decayed instead of incrementing — giving the turn the ~9-12
+ticks it actually needs to complete before ever considering that heading
+"blocked" and rotating to a new one. This only affects the turn-based escape
+path (`onHitWall()`'s and the wall-only stuck-watchdog's calls to
+`beginEscape()`); the no-turn ram-escape path (`escapeNoTurn == true`,
+round 25/26, already validated) is explicitly exempted (`roughlyAligned =
+escapeNoTurn || ...`) and behaves exactly as before — no turn is ever
+requested there, so "mid-turn" never applies and the original position-only
+check is still correct for that case. Also widened the two turn-based
+`beginEscape()` call sites' duration from 30 to 60 ticks (`onHitWall()` and
+the `onScannedRobot()` wall-stuck-watchdog), to give a full retry cycle
+(align ~12 ticks + confirm-blocked 3 ticks + rotate + align again) comfortable
+headroom within a single escape session instead of needing multiple restarts.
+
+Verified `javac -Xlint:all -cp libs/robocode.jar -d robots
+robots/custom/MyTank.java` compiles clean (no errors/warnings), `.class` up
+to date. Old (pre-this-round, i.e. round 36's) version preserved at
+`archive/round1_backups/MyTank.java.before_round37_alignment_fix` for a quick
+diff/revert if next round's numbers still look bad.
+
+### What I did NOT get to
+- **Not validated by a real match** (same long-standing limitation as every
+  previous round — no working local headless battle runner in this sandbox;
+  see round 6's section for the most detailed writeup). Unlike round 36's fix
+  though, this round's diagnosis is grounded in a very concrete, checkable
+  physical fact (max turn rate ~10 deg/tick vs. the ~107-degree turn actually
+  needed, directly computed from real logged positions) that fully explains
+  the exact oscillation pattern observed, not just a plausible-sounding
+  mechanism — high confidence this is the real, complete fix, but it MUST be
+  checked for real next round given rounds 35/36 each thought they'd fixed
+  this too and were wrong (round 35 introduced the regression, round 36's
+  fix was real but insufficient). **First thing to check next round**: run
+  `python3 tools/analyze_freezes.py /logs/rounds/<N> --threshold 20 | grep -i
+  sonnet` — should show few/no findings (this round's pre-fix baseline,
+  round 2 in this environment: 38 findings, several running to game-end).
+  Also check `trace.md`'s avg speed (should return to ~6+, not 2.2-2.3) and
+  win rate (should return to ~98%+, not 32-34%) against
+  `andrekorol__oppswantmedead` if it reappears.
+- Did not add any automated regression test/simulation harness for the
+  escape-mode turn-rate math (e.g. a small standalone Java or Python
+  simulation of `reissueEscape()`'s logic against a mock max-turn-rate model)
+  that could have caught this class of bug without needing a real match —
+  would be a valuable, low-risk addition for a future teammate: the core
+  turn-convergence-time-vs-stuck-threshold relationship is fully deterministic
+  and checkable offline, unlike combat/accuracy tuning which genuinely needs
+  real opponent interaction.
+- Did not re-examine whether `escapeStuckTicks >= 3` (still used for the
+  no-turn ram-escape path, and now also for the turn-based path's OWN
+  "confirm truly blocked once aligned" check) is well-tuned — 3 ticks of
+  confirmed-aligned-but-not-moving seems reasonable (no turn-rate mismatch
+  applies once alignment is already required), but wasn't stress-tested this
+  round.
+- Did not touch bullet power, movement/orbit tuning, `PREFERRED_DISTANCE`, or
+  the ramming/press-advantage logic this round — wanted to isolate this one
+  fix (on top of the already-diagnosed, still-broken escape mechanism) so
+  it's cleanly attributable in next round's logs, consistent with this file's
+  usual one-change-per-round practice, ESPECIALLY important right now since
+  rounds 34-36 have each made a change to this exact mechanism that didn't
+  fully work — need a clean signal this time.
+
+### Suggestions for next teammate
+1. **First step, as always, and MORE IMPORTANT than usual this time**: run
+   `python3 tools/analyze_freezes.py /logs/rounds/<N> --threshold 20 | grep -i
+   sonnet` on this round's fresh logs. Compare finding count directly against
+   this round's own pre-fix baseline (`/logs/rounds/2` in THIS environment:
+   38 findings, several spanning to game-end) — this is the cleanest
+   available regression check for this specific, now-3-rounds-running bug.
+2. Check `trace.md`'s avg speed, avg min energy, and win rate. If
+   `andrekorol__oppswantmedead` reappears, compare directly against round 0's
+   healthy baseline (98% win, avg speed 6.1, avg min energy 75) vs rounds
+   1-2's broken baselines (32-34% win, avg speed 2.2-2.3, avg min energy
+   28-30) documented above.
+3. If findings/broken-speed STILL persist despite this round's fix, dump
+   per-tick x/y/bh/v/status for a flagged game (same technique as this round
+   — see the `sim_0.jsonl` trace above) and check specifically: is `bh` still
+   oscillating without converging? If the oscillation period/amplitude looks
+   different from this round's description, there may be a THIRD contributing
+   bug (e.g. maybe `getHeadingRadians()` itself doesn't update the way
+   expected mid-turn in some edge case, or the `0.25` rad alignment tolerance
+   is too tight/loose) — if the oscillation pattern is IDENTICAL to what's
+   described above, then something about the actual deployed code differs
+   from what's described here (e.g. verify the round-37 diff actually made it
+   into the version that was graded, via `diff
+   archive/round1_backups/MyTank.java.before_round37_alignment_fix
+   robots/custom/MyTank.java`).
+4. **General lesson reinforced across rounds 34-37**: this escape-mode
+   mechanism has now needed FOUR consecutive rounds of fixes (34: onHitWall
+   never entered escape mode at all; 35: no-turn was wrong strategy for a
+   corner; 36: double-counted stuck-ticks across handlers; 37: stuck-ticks
+   counted even mid-turn) to get right. Each fix was individually
+   well-reasoned but the interaction with the NEXT layer of the problem
+   wasn't visible until a real match exposed it. If a 5th issue turns up,
+   consider whether a fundamentally simpler strategy (e.g. just cutting
+   velocity/turn commands entirely and firing in place for N ticks once
+   "obviously wall-stuck" is detected, avoiding the whole turn-convergence
+   problem, since gun aim/fire isn't blocked by any of these mechanisms per
+   round 26's finding) might be more robust than continuing to patch the
+   turn-based escape's timing assumptions.
+5. `pez__gf1` (rounds 11-12, ~14% tie rate from mutual energy attrition)
+   remains the toughest opponent in this file's history and the single most
+   valuable target for directly re-testing the many escape/energy-management
+   fixes accumulated since round 12 — still hasn't reappeared after 25 rounds.
+6. Local headless battle-runner: still unresolved after 36+ rounds of
+   attempts (see round 6's section for the most detailed known blocker,
+   `RepositoryManager.loadSelectedRobots` not seeing a freshly-reloaded
+   repository within the same call). Still the single highest-leverage infra
+   fix available if a future teammate has a larger step budget to spend on it
+   than usual — this recurring escape-mode bug class in particular
+   (4 rounds and counting) is exactly the kind of thing that would have been
+   caught and fixed in ONE round instead of four with working local
+   battle-testing.
