@@ -430,11 +430,20 @@ public class MyTank extends AdvancedRobot {
         // bullets take longer to arrive so reactive dodging is more effective.
         // Reverse ~60% on detected enemy fire (still randomized, not a strict
         // alternation), plus rare random reversals to break any residual period.
+        // ROUND-1 vs dankraemer__juggernaut: enemy uses LEAD (predictive) targeting
+        // -- its gun points ~0.364 rad off head-on when it fires, so it aims where
+        // we WOULD be. Against a lead-aiming gun the strongest evasion is to REVERSE
+        // when the enemy fires: its lead shot flies to the far side and misses.
+        // In our 16 losses the enemy hit 45% (vs 32% in wins) -- a movement problem,
+        // not a gun problem (head-on is confirmed our best aim). Raise dodge-on-fire
+        // 0.45 -> 0.70 (still not a strict alternation, so not itself learnable),
+        // shorten the rate-limit 6 -> 5 ticks so we can dodge consecutive waves,
+        // and keep the rare random reversal to break any residual period.
         long now = getTime();
-        if (enemyFired && now - lastReverseTime >= 6 && Math.random() < 0.45) {
+        if (enemyFired && now - lastReverseTime >= 5 && Math.random() < 0.70) {
             moveDirection = -moveDirection;
             lastReverseTime = now;
-        } else if (now - lastReverseTime >= 8 && Math.random() < 0.07) {
+        } else if (now - lastReverseTime >= 8 && Math.random() < 0.08) {
             moveDirection = -moveDirection;
             lastReverseTime = now;
         }
@@ -463,8 +472,10 @@ public class MyTank extends AdvancedRobot {
     }
 
     public void onHitByBullet(HitByBulletEvent e) {
-        // Change direction when hit to be less predictable
-        if (Math.random() < 0.5) {
+        // Change direction when hit to be less predictable. Raised 0.5 -> 0.8:
+        // a hit means the enemy's gun profiled our current path, so disrupt it
+        // (vs dankraemer__juggernaut, a lead-aiming gun that hits 45% in our losses).
+        if (Math.random() < 0.8) {
             moveDirection = -moveDirection;
         }
     }

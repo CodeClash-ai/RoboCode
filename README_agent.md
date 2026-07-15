@@ -3236,3 +3236,66 @@ far-range fire gate (allow tiny power ~0.1 far shots when behind to contest the
 free-damage concession) — validate vs the LADDER, not just markrobo. Always
 re-check `head -1 /logs/rounds/0/sim_0.jsonl` for the opponent name + INDEX
 MAPPING first. Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 1 / current pass) — opponent = dankraemer__juggernaut (COMPETITIVE, 16 losses)
+
+## KEY FINDING: juggernaut has a GOOD LEAD-AIMING gun — losses are a DODGING problem
+Round 0 result (BEFORE my change): opus-4-8 42256 vs dankraemer__juggernaut 10269
+(21% share — highest enemy share in a while). results_0.txt: opus 1648 (79%),
+9/10 firsts (enemy got 1 first!). trace.md WIN RATE 94% (234/250) — 16 LOSSES.
+Our accuracy 46%, ENEMY accuracy 29% overall (but 45% in the games it WINS).
+
+## Opponent profile (120 sims; header maps idx->name, enemy=non-'opus')
+- movefrac 0.56, avg|v| 3.32 (moderate), avg|dh| 0.0586 (moderate curve, near
+  the 0.06 heavy-spinner threshold), engages CLOSE (dist mean 229 / median 205).
+
+## Gun aim W=1.0 head-on CONFIRMED best (my replay-sim, 2 slices, 80 games each)
+Per-tick interception over recorded paths: head-on 55.5/53.6% vs linear 48.6/49.8%
+vs CIRCULAR 46.4/47.4%. Head-on wins clearly DESPITE the moderate curve (enemy is
+reactive/stop-and-go enough that head-on beats lead). KEPT W=1.0 (do NOT switch to
+circular off the curve alone — the replay is decisive here).
+
+## ROOT CAUSE of the 16 losses: enemy out-trades us because ITS gun is hot
+LOSSES: we fire 353 shots / hit 88 (25%); enemy fires 181 / hits 81 (45%!).
+WINS:   we fire 280 / hit 134 (48%); enemy fires 117 / hits 37 (32%).
+Losses are games where the enemy's LEAD gun connects (45%) and ours cools (25%).
+Behind on energy 77% of ticks in losses vs 23% in wins. NOT a distance problem
+(losses avg 217px vs wins 210px) and NOT wall/speed (losses have LESS wall time,
+HIGHER speed). It's the enemy's gun accuracy -> a MOVEMENT/dodging problem.
+
+## MEASURED enemy uses LEAD (predictive) targeting — the key to the fix
+When the enemy fires, its gun points ~0.364 rad OFF head-on (it aims where we
+WILL be). Against a lead-aiming gun the strongest evasion is to REVERSE on its
+fire: its lead shot flies to the far side and misses.
+
+## Full net energy by distance (measured, 150 games) — 100-200px is the ONLY zone
+  0-100px:   FULLNET -40/1k (enemy gun deadly close)
+  100-200px: FULLNET  -1/1k (BEST — near break-even; we camp here, orbit ~160px)
+  200-300px: FULLNET -69/1k (catastrophic: our hit drops to 33%, enemy still hot)
+  300-400px: FULLNET -51/1k | 400-500px -16/1k
+Current orbit (~160px, graduated inward pull) already camps the right zone; the
+drift to 217px in losses is a SYMPTOM of enemy hits, not a config bug. Movement
+distance UNCHANGED (closer = enemy's 0-100px deadly zone; wider = losing zones).
+
+## CHANGES THIS PASS (movement dodging only — gun/distance UNCHANGED)
+1. Dodge-on-enemy-fire probability 0.45 -> 0.70 (reverse to dodge the lead shot).
+2. Dodge rate-limit 6 -> 5 ticks (dodge consecutive waves).
+3. onHitByBullet reverse 0.5 -> 0.8 (a hit means we were profiled -> disrupt harder).
+Rationale: directly attacks the 45% enemy hit rate in losses. Kept below a strict
+alternation (0.70, not 1.0) so it's not itself learnable, plus rare random reversal
+(0.08) to break residual period. Backup of prior source: /tmp/MyTank.bak.java.
+Compiles Java 8 (major version 52), rc=0.
+
+## For next teammate — VERIFY
+- Want NEW /logs win rate ABOVE 94% (ideally 97%+), enemy accuracy DOWN from 45%
+  in-loss / 29% overall, enemy score DOWN from 10269, fewer/no losses, our avg
+  min-E UP from 61. If it REGRESSED (new losses / share drop), the higher dodge
+  rate may have made us MORE learnable (a fixed ~70% dodge cadence) or cut our own
+  lateral coverage -> lower dodge back to 0.55-0.60 or revert to /tmp/MyTank.bak.java
+  (git prior, 94%). If it worked, could push dodge to 0.75.
+- juggernaut is a MODERATE curving mover with a LEAD gun -> KEEP W=1.0 head-on
+  (replay-confirmed) and the dodge-on-fire evasion. The remaining lever if losses
+  persist is WAVE SURFING (track enemy bullet waves, move to min-danger GF) — the
+  only robust anti-lead-gun movement, but high-risk; local harness broken, trust
+  /logs only. Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for the opponent
+  name + INDEX MAPPING first. Keep MyTank class name + Java-8 bytecode.
