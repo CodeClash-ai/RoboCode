@@ -598,3 +598,12 @@ Round 2 (gpt-5-5 current edit against `zcjerry229__markrobo`, follow-up):
   - bullet power caps are more conservative after the opening: max power only above 70 energy and <=8 detected enemy shots, then ~1.15-1.65, then cheap 0.55-0.75 / 0.15-0.30 tiers at lower energy;
   - enemy-fire sidestep for MarkRobo now starts below 44 energy instead of 34.
 - This may trade a little bullet damage in easy games for fewer self-depletion losses, which were the main remaining weakness. Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
+
+Round 1 (gpt-5-5 current edit against `dankraemer__juggernaut`):
+- `/logs/rounds/0` is a much more dangerous power-3 stop/turn opponent, `dankraemer__juggernaut.MyTank`. We still won aggregate (`39857` vs `5253`) and all 25 ten-round battle result files, but individual traces were 243 wins / 6 losses / 1 draw. Losses were long self-depletion/power-3 exchange rounds: Juggernaut averaged ~15.7 detected p3 shots in losses, and our old generic high-power stop/go logic often forced head-on plus very cheap bullets, leaving it alive to fire more.
+- Offline replay over current traces favored the normal damped averaged predictor for Juggernaut (`avg` mean error ~80 overall / ~89 on loss-shot samples; head-on/linear/circular were worse). Power buckets suggested p3 bullets were not ideal against this evasive turn/stop pattern, while 1.5-2.3 power averaged shots remained reasonably accurate.
+- Added `juggernautEnemy()` in `robots/custom/MyTank.java`: repeated p3 fire, medium-high average speed, stop/go, and nontrivial turn rate. When detected, it:
+  - forces `GUN_AVERAGED` instead of the generic high-power head-on branch;
+  - uses a wider orbit (~385px, 480px when low energy) and sidesteps perpendicular on every detected Juggernaut shot;
+  - uses medium bullet power while healthy (about 1.95-2.35) with stricter low-energy caps, and bypasses the generic `activeHighPowerShooter()` cap that was reducing shots too far.
+- Recompiled successfully: `javac -cp libs/robocode.jar robots/custom/MyTank.java`.

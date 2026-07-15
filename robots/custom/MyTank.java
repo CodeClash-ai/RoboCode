@@ -40,6 +40,7 @@ public class MyTank extends AdvancedRobot {
     private int closeRammerScans = 0;
     private int trackerApproachScans = 0;
     private int npcSniperScans = 0;
+    private int juggernautScans = 0;
     private double enemyVelocityAvg = 0.0;
     private double enemySpeedAvg = 0.0;
     private double enemyTurnRateAvg = 0.0;
@@ -221,6 +222,11 @@ public class MyTank extends AdvancedRobot {
         } else {
             npcSniperScans = Math.max(0, npcSniperScans - 1);
         }
+        if (juggernautSignatureRaw()) {
+            juggernautScans = Math.min(70, juggernautScans + 4);
+        } else {
+            juggernautScans = Math.max(0, juggernautScans - 1);
+        }
 
         updateVirtualGuns(enemyX, enemyY);
 
@@ -274,6 +280,15 @@ public class MyTank extends AdvancedRobot {
                 // reserve is low, spend the next movement command sidestepping the shot
                 // instead of only reversing along the same orbit.
                 drivePerpendicularEscape(absBearing, 260.0);
+                return;
+            }
+            if (juggernautEnemy()) {
+                // dankraemer__juggernaut spends repeated power-3 bullets while making
+                // max-speed stop/turn bursts.  The old high-power stop/go branch only
+                // reversed on early fire ticks; loss traces show several power-3 hits
+                // in the 200-350px band.  Commit to a clean perpendicular dodge on each
+                // detected shot, not only after our energy is already low.
+                drivePerpendicularEscape(absBearing, 275.0);
                 return;
             }
         }
@@ -466,6 +481,10 @@ public class MyTank extends AdvancedRobot {
             // gated by low virtual error/fire count so RegullarMonk-style self-
             // depletion cases still use their conservation profile.
             preferredDistance = 255.0;
+        } else if (juggernautEnemy()) {
+            // Juggernaut is a dangerous power-3 stop/turn bot; stay a bit wider than
+            // the Ultron farming band and open further once the reserve falls.
+            preferredDistance = getEnergy() < 30.0 ? 480.0 : 385.0;
         } else if (highPowerStopGoDodger()) {
             // Current Ultron-style target: frequent power-3 firing, lots of stops,
             // but enough max-speed reversing that the high-pressure Florian branch
@@ -812,6 +831,20 @@ public class MyTank extends AdvancedRobot {
             if (getEnergy() > 24 && distance < 720) {
                 power = Math.max(power, distance < 560 ? 3.0 : 2.45);
             }
+        } else if (juggernautEnemy()) {
+            // Current Juggernaut traces differ from Ultron: it turns/stops enough that
+            // the averaged gun beats head-on, and excessive 0.6-1.4 power pinpricks
+            // left it alive to land many more power-3 shots.  Use faster medium shots
+            // while healthy, then downshift before true self-depletion.
+            if (getEnergy() > 50 && distance < 720) {
+                power = Math.min(Math.max(power, distance < 420 ? 2.25 : 1.95), 2.35);
+            } else if (getEnergy() > 28) {
+                power = Math.min(Math.max(power, distance < 360 ? 1.35 : 1.05), 1.55);
+            } else if (getEnergy() > 10) {
+                power = Math.min(power, distance < 320 ? 0.55 : 0.35);
+            } else {
+                power = Math.min(power, getEnergy() < 7 ? 0.15 : 0.25);
+            }
         } else if (highPowerStopGoDodger()) {
             // Ultron-like evasive high-power stop/go shooters made the old generic
             // slow/stop-go max-power branches burn us to zero in rare long games.
@@ -895,7 +928,7 @@ public class MyTank extends AdvancedRobot {
                 power = Math.min(power, 0.75);
             }
         }
-        if (activeHighPowerShooter()) {
+        if (activeHighPowerShooter() && !juggernautEnemy()) {
             // A few Ultron losses/draws still came from falling out of the narrow
             // highPowerStopGoDodger() signature late in a round, then spending 2+
             // energy slow-target shots while already below ~12 energy.  Any opponent
@@ -1010,6 +1043,11 @@ public class MyTank extends AdvancedRobot {
             // generic damped stop-go or high-power-shooter head-on branches once
             // virtual waves show linear is winning.
             gun = GUN_LINEAR;
+        } else if (juggernautEnemy()) {
+            // Replay over the current power-3 stop/turn opponent favors the damped
+            // averaged predictor; head-on was overused by the generic high-power
+            // stop/go branch and missed the max-speed turn bursts.
+            gun = GUN_AVERAGED;
         } else if (highPowerStopGoDodger()) {
             // The current Ultron traces strongly favor head-on: it stops/reverses
             // during bullet flight, so linear/circular/averaged over-lead badly.
@@ -1135,7 +1173,9 @@ public class MyTank extends AdvancedRobot {
         if (velociRobotEnemy()) {
             tolerance = Math.min(tolerance, Math.atan2(18.0, distance));
         }
-        if (highPowerStopGoDodger()) {
+        if (juggernautEnemy()) {
+            tolerance = Math.min(tolerance, Math.atan2(16.0, distance));
+        } else if (highPowerStopGoDodger()) {
             // Cheap head-on shots are still wasted if the gun is broadside; wait for
             // a clean angle in these long high-power stop/go exchanges.
             tolerance = Math.min(tolerance, Math.atan2(15.0, distance));
@@ -1417,6 +1457,35 @@ public class MyTank extends AdvancedRobot {
                 && Math.abs(enemyVelocityAvg) < 4.4;
     }
 
+
+    private boolean juggernautEnemy() {
+        return juggernautScans > 0 || juggernautSignatureRaw();
+    }
+
+    private boolean juggernautSignatureRaw() {
+        // dankraemer__juggernaut profile in /logs/rounds/0: repeated power-3 fire,
+        // max-speed bursts mixed with long stops, and appreciable turn rate.  This
+        // should not inherit the Ultron high-power branch, which forces head-on aim
+        // and very cheap bullets; trace replay favors the averaged predictor and the
+        // losses came from letting Juggernaut survive many extra p3 shots.
+        return enemyFireCount > 1
+                && enemyFirePowerSamples > 0
+                && enemyFirePowerAvg > 2.60
+                && stationaryScans <= 5
+                && enemySpeedAvg > 3.15
+                && enemySpeedAvg < 5.4
+                && enemyAbsTurnRateAvg > 0.040
+                && stopGoEnemyScans > 4
+                && wallEnemyScans <= 12
+                && !weakFixedAxisOscillator()
+                && !fixedHeadingHighPowerShooter()
+                && !fixedHeadingStopGoEnemy()
+                && !fixedHeadingLineEnemy()
+                && !fastWallCruiser()
+                && !straightStopGoLinearEnemy()
+                && !spinBotEnemy()
+                && crazyEnemyScans <= 4;
+    }
 
     private boolean highPowerStopGoDodger() {
         // rafaeljdesa__ultron in the current logs: fires many power-3 bullets,
