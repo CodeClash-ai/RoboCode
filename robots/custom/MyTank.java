@@ -163,10 +163,21 @@ public class MyTank extends AdvancedRobot {
         // break-even at hr>1/3): <200px hr~66% & <300px hr~36% are net-POSITIVE at
         // full power 3.0. The 300-400px zone is only 17% hit (net -1.48 at p3.0),
         // so taper power there so each miss costs LESS while we pull back inside.
-        if (dist < 300)       power = 3.0;   // 36-66% hit -> full power, big net gain
-        else if (dist < 400)  power = 1.6;   // 17% hit danger zone -> cheap shots
-        else if (dist < 500)  power = 1.8;   // 23% hit
-        else                  power = 1.2;   // low hit far -> minimal drain
+        // ==== TUNING vs andrekorol__oppswantmedead (SLOW STRAIGHT-LINE MOVER) ====
+        // Round 0: we won 100% (250/250), 92% share, worst final E 25 (enemy dies
+        // every game). Opponent = slow straight mover (avg |v| 2.1, moving 46% of
+        // ticks, avg |dh| = 0.0 -> NEVER turns body). Head-on (W=1.0) is monotonically
+        // best (W-sweep: 34.5%@0.0 -> 50.0%@1.0). Head-on hit rate BY DISTANCE (p3.0):
+        //   0-200px 66-98%, 200-300 48%, 300-400 52%, 400-500 46%, 500-600 37%.
+        // Net energy/shot = hr*3p - p; break-even at hr>1/3. EVERY bucket clears it
+        // even at 500-600px (37% = +0.36 net @ p3). So the old regullarmonk taper
+        // (1.6/1.8 at 300-500px) was leaving damage on the table -- those buckets are
+        // 46-52% here, not 17%. This opponent loses the energy war decisively, so
+        // use FULL power out to 550px for more bullet damage -> higher share + faster
+        // kills. Beyond 550px hit rate drops (37%) so keep a modest taper there.
+        if (dist < 550)       power = 3.0;   // 37-98% hit here -> full power, net-positive
+        else if (dist < 650)  power = 2.0;   // ~37-58% hit
+        else                  power = 1.5;   // long range -> smaller drain if a miss
 
         // Energy safety clamps so a bad streak can't self-destruct us.
         if (getEnergy() < 30) power = Math.min(power, 2.0);
@@ -229,10 +240,13 @@ public class MyTank extends AdvancedRobot {
         // Only fire at 300px+ (hit rate <=23%) when we still hold an energy lead,
         // so a bad long-range streak can't drain us below the enemy in the grind.
         // Up close (<300px, 36-66% hit) always fire -- those shots gain energy.
+        // vs oppswantmedead: every distance bucket is net-energy-positive (37%+
+        // hit even at 500-600px) and we win the energy war decisively, so only gate
+        // the truly long, low-hit shots (>550px) when we're behind on energy.
         boolean allowFire = true;
-        if (dist > 300 && getEnergy() < enemyEnergy) allowFire = false;
+        if (dist > 550 && getEnergy() < enemyEnergy) allowFire = false;
         // Tighter alignment for distant shots (bullet spread grows with range).
-        double alignThresh = (dist > 350) ? 0.08 : 0.12;
+        double alignThresh = (dist > 400) ? 0.09 : 0.12;
 
         if (allowFire && getGunHeat() == 0 && Math.abs(gunTurn) < alignThresh
                 && getEnergy() > power + 0.5) {

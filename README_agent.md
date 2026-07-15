@@ -1223,3 +1223,47 @@ reactive to our aim) and clearly favors closing to 200-300px.
 - Re-run the distance analyses (hit-rate-by-dist + enemy-hit-density-by-dist) on
   the NEW logs — one-liners are in the step history / tools/replay_hitrate.py.
 - Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 1 / current pass) — opponent = andrekorol__oppswantmedead
+
+## STATUS: 100% WIN (250/250), 92% share — RAISED POWER FOR MORE DAMAGE/SHARE
+Round 0 result: opus-4-8 45054 vs andrekorol__oppswantmedead 2493. results_0.txt:
+opus_4_8.MyTank 1811 (92%), 10/10 firsts; enemy 149 (8%). ZERO losses, zero close
+games (worst our final E = 25.0 while enemy DIES every game; enemy finalE 0.0).
+Trace: our win 100%, accuracy 48%, avg speed 5.3, avg min E 81.
+
+## Opponent = SLOW STRAIGHT-LINE MOVER
+Per-sim analysis: moving 46% of ticks, avg |v| 2.1, avg |dh| = 0.0 (NEVER turns
+its body — pure straight-line back/forth). Fires ~8 shots/game at 32% acc.
+Loses the energy war to us decisively. Mean kill tick ~269, avg engagement 303px.
+
+## Replay-sim (per-tick interception, all 250 games, per-file header idx->name)
+- W-sweep (head-on best, MONOTONIC): W=0.0 34.5% -> W=0.5 39.2% -> W=1.0 50.0%.
+  Kept W=1.0 (head-on) — a slow non-turning target is best hit at current pos.
+- Head-on hit rate BY DISTANCE @p3.0: 0-200px 66-98%, 200-300 48%, 300-400 52%,
+  400-500 46%, 500-600 37%. EVERY bucket is net-energy-POSITIVE (hr>1/3; even
+  500-600px = +0.36 net/shot @ p3). The old regullarmonk power taper (1.6/1.8 at
+  300-500px, assuming 17% hit) was FAR too conservative here.
+
+## CHANGE THIS PASS: raised power tiers + loosened fire gate
+1. Power: OLD 3.0/<300, 1.6/<400, 1.8/<500, 1.2/else -> NEW 3.0/<550, 2.0/<650,
+   1.5/else. Full power out to 550px (all net-positive here).
+2. Fire gate: skip-when-behind-on-energy threshold 300px -> 550px (only gate the
+   truly long low-hit shots). Align threshold tighten point 350->400px.
+3. Low-E safety clamps (30->2.0, 15->1.0, 6->0.4) UNCHANGED. W=1.0 UNCHANGED.
+   Movement UNCHANGED (orbit ~230px; it was fine at 100% win).
+
+## Validation (damage/net-energy replay-sim over all 250 recorded games)
+   OLD power+gate: dmg 42182, net +8679
+   NEW power+gate: dmg 48842 (+16%), net +9166 (still net-POSITIVE, higher)
+More bullet damage = higher score share + faster kills, and net energy IMPROVED
+so no energy-war risk. Clear win, no downside. Compiles Java 8 (major version 52).
+Backup of prior source: /tmp/MyTank.bak.java (also git).
+
+## For next teammate
+Only act if a NEW /logs shows win rate <100% or our min-energy collapsing to a
+LOSS. If oppswantmedead becomes a FAST dodger (avg |v| rises, moving frac up) or
+starts curving (avg |dh|>0), LOWER power back toward distance tiers and re-check
+the W-sweep (never flat power 3.0 at long range vs a fast dodger -> regressed us
+to 83% vs robo_code__crazy; but THIS opponent is slow/straight so full power to
+550px is safe and validated). Keep MyTank class name + Java-8 bytecode.
