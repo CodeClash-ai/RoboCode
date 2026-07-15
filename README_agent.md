@@ -5643,3 +5643,53 @@ losing R0 source: /tmp/MyTank.bak.java.
   spinner (avg|dh|>0.09), W=0.0 circular already applies.
 - Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING.
 - Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 2 verification pass, THIS pass) — opponent = pez__poet
+
+## STATUS: THE ROUND-1 W=0.0 GUN + DODGE-0.30 CHANGE FLIPPED A MATCH LOSS INTO A DOMINANT WIN — NO CODE CHANGE
+Opponent = pez__poet (FAST moderate-curve mover avgV 4.84, avg|dh| 0.056, LEAD gun
+offset ~0.306 rad, engages ~195px). INDEX both rounds i=0=opus, i=1=pez__poet.
+Cross-round MATCH results (results.json winner = decisive):
+- Round 0 (OLD W=0.9 near-head-on + dodge 0.12, leftover from dodgebot2): LOST —
+  opus 20652 vs pez__poet 28662. Full 250-sim sweep: 140 LOSSES. REAL in-game hit
+  rate (energy-event based, UNBIASED) only 21.7%.
+- Round 1 (prior teammate: gun aim W=0.9 -> W=0.0 FULL LINEAR LEAD + dodge 0.12 ->
+  0.30 anti-lead-gun): WON — opus 39677 vs pez__poet 15005 (69% share).
+  results_0.txt: opus_4_8.MyTank 1542 (69%), 9/10 firsts. Full 250-sim sweep:
+  LOSSES = 15/250 (down from 140!), close(<20E) = 8, ourFE mean 66.6, killtick
+  mean 226. REAL in-game hit rate 50.7% (up from 21.7% — DECISIVE unbiased proof).
+
+## The biased replay says W=1.0 head-on wins — IGNORE IT (documented trap)
+Ran a W-sweep on round-1 logs (80 games): it shows W=1.0 0.401 > W=0.9 0.386 >
+W=0.0 0.253 — MONOTONIC toward head-on. This is the KNOWN reactivity bias (round-1
+enemy path was reactive to our ACTUAL W=0.0 shots, so the replay artificially
+favors a DIFFERENT aim W=1.0). The REAL cross-round result is OPPOSITE and decisive:
+W=0.9 lost 140 / realHR 21.7%; W=0.0 lost 15 / realHR 50.7%. DO NOT switch to
+head-on off the replay (same trap as crazy/velocirobot/dominatorx/smallpoet).
+
+## The 15 losses = energy-war VARIANCE, not a positional/config bug
+Losses avg dist 187px (behindfrac 0.73) vs wins avg dist 208px (behindfrac 0.07).
+Losses are at SLIGHTLY CLOSER distance than wins -> NOT a distance-drift problem;
+pure hit-rate variance in the energy war. Hit density by distance (R1 250 sims,
+UNBIASED): 0-100px ratio 2.29 (our 38.4/1k vs enemy 16.8), 100-200px 2.12 (22.3 vs
+10.5), 200-300px 1.18 (10.0 vs 8.5). We WIN the exchange at every zone; we spend
+most ticks (39970) at 100-200px = a strong win zone. Movement (~120px orbit target)
+already camps the winning zones. No cheap fix converts a 73%-behind variance loss.
+
+## Decision this pass: NO code change (deliberate)
+Source is IDENTICAL to the round-1 winning commit 1adb738 (git diff on MyTank.java
+= empty; only .class recompiled). W=0.0 full linear lead (line 349), dodge-on-fire
+0.30 (anti-lead-gun), close orbit ~120px. Any gun/movement edit only risks
+regression on a match we now WIN 69% share / 9-10 firsts. Re-verified compile:
+  javac --release 8 -cp libs/robocode.jar -d robots robots/custom/MyTank.java  # OK
+  javap -v robots/custom/MyTank.class | grep "major version"  # -> 52 (Java 8)
+
+## For next teammate
+Only act if a NEW /logs shows the MATCH lost (winner=pez__poet) or win rate
+collapsing. pez__poet is a FAST moderate-curve LEAD-gun mover -> KEEP W=0.0 full
+lead + dodge 0.30. Do NOT switch to head-on off the biased replay (cross-round
+REAL hit rate 21.7% W=0.9 vs 50.7% W=0.0 is decisive). If it becomes SLOW/near-
+straight (avgV<3), raise W toward 0.9. The only robust lever for the 15 variance
+losses is WAVE SURFING (high-risk, harness broken). Always re-check
+`head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING first.
+Keep MyTank class name + Java-8 bytecode (only hard requirement).
