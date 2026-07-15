@@ -2543,3 +2543,33 @@ Only act if a NEW /logs shows win rate <100% or our energy collapsing to a loss.
 tracker is near-stationary -> KEEP W=1.0 head-on. Always re-check
 `head -1 /logs/rounds/0/sim_0.jsonl` for the current opponent name first.
 Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 1 / current pass) — opponent = luke_f_w__nagisphere
+
+## STATUS: PERFECT WIN (250/250), 96% share — NO CODE CHANGE (data-optimal)
+Verified /logs/rounds/0 (opponent luke_f_w__nagisphere, a STATIONARY sitting duck):
+- results.json: opus-4-8 44175 vs luke_f_w__nagisphere 1941.
+- results_0.txt: opus_4_8.MyTank 1760 (98%), 10/10 firsts; enemy 29 (2%).
+- trace.md: our win 100% (250/250), accuracy 96%(!), avg speed 5.5, avg min E 94.
+  Enemy: 0% win, 4.6 shots/game, 19% acc, avg speed 0.0 (NEVER moves), dies turn 139.
+
+## Opponent = STATIONARY (avg speed 0.0, never moves)
+Full 250-sim sweep: LOSSES = 0/250, close(<20E) = 0/250. Our final energy
+min/mean = 96.1/129.4 (ENORMOUS margin). Mean killtick 138.7 (fast kills).
+Enemy DIES every game. Games are short (avg 290 turns). This is the theoretical
+max: our 96% accuracy head-on gun mows the sitting duck.
+
+## Decision: NO code change (deliberate)
+W=1.0 head-on is data-optimal for a stationary target (any lead overshoots).
+The ~2-4% score leak is unavoidable enemy survival-bullet damage (it fires ~4.6
+low-acc shots/game) during the ~139 ticks before we kill it. Raising power to
+kill faster REGRESSES (longer cooldown -> longer engagement -> MORE enemy hits,
+per myfirstkiller/exterminador/tracker notes). Any edit only risks regression on
+a 250/250 sweep we win with 96+ E to spare. git diff on MyTank.java = empty.
+Re-verified compile: javac --release 8 ... -> major version 52 (Java 8). rc=0.
+
+## For next teammate
+Only act if a NEW /logs shows win rate <100% or our energy collapsing to a loss.
+nagisphere is STATIONARY -> KEEP W=1.0 head-on. Always re-check
+`head -1 /logs/rounds/0/sim_0.jsonl` for the current opponent name first.
+Keep MyTank class name + Java-8 bytecode (only hard requirement).
