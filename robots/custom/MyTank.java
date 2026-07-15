@@ -299,17 +299,24 @@ public class MyTank extends AdvancedRobot {
         int gun = chooseGun();
         if (stationaryScans > 5) {
             gun = GUN_HEAD_ON;
-        } else if (straightEnemyScans > 2 && enemyFireCount == 0 && Math.abs(e.getVelocity()) > 0.55 && Math.abs(turnRate) < 0.025) {
+        } else if (straightEnemyScans > 2 && enemyFireCount == 0 && Math.abs(e.getVelocity()) > 0.55 && Math.abs(turnRate) < 0.025
+                && (virtualSamples < 22 || virtualGunError[GUN_LINEAR] <= virtualGunError[GUN_AVERAGED] + 5.0)) {
             // Anti-walls style movement can be straight and predictable even
-            // when it is not literally near a wall; do not wait for virtual-gun
-            // convergence before using linear prediction on a confirmed harmless
-            // line.  If an opponent has fired, leave selection to the virtual
-            // guns so GF/surfing movers are not over-fit to linear shots.
+            // when it is not literally near a wall; cold-start with linear
+            // prediction on a confirmed harmless line.  After enough virtual
+            // waves, stop forcing it unless linear remains competitive: the
+            // current Tirolio traces contain many straight-looking snippets
+            // where the damped averaged predictor is measurably better overall.
+            // If an opponent has fired, leave selection to the virtual guns so
+            // GF/surfing movers are not over-fit to linear shots.
             gun = GUN_LINEAR;
-        } else if (wallEnemyScans > 4 && Math.abs(e.getVelocity()) > 0.55 && Math.abs(turnRate) < 0.025) {
+        } else if (wallEnemyScans > 4 && Math.abs(e.getVelocity()) > 0.55 && Math.abs(turnRate) < 0.025
+                && (virtualSamples < 22 || virtualGunError[GUN_LINEAR] <= virtualGunError[GUN_AVERAGED] + 5.0)) {
             // Antiwalls-style bots often sit still, then run in a straight line
             // along an edge.  During those fast/straight wall bursts, full
-            // linear prediction is much better than the damped wall-stop gun.
+            // linear prediction is much better than the damped wall-stop gun,
+            // but only keep forcing it after learning if the virtual scores
+            // agree; some wall runners stop/reverse enough to prefer averaging.
             gun = GUN_LINEAR;
         } else if (wallEnemyScans > 4 && virtualSamples < 18) {
             // Cold-start wall-bound targets with the damped wall predictor, but

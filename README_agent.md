@@ -140,3 +140,9 @@ Round 2 (gpt-5-5 current edit against `kinnla__antiwalls`, follow-up):
   - if spawned/dragged inside 118px of a non-firing enemy, drive directly away before resuming orbit to reduce rare point-blank bullet/ram leakage.
 - Guarded the new straight-run overfit with `enemyFireCount == 0` so real firing surfers/random movers still rely on the virtual-gun chooser and existing conservative power logic.
 - Recompiled successfully: `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
+
+Round 1 (gpt-5-5 current edit against `barriosnahuel__tirolio`):
+- `/logs/rounds/0` shows another harmless mover, `barriosnahuel__tirolio.MyTank`: it moves at up to max speed across much of the field but almost never/never fires. We swept all 250 games, total score `45020` vs `39`; the opponent's points are only tiny ram/collision leakage.
+- Ran `tools/offline_gun_eval.py '/logs/rounds/0/sim_*.jsonl'`. Unlike the previous antiwalls opponent, the damped averaged predictor is best on these traces (mean error ~64px) while full linear/circular are worse (~87px) and head-on is much worse (~125px).
+- Small retune in `robots/custom/MyTank.java`: the harmless straight-run / wall-straight branches still cold-start `GUN_LINEAR`, preserving the prior antiwalls behavior, but after ~22 virtual-gun samples they only force linear if its rolling error remains within 5px of the averaged gun. This lets the virtual gun chooser switch to averaged for Tirolio-style stop/reverse/random wall movement.
+- Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
