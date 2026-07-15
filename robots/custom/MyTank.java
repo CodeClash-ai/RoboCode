@@ -197,7 +197,7 @@ public class MyTank extends AdvancedRobot {
         // Orbit perpendicular, with a distance-control offset.  Far away we cut
         // inward; too close we open out.  wallSmooth then bends the path away
         // from the battlefield edges before we commit to it.
-        double preferredDistance = (crazyEnemyScans > 4 ? 305.0 : (dangerousWallEnemy() ? 335.0 : ((straightEnemyScans > 4 && enemyFireCount == 0) ? 275.0 : (wallEnemyScans > 4 ? 315.0 : (headOnGunIsBest() ? 330.0 : (slowEnemyScans > 12 ? 285.0 : PREFERRED_DISTANCE))))));
+        double preferredDistance = (crazyEnemyScans > 4 ? 305.0 : (dangerousWallEnemy() ? 335.0 : ((straightEnemyScans > 16 && enemyFireCount == 0 && wallEnemyScans <= 4) ? 310.0 : ((straightEnemyScans > 4 && enemyFireCount == 0) ? 275.0 : (wallEnemyScans > 4 ? 315.0 : (headOnGunIsBest() ? 330.0 : (slowEnemyScans > 12 ? 285.0 : PREFERRED_DISTANCE)))))));
         // Against the current GF-style opponent our gun struggles mostly due
         // to long bullet flight, while its own gun almost never connects.  Once
         // virtual guns report a hard-to-hit mover, tighten the orbit a bit to
@@ -280,6 +280,13 @@ public class MyTank extends AdvancedRobot {
         // enemies), do not gamble the whole energy stack on repeated heavy
         // bullets.  Use tiny bullets at low energy: a hit gives more energy back
         // than it costs, while misses cannot self-kill us quickly.
+        if (straightEnemyScans > 16 && enemyFireCount == 0 && wallEnemyScans <= 4) {
+            // Sustained non-wall straight runners are harmless enough for heavy
+            // bullets; the averaged gun still handles their stops/reverses.
+            // Keep pressure high while the slightly wider orbit reduces rare
+            // point-blank ram/leakage in long field-crossing runs.
+            power = Math.max(power, distance < 620 ? 3.0 : 2.65);
+        }
         if (crazyEnemyScans > 4) {
             // High-speed continuous turners are easier to hit with faster,
             // moderate-power circular shots.  Previous max-power wall/straight
@@ -342,11 +349,10 @@ public class MyTank extends AdvancedRobot {
             // linear, circular, or the old wall-damped special case.
             gun = GUN_AVERAGED;
         } else if (straightEnemyScans > 2 && enemyFireCount == 0 && wallEnemyScans <= 4) {
-            // Tirolio-style harmless movers show lots of short straight-looking
-            // snippets, but they stop/reverse and hit walls often enough that
-            // full linear over-leads.  For non-wall straight motion, prefer the
-            // damped averaged predictor immediately; the separate wall branch
-            // below still preserves the antiwalls edge-slide linear cold start.
+            // Short non-wall straight-looking snippets are often stop/reverse
+            // noise (e.g. Tirolio).  The current Claptrap traces also show the
+            // damped averaged gun slightly ahead of full linear at our actual
+            // shot times, despite long straight runs.
             gun = GUN_AVERAGED;
         } else if (wallEnemyScans > 4 && Math.abs(e.getVelocity()) > 0.55 && Math.abs(turnRate) < 0.025
                 && (virtualSamples < 22 || virtualGunError[GUN_LINEAR] <= virtualGunError[GUN_AVERAGED] + 5.0)) {
