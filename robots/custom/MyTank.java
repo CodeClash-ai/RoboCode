@@ -28,6 +28,7 @@ public class MyTank extends AdvancedRobot {
     private long lastScanTime = -1000;
     private long lastDirectionChangeTime = -1000;
     private int stationaryScans = 0;
+    private int enemyFireCount = 0;
 
     public void run() {
         setBodyColor(new Color(18, 24, 34));
@@ -82,8 +83,27 @@ public class MyTank extends AdvancedRobot {
     private void doMovement(ScannedRobotEvent e, double absBearing) {
         double enemyDrop = lastEnemyEnergy - e.getEnergy();
         if (enemyDrop > 0.09 && enemyDrop <= 3.01) {      // likely enemy bullet
+            enemyFireCount++;
             reverseDirection();
         }
+
+        // SittingDuck-style opponents in the current logs never fire.  Once we
+        // are confident a stationary target is harmless, cancel movement so we
+        // do not donate wall/collision damage while the gun farms max-power
+        // hits.  If a stationary locker does fire, enemyFireCount disables this
+        // branch and we keep orbiting/dodging as normal.
+        if (stationaryScans > 10 && enemyFireCount == 0) {
+            if (!insideBattlefield(getX(), getY(), WALL_MARGIN + 25.0)) {
+                driveToward(getBattleFieldWidth() / 2.0, getBattleFieldHeight() / 2.0, 120.0);
+                setMaxVelocity(6.0);
+            } else {
+                setTurnRightRadians(0.0);
+                setAhead(0.0);
+                setMaxVelocity(0.0);
+            }
+            return;
+        }
+
         // Irregular reversals break simple linear targeting and prevent long
         // straight runs.  Guard reversals with a cooldown; flipping every scan
         // at very close/long range can leave us oscillating into a wall.
@@ -183,17 +203,23 @@ public class MyTank extends AdvancedRobot {
 
     public void onHitByBullet(HitByBulletEvent e) {
         reverseDirection();
-        setTurnRightRadians(Utils.normalRelativeAngle(Math.PI / 2.0 - e.getBearingRadians()));
+        setMaxVelocity(8.0);
+        // e.getBearingRadians() is relative to our body heading.  To dodge the
+        // bullet line, turn to a perpendicular bearing; driving backward after
+        // a reversal gives the opposite perpendicular when that is faster.
+        setTurnRightRadians(Utils.normalRelativeAngle(e.getBearingRadians() + Math.PI / 2.0));
         setAhead(170.0 * moveDirection);
     }
 
     public void onHitWall(HitWallEvent e) {
         reverseDirection();
+        setMaxVelocity(8.0);
         driveToward(getBattleFieldWidth() / 2.0, getBattleFieldHeight() / 2.0, 170.0);
     }
 
     public void onHitRobot(HitRobotEvent e) {
         reverseDirection();
+        setMaxVelocity(8.0);
         double gunTurn = Utils.normalRelativeAngle(getHeadingRadians() + e.getBearingRadians() - getGunHeadingRadians());
         setTurnGunRightRadians(gunTurn);
         if (e.isMyFault()) {
