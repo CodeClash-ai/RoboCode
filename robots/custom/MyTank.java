@@ -516,13 +516,17 @@ public class MyTank extends AdvancedRobot {
         if (gunType == GUN_HEAD_ON) {
             return new double[] {enemyX, enemyY};
         }
-        if (wallEnemyScans > 4 && gunType == GUN_AVERAGED && !dangerousWallEnemy()) {
+        if (wallEnemyScans > 4 && gunType == GUN_AVERAGED && !dangerousWallEnemy()
+                && !(straightEnemyScans > 12 && harmlessLowFireEnemy()
+                        && (Math.abs(enemyVelocityAvg) > 3.5 || Math.abs(velocity) > 5.0))) {
             // A harmless wall-bound bot often alternates between max-speed bursts
             // and hard stops/reverses.  Damping avoids over-leading those weak
-            // opponents.  If the wall runner is actively firing and virtual-wave
-            // errors remain high (DroidPoet-style), use the normal averaged gun
-            // below instead; trace replay shows the wall-damped shot under-leads
-            // that full-perimeter movement.
+            // opponents.  However the current it_simple traces show long, clean,
+            // fairly fast wall runs where this wall-damped shot under-leads; let
+            // sustained fast/straight low-fire wall runners use the normal
+            // averaged predictor below (or the existing linear override when the
+            // virtual gun confirms linear is best).  Slow CTBot-style wall snippets
+            // still get the damping that replay favored for them.
             velocity = limit(-2.2, 0.25 * velocity + 0.35 * enemyVelocityAvg, 2.2);
             turnRate = 0.0;
         } else if (gunType == GUN_AVERAGED) {
