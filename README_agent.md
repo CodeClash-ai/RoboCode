@@ -260,3 +260,45 @@ Compiles Java 8 (major version 52), rc=0. Backup at /tmp/MyTank.bak.java (this p
 - We win 100%; bullet damage (~800/1580 of score) is the only remaining lever.
   If a NEW log shows margin dropping or a faster/erratic mover, raise the predicted
   weight or lower the <1.5 direct-aim threshold. Keep MyTank class name + Java-8.
+
+# Agent Notes (Round 1 / current pass) — opponent = trex22__deepthought
+
+## KEY FINDING: opponent is a STOP-AND-GO DODGER (first real evasive foe)
+Analyzed /logs/rounds/0/sim_*.jsonl (header per-file: i=0=trex, i=1=opus).
+- Enemy STOPPED (v<0.3) ~54% of ticks; between stops it bursts to v=8 (full
+  speed), traveling 100+px, then stops again. Bursts triggered ~when we fire
+  (energy-drop dodge). Body heading in scan looked ~0 but it clearly translates.
+- Prior result (before my change): opus-4-8 43329 vs trex 343. 10/10 firsts,
+  100% win. BUT margin lower than stationary foes: kill tick ~428, we finish
+  with only ~83 energy (vs ~130 for sitting ducks). Enemy fires ~power-1.5
+  bullets and lands ~26 hits/game on us (~50 E lost).
+
+## Changes this pass (gun + movement)
+1. aimAndFire power selection REWRITTEN and TIERED by (stationary vs moving) x range:
+   - stationary (|v|<1.0): power 3.0 (<500px) else 2.4 (long range gives it time
+     to move before slow bullet lands, so use faster bullet far away).
+   - moving dodger: 3.0 (<200px) / 2.2 (<450) / 1.7 (>=450) — faster bullets at
+     range arrive before the evasive burst completes; higher power up close where
+     bullet flight is short.
+2. Aim blend retuned to new thresholds: |v|<1.0 -> aim at current pos (hits the
+   54% stopped ticks); 1.0<=|v|<3.0 -> 0.55 cur/0.45 predicted (accel/decel);
+   |v|>=3.0 -> full constant-velocity prediction (it holds v=8 mid-burst).
+3. Movement now RANGE-CONTROLLED: orbit angle biased inward if dist>550,
+   outward if dist<300 (target ~450px sweet spot). Harder to ram, enemy bullets
+   take longer to reach us, gun stays accurate.
+All compile to Java 8 (major version 52). Backup of prior version: /tmp/MyTank.bak.java
+(not persistent across rounds — prior source also in git history).
+
+## LOCAL HARNESS UPDATE
+The battle now RUNS 10 rounds locally (java -cp libs/* ... robocode.Robocode
+-battle ... -nodisplay) but STILL "Can't find custom.MyTank" -> empty results
+(scoring rows blank). So still cannot get local head-to-head numbers. Trust /logs.
+
+## For next teammate
+- We win 100%; goal is raising bullet-damage share vs this dodger. If a NEW log
+  shows margin dropping, revisit power tiers. Note bullet dmg per hit for power p
+  = 4p + 2*max(p-1,0): power3=16, power1.7=7.4. Lower power only wins if it hits
+  >~2x more often — I kept powers fairly high to hedge. If enemy dodges our
+  stopped-aim shots too (fires-then-moves faster than bullet), lower long-range
+  power further.
+- Keep MyTank class name + Java-8 bytecode (the only hard requirement).

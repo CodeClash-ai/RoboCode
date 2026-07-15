@@ -100,19 +100,27 @@ public class MyTank extends AdvancedRobot {
     }
 
     private void aimAndFire(double absBearing) {
-        // Choose bullet power by distance & our energy
+        // Choose bullet power by distance & our energy.
+        // Opponent (trex22__deepthought) is a STOP-AND-GO DODGER: stopped ~54%
+        // of ticks, then makes big evasive bursts (v up to 8) after we fire.
         double power;
-        if (enemyDistance < 150) {
-            power = 3.0;
-        } else if (enemyDistance < 400) {
-            power = 2.5;
+        boolean stationary = Math.abs(enemyVelocity) < 1.0;
+        if (stationary) {
+            // Can't dodge a bullet already in flight while stopped -> max power,
+            // BUT at long range give it time to move before impact, so use a
+            // slightly lower (faster) bullet far away.
+            power = (enemyDistance < 500) ? 3.0 : 2.4;
         } else {
-            power = 1.9;
-        }
-        // Against a (near-)stationary target we always hit, so fire max power to
-        // kill faster and maximize damage margin (safe: no aiming error).
-        if (Math.abs(enemyVelocity) < 3.5) {
-            power = 3.0;
+            // Moving dodger: fire FASTER (lower-power) bullets so they arrive
+            // before it can complete an evasive burst. Faster bullets = harder
+            // to dodge and less energy wasted on missed max-power shots.
+            if (enemyDistance < 200) {
+                power = 3.0;
+            } else if (enemyDistance < 450) {
+                power = 2.2;
+            } else {
+                power = 1.7;
+            }
         }
         if (getEnergy() < 20) {
             power = Math.min(power, 1.0);
@@ -149,16 +157,16 @@ public class MyTank extends AdvancedRobot {
             predDist = Point2D.distance(getX(), getY(), predX, predY);
         } while ((deltaTime) * bulletSpeed < predDist && deltaTime < 120);
 
-        // Stop-and-go / slow target: the enemy stops for ~half its ticks, so a
-        // constant-velocity predictor over-shoots. Blend current position (heavy)
-        // with the linear prediction to compensate.
-        if (Math.abs(enemyVelocity) < 1.5) {
-            // Near-stationary: aim directly at current position for max accuracy.
+        // Stop-and-go dodger: when stopped, aim directly at current position
+        // (max accuracy). When it accelerates it ramps to v=8 quickly and holds,
+        // so full constant-velocity prediction is accurate mid-burst. Blend only
+        // in the low-speed accel/decel transition to avoid over-shooting.
+        if (Math.abs(enemyVelocity) < 1.0) {
             predX = enemyX;
             predY = enemyY;
-        } else if (Math.abs(enemyVelocity) < 3.5) {
-            predX = 0.65 * enemyX + 0.35 * predX;
-            predY = 0.65 * enemyY + 0.35 * predY;
+        } else if (Math.abs(enemyVelocity) < 3.0) {
+            predX = 0.55 * enemyX + 0.45 * predX;
+            predY = 0.55 * enemyY + 0.45 * predY;
         }
         double aimAngle = Math.atan2(predX - getX(), predY - getY());
         double gunTurn = Utils.normalRelativeAngle(aimAngle - getGunHeadingRadians());
@@ -179,10 +187,15 @@ public class MyTank extends AdvancedRobot {
         double energyDrop = lastEnemyEnergy - enemyEnergy;
         boolean enemyFired = energyDrop >= 0.09 && energyDrop <= 3.0;
 
-        // Orbit: move perpendicular to enemy
+        // Orbit: move perpendicular to enemy, biased to hold a good range.
         double absBearing = enemyBearing;
-        // Desired heading perpendicular to the enemy, offset a bit to close/open range
-        double desiredDir = absBearing + Math.PI / 2 * moveDirection;
+        // Range control: if too far, angle inward to close; if too close, angle
+        // outward to open. Keeps us in the sweet spot (~450px) where our gun is
+        // accurate but we're hard to ram and enemy bullets take longer to arrive.
+        double rangeBias = 0.0;
+        if (enemyDistance > 550) rangeBias = -0.35;      // pull in
+        else if (enemyDistance < 300) rangeBias = 0.45;  // push out
+        double desiredDir = absBearing + (Math.PI / 2 + rangeBias) * moveDirection;
 
         // Wall smoothing: steer away from walls
         desiredDir = wallSmoothing(getX(), getY(), desiredDir, moveDirection);
