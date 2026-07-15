@@ -4369,3 +4369,47 @@ R2 dodge params (0.15). Do NOT raise dodge, do NOT conserve. Both lose the match
 - Verify NEW /logs: want winner=opus-4-8, ~55% share like R2, firsts ~152.
 - Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING.
 - Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 5 / current)
+
+## OPPONENT NOW: josephjeon__gntest (a REAL, aggressive bot)
+Prior notes about stationary/passive opponents are OBSOLETE for this matchup.
+Analyzed /logs/rounds/0/ (250 sims). Baseline (before my edits): we WON 70% of
+games (173-74) and led score 26867 vs 16527 (~62%). But 2 of 25 matches lost.
+
+### Opponent profile (analysis scripts in /tmp saved logic below):
+- FAST curving mover: avg|v| 6.39, 74% full speed, moves 89% of ticks, avg|dh| 0.083 rad/tick.
+- AGGRESSIVE: fires ~29 shots/game (NOT energy-conserving).
+- Gun is HEAD-ON: median offset 0.022 rad (aims at our current position).
+- We are hard for it to hit AND it's hard for us to hit (~5-7% both ways = slugfest).
+
+### KEY DEFENSIVE FINDING (biggest lever = survival, our top score component):
+Enemy hit density on us by distance (hits/1000 ticks):
+  100-500px: ~58-65/1k (FLAT, high)   500-600px: 27.6   600-700px: 18.2
+=> Enemy accuracy COLLAPSES beyond 500px. We were orbiting ~370px (in its kill
+zone). Moved orbit to ~530px (rangeBias tiers, ~line 580) to slash damage taken.
+
+### Aim: W=0.0 (full linear lead) beats W=1.0 head-on (7.6% vs 5.0% replay).
+Changed W 1.0 -> 0.0 (line ~334). Fast constant-velocity mover needs a full lead.
+
+### Power: tiered by distance (line ~266): 3.0<200, 2.0<450, 1.5<560, 0.8<640, 0.4 far.
+Point-blank (enemy charging in) is ~80% hit -> full power. At our 530px orbit,
+moderate power keeps our bullet-dmg lead (we win 14064 vs 10918) without heavy bleed.
+Relaxed far-fire gates to 600/640px so we still fight at our 530px orbit.
+
+## ANALYSIS SCRIPTS (rebuild in /tmp; logic documented):
+- Enemy movement/gun profile: parse sim_*.jsonl, robot i=1 is enemy. Check v (velocity),
+  bh (body heading) deltas, energy drops 0.09-3.05 = a fire, gun offset gh vs atan2 to us.
+- Enemy hit density on us: count our energy drops 0.09-3.05 per distance bucket.
+- Aim replay: for each tick, compute our aim (W blend of head-on vs iterated lead),
+  fly bullet dist/bs ticks, check if it lands within 18px of enemy's ACTUAL future pos.
+  NOTE: replay UNDERSTATES hit rate (enemy path is reactive to our old shots) but W/dist
+  RANKINGS are still valid.
+
+## Backup of pre-edit bot: robots/custom/MyTank.java.bak
+## Verify build: javac --release 8 -cp libs/robocode.jar -d robots robots/custom/MyTank.java
+##   javap -v robots/custom/MyTank.class | grep "major version"  # want 52
+
+## NEXT TEAMMATE: if we regress, the orbit-wider (530px) change is the main bet.
+If losses go UP, try orbit ~450px (between old 370 and new 530). If bullet-dmg
+share drops too much, raise the 1.5 tier at 560px back toward 2.0.
