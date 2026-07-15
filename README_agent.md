@@ -5404,3 +5404,138 @@ this healthy.
    repository within the same call). Still the single highest-leverage infra
    fix available if a future teammate has a larger step budget to spend on it
    than usual.
+
+## Round 43 update (this round) — new opponent (alpian__ianstank), found & fixed "corner camper" movement bug
+
+### Context
+Only `/logs/rounds/0/` exists in this environment for me. Per `trace.md` /
+`results.json`, this round's opponent is a **new** one, `alpian__ianstank`
+(different from every opponent documented in rounds 1-42 above). Result:
+**98% win rate (244/250)**, 39% accuracy, avg speed 6.4, avg walls/game 2.2,
+avg min energy 78. **6 losses** (`sim_0`, `sim_16`, `sim_68`, `sim_142`,
+`sim_189`, `sim_191`), 0 ties. Opponent is weak overall (2% win rate, 20%
+accuracy, avg speed 2.6) but clearly capable of grinding out occasional wins
+in long games (all 6 losses ran 1000+ turns, vs. the series avg of 489).
+
+### Investigation
+`python3 tools/analyze_freezes.py /logs/rounds/0 --threshold 20 | grep -i
+sonnet` -> only 6 short, benign findings (radar-settled + short
+STUCK-RAMMING, all well-understood patterns from earlier rounds, none
+correlating with a loss) — no escape-mode regression (rounds 34-37/40's
+fixes are holding).
+
+Traced all 6 losses' opponent (robot 0) x/y ranges: **every single loss game
+shows the opponent camped in a small area right in one corner of the field**
+(e.g. game 0: x in [57,146], y in [54,99]; game 142: x in [705,782], y in
+[460,525]; etc. — all 4 corners represented across the 6 losses). Dumped
+robot 0's per-tick position in one game (`sim_0.jsonl`): it's a simple
+**oscillator** — accelerates to top speed along a FIXED heading, travels a
+short distance, sits motionless for ~10-20 ticks, then reverses back along
+the exact same heading, forever, near one corner. Never turns. This is a
+"corner camper" strategy.
+
+Cross-checked OUR OWN robot's position range in the same 6 games: **our own
+x/y range spans almost the ENTIRE battlefield** (e.g. game 0: x in [18,782],
+y in [18,582] — literally corner-to-corner) even though the enemy never
+moves more than ~90px from one spot. Also found elevated wall-hit counts in
+these losses specifically (7-15 `HIT_WALL` ticks per game vs. the ~2.2/game
+series average) — both signs point to the same root cause.
+
+### Root cause
+`onScannedRobot()`'s orbit-strafe movement computes a single perpendicular
+waypoint per tick (`myX/myY + sin/cos(perpendicularAngle) * moveAmount`,
+where `perpendicularAngle = absBearing ± 90°` based on `moveDirection`), then
+clamps it to a `WALL_MARGIN`-inset safe rectangle if it falls outside. When
+the enemy sits within/near that inset rectangle (a corner-camping bot, by
+construction), roughly HALF the circle of points at `PREFERRED_DISTANCE`
+around it is off-field — so whichever perpendicular side `moveDirection`
+happens to point at on a given tick is essentially a coin flip between "open
+space" (clean orbit) and "immediately clamped" (reactive fallback: re-aim
+toward the clamped boundary point or field center instead). Since
+`moveDirection` only flips periodically/randomly (`strafeTimer`) or on being
+hit, with zero awareness of wall geometry, the bot kept alternating between
+these two very different movement plans tick after tick near a corner-camped
+enemy — producing the observed erratic, whole-battlefield-spanning
+trajectory and elevated wall-hit count, instead of settling into a stable
+orbit specifically on the enemy's OPEN side.
+
+### Fix applied (`robots/custom/MyTank.java`, `onScannedRobot()`'s movement block)
+Before falling through to the existing reactive "clamp to boundary / head
+toward center" fallback, added a check: if the primary perpendicular
+waypoint would be clamped (off-field), compute the OTHER perpendicular side's
+waypoint too; if that alternate side is clear (not clamped), commit to it
+persistently (flip `moveDirection`, reset `strafeTimer` so the periodic
+random flip doesn't immediately undo this) instead of falling back to the
+boundary-hugging fallback. This should let the bot settle into a stable
+orbit on whichever side of a corner-camping enemy is actually open, rather
+than randomly toggling between "clean orbit" and "reactive fallback" every
+time `moveDirection` happens to flip. The original reactive fallback (clamp
+to the safe rectangle, or head to field center if already there) is
+unchanged and still used as a last resort if BOTH perpendicular sides are
+blocked (e.g. we're also right next to a wall ourselves, not just the
+enemy).
+
+Verified `javac -Xlint:all -cp libs/robocode.jar -d robots
+robots/custom/MyTank.java` compiles clean (no errors/warnings), `.class` up
+to date. Old (pre-this-round) version preserved at
+`archive/round1_backups/MyTank.java.before_round43_corner_camper_fix` for a
+quick diff/revert if next round's numbers look worse.
+
+### What I did NOT get to
+- **Not validated by a real match** (same long-standing limitation as every
+  previous round — no working local headless battle runner in this sandbox).
+  This is a real, clearly-diagnosed bug (directly traced whole-battlefield
+  wandering + elevated wall hits in all 6 real losses, all against a
+  corner-camping enemy) with a reasoned, low-risk fix (it only changes
+  behavior in the specific case where the primary orbit side is already
+  about to be clamped, and it reuses the exact same wall-safety check already
+  computed for the existing fallback — it cannot make a currently-fine tick
+  worse). **First thing to check next round**: `avg walls/game` should drop
+  from this round's 2.2 baseline if this specific opponent reappears, and
+  losses should shrink from 6/250. Also worth spot-checking whether our own
+  robot's x/y range in games against a corner-camping opponent (if one
+  reappears) stays closer to the enemy's own range instead of spanning the
+  whole field.
+- Did not add a systematic "corner camper" detector to any analysis tool
+  (e.g. flagging games where the opponent's position range is small while
+  ours is huge) — this round's investigation was a manual per-loss trace;
+  a good next tooling step would be to compute both robots' position bounding
+  boxes per game in `tools/analyze_sim_logs.py` or a new script and flag a
+  large disparity automatically.
+- Did not touch bullet power, `PREFERRED_DISTANCE`, the escape-mode
+  mechanism (rounds 20/23/25/34-37/40), or ramming logic this round — wanted
+  to isolate this one movement-side fix so it's cleanly attributable in next
+  round's logs.
+- Did not consider making `PREFERRED_DISTANCE` itself adaptive when the enemy
+  is near a wall (e.g. shrinking it so the full orbit circle fits on-field) —
+  the "prefer the open side" fix is a smaller, more surgical change that
+  should handle the common case (a corner, not literally every point on the
+  circle blocked) without needing to also retune the preferred-distance
+  logic; if losses persist against corner-campers, that would be a natural
+  next thing to try.
+
+### Suggestions for next teammate
+1. **First step, as always**: check `/logs/rounds/<N>/trace.md` for this
+   round's actual opponent/result, and run
+   `python3 tools/analyze_freezes.py /logs/rounds/<N> --threshold 20 | grep -i
+   sonnet` as the standard regression check.
+2. If `alpian__ianstank` reappears, this is the highest-value comparison:
+   check whether losses dropped from 6/250, whether `avg walls/game` dropped
+   from 2.2, and whether our own robot's position range in individual games
+   stays tighter around the enemy's actual location (spot-check a couple of
+   games' x/y ranges the same way this round did) instead of spanning the
+   whole battlefield.
+3. If a different corner-camping-style opponent shows up (small position
+   range, stationary-with-bursts movement pattern, near a corner/wall), the
+   same fix should generalize — worth explicitly checking rather than
+   assuming, since this round's fix is genuinely untested in a real match.
+4. `pez__gf1` (rounds 11-12, ~14% tie rate from mutual energy attrition)
+   remains the toughest opponent in this file's history and the single most
+   valuable target for directly re-testing the FULL accumulated stack of
+   fixes since round 12 — still hasn't reappeared after 31 rounds.
+5. Local headless battle-runner: still unresolved after 42+ rounds of
+   attempts (see round 6's section for the most detailed known blocker,
+   `RepositoryManager.loadSelectedRobots` not seeing a freshly-reloaded
+   repository within the same call). Still the single highest-leverage infra
+   fix available if a future teammate has a larger step budget to spend on it
+   than usual.

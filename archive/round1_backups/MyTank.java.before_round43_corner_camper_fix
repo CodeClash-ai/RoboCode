@@ -736,11 +736,6 @@ public class MyTank extends AdvancedRobot {
             moveAmount = (distanceError > 0) ? 120 : 80;
         }
 
-        double minX = WALL_MARGIN;
-        double maxX = getBattleFieldWidth() - WALL_MARGIN;
-        double minY = WALL_MARGIN;
-        double maxY = getBattleFieldHeight() - WALL_MARGIN;
-
         // Project the planned waypoint and clamp it to a safe inset rectangle so we
         // never issue a move that would drive us straight into (or through) a wall.
         // This is the core fix for the "wall standoff" bug: previously we always
@@ -749,51 +744,20 @@ public class MyTank extends AdvancedRobot {
         double targetX = myX + Math.sin(perpendicularAngle) * moveAmount;
         double targetY = myY + Math.cos(perpendicularAngle) * moveAmount;
 
-        boolean clamped = (targetX < minX || targetX > maxX || targetY < minY || targetY > maxY);
+        double minX = WALL_MARGIN;
+        double maxX = getBattleFieldWidth() - WALL_MARGIN;
+        double minY = WALL_MARGIN;
+        double maxY = getBattleFieldHeight() - WALL_MARGIN;
 
-        // Round 43 addition ("corner camper" fix): if an opponent parks itself near
-        // (or inside) the WALL_MARGIN inset -- e.g. a stationary/sentry-style bot
-        // that just sits in a corner -- roughly HALF of the circle around it at
-        // PREFERRED_DISTANCE is off-field, so whichever perpendicular side
-        // moveDirection happens to be pointing at that moment is a coin flip
-        // between "open space" and "immediately clamped". Analysis of this rung's
-        // 6 losses (see README_agent.md round 43 notes) showed our own robot
-        // wandering the ENTIRE battlefield (full 18-782 x-range, 18-582 y-range)
-        // while the enemy stayed camped in one small corner the whole game, plus
-        // elevated wall-hit counts (7-15/game vs a ~2.2/game series average) --
-        // consistent with repeatedly picking the clamped side and reacting after
-        // the fact, rather than settling into a stable orbit on the enemy's open
-        // side. Fix: if the primary perpendicular choice is clamped, check whether
-        // flipping to the OTHER perpendicular side is clear; if so, commit to that
-        // side (flip moveDirection persistently, not just for this tick) instead of
-        // falling through to the reactive clamp-to-boundary fallback below.
-        if (clamped) {
-            double altAngle = absBearing - (Math.PI / 2) * moveDirection;
-            double altX = myX + Math.sin(altAngle) * moveAmount;
-            double altY = myY + Math.cos(altAngle) * moveAmount;
-            boolean altClamped = (altX < minX || altX > maxX || altY < minY || altY > maxY);
-            if (!altClamped) {
-                moveDirection = -moveDirection;
-                perpendicularAngle = altAngle;
-                targetX = altX;
-                targetY = altY;
-                clamped = false;
-                strafeTimer = 0;
-            }
-        }
+        boolean clamped = false;
+        if (targetX < minX) { targetX = minX; clamped = true; }
+        if (targetX > maxX) { targetX = maxX; clamped = true; }
+        if (targetY < minY) { targetY = minY; clamped = true; }
+        if (targetY > maxY) { targetY = maxY; clamped = true; }
 
         double moveAngle;
         double finalMoveAmount;
         if (clamped) {
-            // Actually clamp the waypoint into the safe rectangle now (this was
-            // previously done inline while computing `clamped` above; kept as a
-            // separate step now since round 43's "prefer open side" check above
-            // needs the *unclamped* targetX/targetY to test the alternate side
-            // fairly, before we commit to clamping as a last resort here).
-            if (targetX < minX) targetX = minX;
-            if (targetX > maxX) targetX = maxX;
-            if (targetY < minY) targetY = minY;
-            if (targetY > maxY) targetY = maxY;
             // Re-derive heading/distance toward the clamped (safe) waypoint instead
             // of blindly driving perpendicular into the wall.
             double dx = targetX - myX;
