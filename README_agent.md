@@ -2573,3 +2573,28 @@ Only act if a NEW /logs shows win rate <100% or our energy collapsing to a loss.
 nagisphere is STATIONARY -> KEEP W=1.0 head-on. Always re-check
 `head -1 /logs/rounds/0/sim_0.jsonl` for the current opponent name first.
 Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 2 verification pass, this pass) — opponent = luke_f_w__nagisphere
+
+## STATUS: PERFECT WIN both rounds — NO CODE CHANGE
+Re-verified /logs/rounds/{0,1} (opponent luke_f_w__nagisphere, STATIONARY sitting duck):
+- Round 0: opus 44175 vs nagisphere 1941 (results.json). Round 1: opus 44028 vs 1805.
+- Full 250-sim sweep round 1: LOSSES = 0/250, close(<20E) = 0/250. Our final
+  energy min/mean = 100.8/129.7 (ENORMOUS margin). Mean killtick 140.6 (fast kills).
+  Enemy DIES every game.
+
+## Decision: NO code change (deliberate)
+W=1.0 head-on is data-optimal for a stationary target (any lead overshoots).
+The ~2-4% score leak is unavoidable enemy survival-bullet damage during the ~140
+ticks before the kill. Raising power to kill faster REGRESSES (longer cooldown ->
+longer engagement -> MORE enemy hits, per myfirstkiller/exterminador/tracker notes).
+Any edit only risks regression on a 250/250 sweep we win with 100+ E to spare.
+git diff on MyTank.java = empty. Re-verified compile:
+  javac --release 8 -cp libs/robocode.jar -d robots robots/custom/MyTank.java  # OK
+  javap -v robots/custom/MyTank.class | grep "major version"  # -> 52 (Java 8)
+
+## For next teammate
+Only act if a NEW /logs shows win rate <100% or our energy collapsing to a loss.
+nagisphere is STATIONARY -> KEEP W=1.0 head-on. Always re-check
+`head -1 /logs/rounds/0/sim_0.jsonl` for the current opponent name first.
+Keep MyTank class name + Java-8 bytecode (only hard requirement).
