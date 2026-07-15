@@ -2953,3 +2953,50 @@ If a NEW opponent appears next rung, check its movement:
   python3 -c "import json,glob;fn=sorted(glob.glob('/logs/rounds/N/sim_*.jsonl'))[0];[print([u for u in d['u'] if u['i']==0][0]['v']) for d in [json.loads(l) for l in open(fn)][:25] if 'u' in d]"
 Then pick W (0.0=full lead/circular for fast curvers, 1.0=head-on for slow/
 oscillators) and rangeBias orbit distance based on where the enemy's gun is weak.
+
+# Agent Notes (Round 1 / current pass) — opponent = iagomonteiro13579__npcsniper (COMPETITIVE, 15 losses)
+
+## KEY FINDING: gun was misconfigured (W=0.0 circular leftover from spinbot) + orbit too far
+Round 0 result (BEFORE my change): opus-4-8 39031 vs npcsniper 7379 (16% share!).
+results_0.txt: opus 1611 (89%), 10/10 firsts BUT full 250-sim sweep: 15 LOSSES,
+21 close(<20E), our final E mean only 59.4, games LONG (avg 620, max 1044),
+killtick mean 450. This is a genuinely competitive foe (highest enemy share in a while).
+
+## Opponent profile (250 sims; header maps idx->name, enemy=non-'opus')
+- movefrac 0.72, avg|v| 4.31 (moderately fast), avg|dh| 0.0345 (MILD curve — NOT
+  a heavy spinner like spinbot's 0.087), engages ~297px. Fires a decent gun.
+
+## ROOT CAUSE of the 15 losses: net-energy-NEGATIVE firing at 200-400px
+Measured OUR hit rate + enemy density + NET bullet energy by distance (250 games):
+  0-100px:   hit 91%, enemy 12.9/1k, NET -39   (enemy gun deadly close)
+  100-200px: hit 66%, enemy  8.7/1k, NET +270  (ONLY net-positive zone!)
+  200-300px: hit 26%, enemy  5.8/1k, NET -6254 (CATASTROPHIC — we fired 3358 shots at 26%)
+  300-400px: hit 18%, enemy  6.9/1k, NET -3247
+We orbited ~250px (spinbot config) -> spent most ticks in the -6254 zone, bleeding
+the energy war -> the 15 losses + long grinds.
+
+## CHANGES THIS PASS (both data-supported)
+1. GUN aim W: 0.0 (circular) -> 1.0 (HEAD-ON). W-sweep 2 independent 80-game
+   slices (per-tick interception over recorded paths): head-on 36-38% vs circular
+   23-24% (MONOTONIC). The replay is BIASED toward W=0.0 (enemy path was reactive
+   to our actual circular shots) yet head-on STILL wins by ~13 points -> very
+   strong signal (bias would favor circular, not against). This is a MILD-curve
+   mover (dh 0.035), so head-on is correct; circular was wrong (that was for the
+   heavy-spinner spinbot).
+2. MOVEMENT orbit ~250px -> ~185-200px (conservative hedge). rangeBias: >400 -> -0.9,
+   >290 -> -0.6, >210 -> -0.3, <160 -> +0.45 (push out of deadly <150px zone).
+   Targets the 100-200px net-positive zone (66% hit) instead of the -6254 zone.
+Power tiers (3.0/<300 2.4/<400 1.6/<550), fire gates, energy-war taper UNCHANGED.
+Compiles Java 8 (major version 52), rc=0. Backup of prior source: /tmp/MyTank.bak.java.
+
+## For next teammate — VERIFY
+- Want NEW /logs win rate ABOVE 94% (ideally 100%), the 15 losses GONE, our final
+  E mean UP from 59.4, killtick DOWN from 450, enemy share DOWN from 16%.
+- If it REGRESSED: (a) if new losses appear, the closer orbit may have exposed us
+  to the enemy's close gun -> push orbit back to ~210px (thresholds 450/320/230/<190)
+  or revert movement only; (b) if hit rate dropped, unlikely (W-sweep clean) but
+  could try W=0.5 half-lead. Full revert = /tmp/MyTank.bak.java (git prior, 94%).
+- npcsniper is a MODERATE mild-curve mover -> KEEP W=1.0 head-on unless profile
+  changes. If it becomes a HEAVY spinner (avg|dh|>0.06), set W=0.0 (circular).
+- Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for the opponent name first.
+- Keep MyTank class name + Java-8 bytecode (only hard requirement).

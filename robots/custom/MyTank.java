@@ -280,7 +280,7 @@ public class MyTank extends AdvancedRobot {
         // (distance-based, kept net-positive) still guard the crazy-bot regression.
         // Chose W=0.85: strongly toward head-on (physics: slow target -> head-on best),
         // hedged just short of pure 1.0 since replay is biased by the reactive enemy path.
-        double W = 0.0;  // vs robo_code__spinbot (FAST heavily-curving SpinBot: movefrac 0.95, avgV 4.68, avgDH 0.087, engages ~218px). W-sweep 2 slices (80 games each): W=0.0 CIRCULAR hits ~56pct vs W=0.25 ~45pct, head-on(W=1.0) ~34pct, linear(W=0.0 no-turn) ~21pct. Circular targeting nearly DOUBLES hit rate vs head-on. Was 1.0 for SLOW sadbot.
+        double W = 1.0;  // vs iagomonteiro13579__npcsniper (moderate mover: movefrac 0.72, avgV 4.31, avg|dh| 0.0345 MILD curve, engages ~297px). W-sweep 2 slices: HEAD-ON(W=1.0) ~36-38pct BEST vs circular(W=0.0) ~23-24pct. Replay biased toward W=0.0 (our old aim) yet head-on wins DESPITE bias. NOT a heavy spinner. Was 0.0 for spinbot.
         // [old] double W = 1.0; // HEAD-ON best vs alpian__ianstank (stop-and-reverse oscillator, ~50% stationary). Replay-sim 80 games: W=1.0 hits 40.3% vs W=0.0 21.4%.
         double predX = W * enemyX + (1 - W) * leadX;
         double predY = W * enemyY + (1 - W) * leadY;
@@ -377,11 +377,11 @@ public class MyTank extends AdvancedRobot {
         // DANGEROUS up close (6.3/1k at 100-200, 17.5/1k at 0-100). So orbiting
         // WIDER to ~250px is strictly better here: same/better hit rate AND far
         // fewer enemy hits. (Prior ~150px orbit was for weak-gun slow movers.)
-        double rangeBias = 0.0;
-        if (enemyDistance > 450)      rangeBias = -1.0;  // far: steer strongly inward to close
-        else if (enemyDistance > 320) rangeBias = -0.6;  // mid: firm inward pull
-        else if (enemyDistance > 250) rangeBias = -0.3;  // near target: gentle inward
-        else if (enemyDistance < 220) rangeBias = 0.5;   // too close (enemy kill zone): push out
+        double rangeBias = 0.0;  // vs npcsniper: net-energy by dist shows 100-200px is the ONLY net-positive zone (66% hit, +270) vs 200-300px catastrophic (26% hit, -6254). Orbit CLOSER (~170px). Was ~250px for spinbot.
+        if (enemyDistance > 400)      rangeBias = -0.9;  // far: steer strongly inward to close
+        else if (enemyDistance > 290) rangeBias = -0.6;  // mid: firm inward pull
+        else if (enemyDistance > 210) rangeBias = -0.3;  // near target ~190px: gentle inward
+        else if (enemyDistance < 160) rangeBias = 0.45;  // too close (enemy gun deadly <150px): push out
 
         double desiredDir = absBearing + (Math.PI / 2 + rangeBias) * moveDirection;
 
