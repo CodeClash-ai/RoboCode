@@ -5119,3 +5119,54 @@ Compiles Java 8 (major version 52).
   (W=0.0 with the circular predictor already uses it). Always re-check
   `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING first.
 - Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 1 / current pass) — opponent = pez__haikuwalls
+
+## STATUS: WINNING 249/250 (79% share, 10/10 firsts every battle) — NO CODE CHANGE
+Opponent CHANGED to pez__haikuwalls. Verified /logs/rounds/0 (INDEX i=0=opus, i=1=haikuwalls):
+- results.json: winner=opus-4-8, 37005 vs 8236.
+- results_0.txt: opus 1485 (79%), 10/10 firsts; enemy 384 (21%, all bullet dmg).
+- Full 250-sim sweep: 1 LOSS (sim_207), 2 close(<20E). ourFE mean 86.4, min 0.0.
+  killtick mean 281.7, turns mean 441.
+
+## Opponent = FAST NEAR-STRAIGHT mover with a LEAD gun
+Per-sim analysis (250 games): movefrac 0.695, avgV 5.14, avg|dh| 0.0108 (NEARLY
+PERFECTLY STRAIGHT — a "walls"-style perimeter mover), engages ~365px. Enemy gun
+offset median 0.464 rad (mean 0.667) -> it uses a LEAD gun (aims where we WILL be).
+This is a DIFFERENT bot from robo_code__walls (v=8 perfect linear) — haikuwalls is
+slightly slower (avgV 5.14) and engages at range (~365px), not point-blank.
+
+## Gun aim W=0.0 (full linear lead) CONFIRMED data-optimal (W-sweep, 2 slices)
+Per-tick interception over recorded paths (power 2.0):
+  W=0.0 0.389/0.374 | W=0.25 0.237/0.220 | W=0.5 0.211/0.201 | W=0.75 0.212/0.211 |
+  W=1.0 0.330/0.312.
+W=0.0 clearly best (full linear lead is near-exact on the straight sections of a
+near-straight fast mover). Current W=0.0 (leftover from robrrrat/crawler) is CORRECT.
+Do NOT change to head-on.
+
+## Enemy hit density by distance (unbiased, 150 games): DROPS with range
+  0-100px 20.4/1k | 100-200 10.9 | 200-300 5.7 | 300-400 3.9 | 400-500 4.5 |
+  500-600 4.2 | 600-700 2.4/1k. Enemy's LEAD gun is ~5x more dangerous close.
+We engage ~365px (300-400px zone, 3.9/1k) = already in the low-enemy-hit zone.
+The 1 loss (sim_207) + 2 close games were at LARGER dist (380-466px) — energy-war
+VARIANCE in longer grinds, NOT a positional bug (enemy density ~similar 4/1k there).
+
+## Decision: NO code change (deliberate)
+Current config (W=0.0 full linear lead, orbit ~290px targeting/~365px achieved,
+distance-tiered power, dodge 0.30 anti-lead-gun, close-escape <130 bolt/<230 push)
+is data-optimal for this fast near-straight LEAD-gun mover. We win 249/250 with 86
+E mean to spare. The 21% leak is enemy bullet damage during the ~282 ticks before
+the kill; NOT fixable by raising power (documented slow-kill regression) and the
+1 loss is rare variance. Any gun/movement edit only risks regression on a sweep we
+dominate. Re-verified compile:
+  javac --release 8 -cp libs/robocode.jar -d robots robots/custom/MyTank.java  # OK
+  javap -v robots/custom/MyTank.class | grep "major version"  # -> 52 (Java 8)
+
+## For next teammate
+Only act if a NEW /logs shows the MATCH lost or win rate collapsing. haikuwalls is
+a FAST NEAR-STRAIGHT mover with a LEAD gun -> KEEP W=0.0 full linear lead + dodge
+0.30 (anti-lead-gun). Do NOT switch to head-on (W-sweep clean: W=0.0 0.38 vs W=1.0
+0.33). If it becomes a HEAVY spinner (avg|dh|>0.06), circular (W=0.0 predictor
+already applies). If SLOW/stationary, raise W toward 1.0. Always re-check
+`head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING first.
+Keep MyTank class name + Java-8 bytecode (only hard requirement).
