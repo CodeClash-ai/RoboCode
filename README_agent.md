@@ -4127,3 +4127,149 @@ wrong, just evidence that variance exists even in a favorable-EV process.
    repository within the same call). Still the single highest-leverage infra
    fix available if a future teammate has a larger step budget to spend on it
    than usual.
+
+## Round 34 update (this round) — found & fixed onHitWall()'s own escape-mode-coordination bug (analogous to round 24's onHitRobot fix, but never applied to walls)
+
+### Context
+Both `/logs/rounds/0/` and `/logs/rounds/1/` exist this round, both real
+combat against `robo_code__regullarmonk` (same opponent round 33's notes
+describe). Round 0 matches round 33's own baseline (99.6% win, 1 loss, score
+43668 vs 1729). Round 1 (this round's fresh data, no code change had been
+made yet): **98% win rate (246/250)**, **2 losses** (`sim_98.jsonl`,
+`sim_195.jsonl`) + **2 ties** (`sim_56.jsonl`, `sim_136.jsonl`, one of which
+ran 3738 turns — very long), accuracy steady at 37%, avg min energy 77.
+`python3 tools/analyze_freezes.py --threshold 20 | grep -i sonnet` only
+flagged one trivial 20-tick radar-settle (benign, same pattern as several
+previous rounds).
+
+### Investigation: traced all 4 non-win games
+Wrote an ad-hoc per-tick energy-delta dump (filtering to |delta|>0.5,
+tagged by status) for all 4 non-win games. Every single one showed the
+**same signature**: we die/tie from pure energy attrition (firing costs
+outpacing landed-hit income), similar to the pattern rounds 18/25/31 already
+documented — but this time with an unusually large contribution from
+**wall-collision costs specifically** (`sim_98`: -22.3 energy from walls
+alone, ~7.4 wall-hits-worth; `sim_195`: -17.6; `sim_56`/`sim_136`: -10.5/-7.5),
+all with **zero matching wall cost on the opponent's side** in 3 of 4 games.
+This is a large, avoidable, purely self-inflicted energy handicap directly
+contributing to close losses/ties.
+
+Dug into *why* wall hits were so costly in these specific games: dumped every
+`HIT_WALL`-status tick's (x,y,v) and found the SAME position repeating for
+many consecutive ticks (e.g. `(18.0, 513.9)` for 12 straight ticks,
+`(782.0, 359.5)` for 4+ ticks) — i.e. genuine multi-tick "wedged at the wall"
+freezes, just each individually too short (2-12 ticks) to trip
+`analyze_freezes.py`'s threshold (even the lowered 20-tick one from round 26),
+so this exact failure mode had never been directly visible to that tool
+before, only found this round via a targeted `HIT_WALL`-status trace.
+
+### Root cause found: `onHitWall()` never entered the shared escape-mode mechanism it was supposed to help coordinate
+Round 20 added `escapeUntil`/`beginEscape()`/`reissueEscape()` specifically so
+`onHitRobot()` and `onScannedRobot()` wouldn't clobber each other's movement
+commands within the same tick (event priority: `HitRobotEvent`=40 >
+`HitWallEvent`=30 > `ScannedRobotEvent`=10, so lower-priority handlers run
+LAST and "win" any same-tick command conflict via simple overwrite). Round 24
+correctly added the *defensive* half of this to `onHitWall()` (check
+`getTime() < escapeUntil`, defer to `reissueEscape()` if already in escape
+mode triggered by something else) — but **never gave `onHitWall()` a way to
+initiate escape mode on its own**. Instead, `onHitWall()`'s "normal" path
+still issued a bespoke one-shot `setTurnRightRadians(...) + setAhead(100) +
+execute()` command with **zero stuck-detection and zero coordination** — so
+if `onScannedRobot()` (or `onHitWall()` again, next tick, recomputing the same
+still-blocked "toward center" turn) fired right after, it would silently
+overwrite/repeat the same non-progressing command, tick after tick, exactly
+the "handler doesn't coordinate" bug class rounds 20/25 had already found and
+fixed for `onHitRobot()` specifically but never generalized to `onHitWall()`'s
+own *initiation* path (only its *deference* path got fixed in round 24).
+
+### Fix applied (`robots/custom/MyTank.java`, `onHitWall()`)
+Replaced the bespoke one-shot turn-toward-center command with a call to
+`beginNoTurnEscape(wallAhead, 30)` — the same no-turn escape mechanism round
+25 built for the ramming-lock case (zero turn requested, ever; straight-line
+`setBack()`/`setAhead()` along whatever heading we already have; if stuck for
+3+ ticks, flip direction rather than trying to rotate — see `reissueEscape()`,
+unchanged this round). `wallAhead` is computed via the wall's bearing
+(`e.getBearingRadians()`, relative to our heading) exactly analogous to
+`onHitRobot()`'s existing `enemyAhead` check. This means:
+1. The very next tick, `onHitWall()`/`onScannedRobot()` (both already
+   correctly checking `getTime() < escapeUntil`) will call `reissueEscape()`
+   and agree on the SAME command instead of onScannedRobot() overwriting it
+   with fresh orbit logic.
+2. No turn is ever requested while escaping a wall, avoiding any analogous
+   "turning while colliding cancels the turn" risk (round 25's core insight
+   for the robot-contact case — untested whether walls have the exact same
+   mechanic, but zero-turn escape is strictly safer either way and costs
+   nothing to apply here too).
+3. If backing away in the wrong direction (e.g. we guessed backward but
+   actually the wall is also behind at a corner), `reissueEscape()`'s
+   existing 3-tick stuck-detection will flip to the opposite direction
+   automatically — no new logic needed, this "just works" by reusing
+   round 25's existing mechanism.
+Verified `javac -Xlint:all -cp libs/robocode.jar -d robots
+robots/custom/MyTank.java` compiles clean (no errors/warnings), `.class` file
+up to date. Old (pre-this-round) version preserved at
+`archive/round1_backups/MyTank.java.before_round34_wallstuck_escape` for a
+quick diff/revert if next round's numbers look worse.
+
+### What I did NOT get to
+- **Not validated by a real match** (same long-standing limitation as every
+  previous round — no working local headless battle runner in this sandbox;
+  see round 6's section for the most detailed writeup). This is a real,
+  clearly-diagnosed bug (directly traced repeated same-position HIT_WALL
+  ticks in real losing/tying games, and the code-level "onHitWall never
+  calls beginEscape" gap is unambiguous from reading the code) with a
+  fix that closely mirrors round 25's already-validated (round 26 confirmed
+  it with hard numbers) approach for the analogous robot-contact case — high
+  confidence, but genuinely untested. **First thing to check next round**:
+  dump `HIT_WALL`-status ticks and check whether the same-position-repeated-
+  for-many-ticks pattern is gone or much shorter; also check whether wall
+  costs specifically in losing/tying games (if any recur) have dropped from
+  this round's 7.5-22.3-energy-per-game range.
+- Did not touch the wall-only stuck-watchdog inside `onScannedRobot()`
+  (`stuckScanCount > 4`, still uses the turn-based `beginEscape()`, round 3/23)
+  — that path only triggers after 4 consecutive low-velocity scans, a slower
+  trigger than the immediate per-tick `onHitWall()` fix above, and I didn't
+  find direct evidence in this round's traces that it was itself misbehaving
+  (the freezes traced were short, 2-12 ticks — consistent with being caused
+  by `onHitWall()`'s own uncoordinated one-shot command repeating, not
+  necessarily implicating the separate slower watchdog). If similar wall-stuck
+  patterns persist next round despite this fix, that watchdog (and whether it
+  also needs a no-turn variant) would be the next thing to check.
+- Did not re-verify whether `HitWallEvent` has an `isMyFault()`-style
+  turn-cancellation mechanic analogous to `HitRobotEvent`'s (round 25's
+  documented root cause for the ramming case) — javadoc for `HitWallEvent`
+  doesn't mention any such method, so this may not even be the same
+  mechanism; the *coordination* gap (handler never entering shared escape
+  mode) was clearly real and fixable regardless, so fixed that first as the
+  higher-confidence, lower-risk piece.
+
+### Suggestions for next teammate
+1. **First step, as always**: check `/logs/rounds/<N>/trace.md` for this
+   round's actual opponent/result, and run
+   `python3 tools/analyze_freezes.py /logs/rounds/<N> --threshold 20 | grep -i
+   sonnet` as the standard regression check.
+2. **New, specific check for this round's fix**: dump `HIT_WALL`-status
+   ticks per game (template: filter each `sim_*.jsonl` line's `u` entries for
+   `s=="HIT_WALL"`, print `(t, x, y, v)`) and check whether the same-position-
+   for-many-consecutive-ticks pattern documented above is gone/shorter. If
+   `robo_code__regullarmonk` reappears, directly compare total wall-cost
+   energy per game (computed the same way as this round's trace: sum of
+   negative energy deltas tagged with `HIT_WALL` status) against this round's
+   baseline range (7.5-22.3 energy in the 4 non-win games) — should be much
+   lower if the fix works.
+3. If losses/ties persist with a similar profile (self-inflicted energy
+   attrition, wall costs still elevated), consider extending the same
+   no-turn-escape treatment to the `onScannedRobot()` wall-only stuck-
+   watchdog (`stuckScanCount > 4` path, still turn-based) as the next
+   candidate fix.
+4. `pez__gf1` (rounds 11-12, ~14% tie rate from mutual energy attrition)
+   remains the toughest opponent in this file's history and the single most
+   valuable target for directly re-testing the many stuck-ramming/wall-
+   escape/energy-management fixes accumulated since round 12 — still hasn't
+   reappeared after 22 rounds.
+5. Local headless battle-runner: still unresolved after 33+ rounds of
+   attempts (see round 6's section for the most detailed known blocker,
+   `RepositoryManager.loadSelectedRobots` not seeing a freshly-reloaded
+   repository within the same call). Still the single highest-leverage infra
+   fix available if a future teammate has a larger step budget to spend on it
+   than usual.

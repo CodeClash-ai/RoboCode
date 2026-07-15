@@ -818,33 +818,20 @@ public class MyTank extends AdvancedRobot {
             reissueEscape();
             return;
         }
-        // Round 34: found (via real-match log traces, see README_agent.md round
-        // 34 notes) that onHitWall() itself was the *source* of repeated,
-        // multi-tick "wedged at the wall" freezes (position frozen at an edge
-        // coordinate, v=0.0, HIT_WALL re-firing every tick, for anywhere from a
-        // couple to a dozen+ consecutive ticks, several separate times per game)
-        // in real losing/tying games -- NOT just a victim of being overridden by
-        // onScannedRobot() (that priority-ordering risk was already handled by
-        // the escapeUntil check above). The bug: this handler used to issue its
-        // own one-shot turn-toward-center + setAhead() command WITHOUT ever
-        // calling beginEscape()/beginNoTurnEscape() to enter the shared escape
-        // mode -- so it never told onScannedRobot() "I'm handling this", and on
-        // the very next tick onScannedRobot() (or this handler again, with a
-        // freshly-recomputed and possibly still-blocked turn) would silently
-        // clobber/repeat the command with no stuck-detection at all, exactly the
-        // same "handler doesn't coordinate" bug class rounds 20/25 already fixed
-        // for onHitRobot(). Fix: enter the shared no-turn escape mode here too
-        // (same rationale as the ramming case, round 25) -- moving in a dead-
-        // straight line along our EXISTING heading away from the wall, with zero
-        // turn request, is far less likely to be blocked/re-blocked than trying
-        // to rotate onto a "toward center" heading while already pinned. Reuse
-        // the same "is the wall roughly ahead or behind us" bearing check as
-        // onHitRobot()'s enemyAhead logic just below.
+        // Back off from the wall and reverse direction. Head toward the field
+        // center rather than just "back()" along our current heading, since that
+        // heading might not actually point away from the wall we just hit -- this
+        // was part of why the old handler could get stuck fighting onScannedRobot's
+        // wall-agnostic movement forever.
         moveDirection = -moveDirection;
         strafeTimer = 0;
-        boolean wallAhead = Math.abs(robocode.util.Utils.normalRelativeAngle(
-                e.getBearingRadians())) < Math.PI / 2;
-        beginNoTurnEscape(wallAhead, 30);
+        double cx = getBattleFieldWidth() / 2.0;
+        double cy = getBattleFieldHeight() / 2.0;
+        double angleToCenter = Math.atan2(cx - getX(), cy - getY());
+        setTurnRightRadians(robocode.util.Utils.normalRelativeAngle(
+                angleToCenter - getHeadingRadians()));
+        setAhead(100);
+        execute();
     }
 
     public void onHitRobot(HitRobotEvent e) {
