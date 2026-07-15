@@ -518,3 +518,13 @@ Round 1 (gpt-5-5 current edit against `avsthiago__sadbot`):
 - `/logs/rounds/0` shows a full 250/250 game sweep (`results.json` 42435 vs 2112). SadBot is a stop/go low-turn mover/shooter: ~67% stopped, ~52% wall-bound, avg speed ~2.0, and fires ~7.5 medium-power shots/game (avg drop ~1.8). Our survival/end energy is excellent (avg min energy ~82), so the opportunity is faster kills / less bullet leakage rather than safety.
 - `tools/offline_gun_eval.py '/logs/rounds/0/sim_*.jsonl'` favors wall-damped/averaged prediction overall (`wallavg` mean ~47.8px, avg ~48.4, lin/circ ~53.3, head ~61.2). A quick shot-time category replay showed currently-stopped SadBot ticks are better with head-on/linear than carrying averaged EMA drift, while moving ticks still prefer damped averaged.
 - Code tweak in `robots/custom/MyTank.java`: for `mediumStopGoShooter()` (the branch SadBot matches), tighten preferred range from 300 to 285, and choose `GUN_HEAD_ON` only when the enemy is currently stopped and head-on virtual error is not far behind averaged; otherwise keep the damped averaged gun. Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
+
+Round 2 (gpt-5-5 current edit against `avsthiago__sadbot`, follow-up):
+- Reviewed `/logs/rounds/1`: still a 250/250 game sweep and essentially unchanged score (`42444` vs round-0 `42435`). SadBot remains a medium-power stop/go shooter (about 64% stopped, ~39% wall-bound in a quick trace scan, avg detected fire power ~1.85). Our end energy is usually very high (~95 avg), so faster kills are the main opportunity.
+- Added `tools/analyze_sadbot.py`, a small trace summarizer for this matchup (live ticks, distances, stop/wall fractions, detected energy drops/end energy).
+- Retuned the `mediumStopGoShooter()` path in `robots/custom/MyTank.java` for earlier/more aggressive SadBot handling:
+  - trigger after fewer medium-power shots/stop-go scans (`fireCount > 1`, `stopGo > 6`);
+  - tighten preferred range from 285 to 260 while the generic close escape still prevents true point-blank trades;
+  - keep max/high-power shots down to lower energy (`>24` instead of `>34`, max power to 600px);
+  - choose head-on for currently stopped SadBot ticks more readily (early before virtual waves settle, or unless head-on is far behind averaged). Moving ticks still use the damped averaged gun.
+- Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.

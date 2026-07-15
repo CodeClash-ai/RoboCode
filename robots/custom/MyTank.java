@@ -402,10 +402,11 @@ public class MyTank extends AdvancedRobot {
             preferredDistance = 275.0;
         } else if (mediumStopGoShooter()) {
             // Gruffalo/SadBot-style opponents: many stops / low-turn bursts and
-            // repeated medium-power shots.  Current SadBot traces leave us with a
-            // large energy surplus, so tighten the exchange slightly to shorten
-            // max-power bullet flight while keeping more room than harmless farmers.
-            preferredDistance = 285.0;
+            // repeated medium-power shots.  SadBot still leaves us with a large
+            // energy surplus, so tighten the exchange further to shorten max-power
+            // bullet flight; the generic close-stop/go escape still prevents true
+            // point-blank trading below ~225px.
+            preferredDistance = 260.0;
         } else if (activeStopGoShooter()) {
             // RegullarMonk-style bots stop/reverse constantly but fire repeated
             // weak bullets.  They are easiest to hit with fast head-on shots;
@@ -690,13 +691,13 @@ public class MyTank extends AdvancedRobot {
                 power = Math.min(power, 0.45);
             }
         } else if (mediumStopGoShooter()) {
-            // Current Gruffalo traces use frequent medium-power fire, but our orbit
-            // dodges it well and the main lost score is long rounds.  Keep high
-            // pressure with the wall/stop-go averaged predictor while preserving a
-            // low-energy escape hatch in the rare 900+ tick game.
-            if (getEnergy() > 34 && distance < 720) {
-                power = Math.max(power, distance < 560 ? 3.0 : 2.35);
-            } else if (getEnergy() > 16) {
+            // Current SadBot/Gruffalo traces use frequent medium-power fire, but our
+            // orbit dodges it well and the main lost score is long rounds.  Engage
+            // high-pressure shots earlier and keep them while we still have a healthy
+            // reserve; SadBot round-1/2 traces ended with plenty of spare energy.
+            if (getEnergy() > 24 && distance < 720) {
+                power = Math.max(power, distance < 600 ? 3.0 : 2.45);
+            } else if (getEnergy() > 14) {
                 power = Math.min(Math.max(power, 1.45), 2.05);
             } else {
                 power = Math.min(power, 0.45);
@@ -827,13 +828,12 @@ public class MyTank extends AdvancedRobot {
             gun = Math.abs(e.getVelocity()) <= 3.25 ? GUN_LINEAR : GUN_AVERAGED;
         } else if (mediumStopGoShooter()) {
             // Medium-power stop/go shooters usually prefer the damped averaged gun
-            // while moving, but the current SadBot traces pause for long endpoint
-            // shots; at those currently-stopped ticks, head-on/linear lands more
-            // often than carrying EMA drift from the previous burst.  Guard with a
-            // loose virtual-error check so Gruffalo-like movers still keep averaged
-            // if head-on is clearly losing overall.
+            // while moving, but SadBot pauses for long endpoint shots; at currently
+            // stopped ticks, head-on/linear lands more often than carrying EMA drift
+            // from the previous burst.  Allow this stopped-shot override early (before
+            // virtual waves fully settle) and unless head-on is clearly losing badly.
             if (Math.abs(e.getVelocity()) < 0.15
-                    && virtualGunError[GUN_HEAD_ON] <= virtualGunError[GUN_AVERAGED] + 18.0) {
+                    && (virtualSamples < 30 || virtualGunError[GUN_HEAD_ON] <= virtualGunError[GUN_AVERAGED] + 24.0)) {
                 gun = GUN_HEAD_ON;
             } else {
                 gun = GUN_AVERAGED;
@@ -1213,11 +1213,11 @@ public class MyTank extends AdvancedRobot {
         // replay favors our damped averaged gun.  Keep this out of the older
         // low-power/head-on conservation branch, which was intended for weak
         // power-1 evasive shooters that caused self-depletion.
-        return stopGoEnemyScans > 8
-                && enemyFireCount > 3
-                && enemyFirePowerSamples > 2
-                && enemyFirePowerAvg > 1.45
-                && enemyFirePowerAvg <= 2.25
+        return stopGoEnemyScans > 6
+                && enemyFireCount > 1
+                && enemyFirePowerSamples > 1
+                && enemyFirePowerAvg > 1.35
+                && enemyFirePowerAvg <= 2.35
                 && crazyEnemyScans <= 4
                 && Math.abs(enemyVelocityAvg) < 3.6
                 && Math.abs(enemyTurnRateAvg) < 0.070
