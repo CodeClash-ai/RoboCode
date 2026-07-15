@@ -1611,3 +1611,56 @@ avoiding losses.
   power at range = shorter cooldown = more shots landed early) beat MORE per-shot
   damage. Only raise power when the enemy is truly passive AND you already win at
   max speed.
+
+# Agent Notes (Round 1 / current pass) — opponent = alpian__tarektank
+
+## STATUS: 249/250 win (99.6%), 92% share — targeted the ONE grind loss
+Round 0 result: opus-4-8 44954 vs alpian__tarektank 3577. results_0.txt:
+opus_4_8.MyTank 1832 (92%), 10/10 firsts; enemy 160 (8%). Games are LONG
+(avg 554, max 1371 turns), our accuracy 34%. ONE LOSS: sim_20, a 1223-turn
+energy-war grind where we were behind on energy 97% of ticks and bled to 0
+(enemy kept 26 E).
+
+## Opponent = SLOW STRAIGHT-LINE MOVER that CONSERVES energy
+Per-sim analysis (80 games, header maps idx->name, enemy=non-'opus'):
+- avg |v| 2.56, moving 48% of ticks, avg |dh| = 0.0 (NEVER turns body — pure
+  straight-line back/forth with pauses), engages ~293px. Fires ~11 shots/game
+  at 33% acc (energy-conserving — fires ~half as often as our 25).
+
+## Gun aim: W=1.0 head-on is CONFIRMED OPTIMAL (kept unchanged)
+Replay-sim W-sweep (80 games, per-tick interception): MONOTONIC toward head-on
+  W=0.0 35.8% | W=0.25 38.9% | W=0.5 42.6% | W=0.75 47.6% | W=1.0 53.9%.
+A slow straight-line target that's stationary ~half the time is best hit at
+current pos; any lead overshoots. W=1.0 unchanged (was already correct).
+
+## Real hit rate by distance (energy-drop=fire, energy-gain=hit, 150 games)
+  100-200px 68% | 200-300px 36% | 300-400px 25% | 400-500px 20% | 500-600px 22%.
+Break-even = 33% (net = hr*3p - p). We spend 57% of ticks at 200-300px (net+),
+19% at 300-400px (net-NEGATIVE bleed), 12% beyond 400px (bleed). This mid/far
+net-negative firing is what drains us in the rare grind.
+
+## CHANGE THIS PASS: strengthened energy-war handling (grind-loss fix only)
+1. Energy-war taper: `getEnergy()<enemyEnergy && dist>300 -> power<=1.0` changed
+   to `power<=0.8` (cheaper misses when behind).
+2. NEW far-shot gate: `dist>400 && getEnergy()<enemyEnergy -> don't fire` (400px+
+   hit rate ~20% = net-negative; conserve to outlast in the grind).
+Both trigger ONLY when strictly behind on energy. Trigger frequency: 7.5% of
+ticks in WINNING games vs 29.5% in the LOSS game — so it targets the grind state
+without meaningfully slowing the 249 comfortable wins (where we're ahead on
+energy). Grind-model over 150 games: net firing energy +20% (1009 -> 1206).
+Used STRICT `<enemyEnergy` (not +10) after checking: +10 triggered 12.4% of
+winning ticks (too much — risks the myfirstkiller slow-kill regression).
+Power tiers (3.0/<300, 2.4/<400, 1.6/<550, 1.0/else), W=1.0, movement (orbit
+~230px), low-E clamps ALL UNCHANGED. Backup of prior source: /tmp/MyTank.bak.java.
+Compiles Java 8 (major version 52), rc=0.
+
+## For next teammate
+- VERIFY new /logs: want the sim_20-style grind loss GONE (win rate 100%) and
+  score share held >=92%. If share DROPPED with no fewer losses, the taper/gate
+  is too aggressive (slowing wins) -> revert the far-shot gate first
+  (/tmp/MyTank.bak.java is the 249/250 prior). If losses PERSIST, orbit closer
+  (rangeBias thresholds 250/160 -> ~200px where our hit rate is 68%).
+- tarektank is SLOW/straight -> KEEP W=1.0 head-on. If it becomes a fast dodger
+  (avg|v| up, moving frac up) or curves (avg|dh|>0), re-run the W-sweep replay.
+  Never go flat power 3.0 at long range vs a fast dodger (regressed to 83% vs crazy).
+- Keep MyTank class name + Java-8 bytecode (only hard requirement).

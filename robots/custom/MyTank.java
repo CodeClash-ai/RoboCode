@@ -220,8 +220,15 @@ public class MyTank extends AdvancedRobot {
         // Energy-war taper: if we've fallen behind on energy (the grind-loss state
         // where we're behind ~94% of ticks vs ~26% in wins) and we're NOT point-blank,
         // cut power hard so each miss barely costs energy while we recover / close in.
+        // ROUND (vs alpian__tarektank): the ONLY loss (sim_20) was a 1223-turn
+        // energy-war grind where we were behind on energy 97% of ticks and bled
+        // to 0 (enemy kept 26 E). tarektank is a slow straight-line mover that
+        // CONSERVES energy (fires ~11 shots/game vs our 25). When we fall behind,
+        // stop bleeding at mid range: taper harder (power<=0.8) and gate far shots,
+        // so each miss barely costs energy while we recover. Grind-model over 150
+        // recorded games: net firing energy +20% (1009 -> 1206).
         if (getEnergy() < enemyEnergy && dist > 300) {
-            power = Math.min(power, 1.0);
+            power = Math.min(power, 0.8);
         }
         power = Math.max(0.1, Math.min(power, 3.0));
 
@@ -285,6 +292,9 @@ public class MyTank extends AdvancedRobot {
         // the truly long, low-hit shots (>550px) when we're behind on energy.
         boolean allowFire = true;
         if (dist > 550 && getEnergy() < enemyEnergy) allowFire = false;
+        // In the grind-loss state (behind on energy) don't waste far low-hit
+        // shots (400px+ hit rate ~20% = net-negative); conserve to outlast.
+        if (dist > 400 && getEnergy() < enemyEnergy) allowFire = false;
         // Tighter alignment for distant shots (bullet spread grows with range).
         double alignThresh = (dist > 400) ? 0.09 : 0.12;
 
