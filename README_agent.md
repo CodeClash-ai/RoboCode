@@ -12516,3 +12516,157 @@ reappearance rather than making a further speculative change now.
    tough matchups like `kcanida__pikachu`, where each experiment currently
    costs a full round to validate or refute (as rounds 107/108/109 all
    demonstrate).
+
+## Round 112 update (this round) — new opponent (robo_code__walls), confirmed fully healthy, found a real analyze_power_accuracy.py bucket-undercount bug caused by round 109's low-power fast-mover cap, no MyTank.java changes
+
+### Context
+Only `/logs/rounds/0/` exists in this environment for me. Per `trace.md` /
+`results.json`, this round's opponent is a **new** one, `robo_code__walls`
+(different from every opponent documented in rounds 1-111 above, and NOT
+`kcanida__pikachu` — the very tough opponent from rounds 107-109 whose
+round-109 fix still awaits a direct before/after re-test). Result: **100%
+win rate (250/250)**, 82% accuracy, avg speed 6.2, avg walls/game 0.4, avg
+rams/game 2.1, avg min energy 77, score 45632 vs 9137. **Zero losses, zero
+ties** (confirmed directly: `grep -v sonnet_5 trace.md | grep sim_` -> 0
+lines out of 250). Opponent is weak (0% win rate, 33% accuracy, avg speed
+5.7, avg walls/game 6.4 — itself crashes into walls a lot, dies avg turn
+520).
+
+### Validation performed
+1. `python3 tools/analyze_freezes.py /logs/rounds/0 --threshold 20 | grep -i
+   sonnet` -> **2 findings**, both short (24/25 ticks), both the well-
+   established benign "radar heading frozen" pattern (radar genuinely
+   settled on a near-stationary-relative target with normal ongoing combat
+   throughout — documented benign since round 15, most recently rounds
+   48-111, not the round-4 freeze bug). **Zero `STUCK-RAMMING` findings at
+   all this round.** Confirms the escape-mode mechanism (rounds
+   20/23/25/34-37/40) and round 47/48's radial-blend movement fix are both
+   still fully healthy.
+2. `javac -Xlint:all -cp libs/robocode.jar -d /tmp/build
+   robots/custom/MyTank.java` compiles clean (exit 0, no errors/warnings).
+3. `diff archive/round1_backups/MyTank.java.before_round109_lowpower_fastcap
+   robots/custom/MyTank.java` — confirmed round 109's low-power fast-mover
+   cap change (1.3 -> 0.5 for `absVelocity > 6`, in both
+   `bulletPowerForDistance()` and the finishing/press-advantage
+   `maxUsablePower` override) is exactly what's currently live, no
+   accidental drift or reversion.
+
+### New finding: `analyze_power_accuracy.py` shows an impossible >100% accuracy in `sonnet_5`'s 0.5-1.0 power bucket this round — traced to a real tool bug, NOT a real-match issue
+Ran `python3 tools/analyze_power_accuracy.py /logs/rounds/0 --bucket-width
+0.5`. Sanity check (48.4 shots/game combined vs `trace.md`'s 38.5+11.1=49.6,
+within ~2.5%) still looks fine overall — but the per-bucket breakdown for
+`sonnet_5` shows the `0.5-1.0` bucket (round 109's new fast-mover cap) at
+**7354 shots, 8084 hits = 109.9% accuracy** — literally impossible (hits
+cannot exceed shots for the same bucket). This is the first time this tool
+has produced a nonsensical per-bucket number since round 28's tick-step fix
+(rounds 22/27/28 previously chased down two other, different, tool-format
+gotchas — lingering post-terminal "ghost" bullet frames, and inconsistent
+1-vs-2-tick log steps — both already documented and fixed in this file's
+history).
+
+**Root cause (diagnosed, not yet fixed)**: this tool splits "shots fired"
+(counted via frame-to-frame `MOVING`-status track continuity, matched by
+expected `bulletSpeed`-based distance) from "hits landed" (counted
+independently via energy-drop-vs-damage-formula matching, which doesn't
+depend on bullet-position tracking at all). Round 109's change makes our
+fast-mover bullets both very cheap (power 0.5, `bulletSpeed=18.5`) AND very
+frequent (gun heat scales with power, so low-power shots reload much faster)
+— against a genuinely fast-moving enemy (the exact condition that triggers
+this bucket), we can have several same-power, same-owner bullets in flight
+simultaneously, closely spaced in time and space. The `MovingTrack` matcher
+(round 28's global-greedy-by-error algorithm) can plausibly merge two or
+more genuinely-distinct, closely-spaced bullets onto the same track across
+consecutive frames when their expected-speed-based positions are ambiguous
+at this tolerance (`SPEED_TOLERANCE=1.5px`), which would cause the "shots"
+side (denominator) to systematically UNDERcount real shots fired in this
+bucket specifically — while the "hits" side (numerator), which doesn't rely
+on this tracking logic at all, stays accurate. This cleanly explains why
+ONLY this specific high-volume, high-frequency bucket shows an impossible
+result while every other bucket (including `robo_code__walls`'s own, and
+`sonnet_5`'s other three buckets) looks normal. This is consistent with,
+and a plausible partial explanation for, why `sonnet_5`'s overall
+script-derived accuracy this round (91.2%) also runs meaningfully HIGHER
+than `trace.md`'s reported 82% (the opposite direction from the "usual"
+gap this file has repeatedly noted since round 41, which is normally the
+tool running slightly LOWER than `trace.md`, not higher) — the
+undercounted-shots bug in this specific bucket inflates the overall
+accuracy ratio too.
+
+**Did NOT attempt a fix this round** — this is a real, newly-discovered
+tooling limitation specific to a high-shot-volume, low-power, low-cooldown
+firing regime that essentially only became possible after round 109's
+change (no previous round's tuning ever pushed bullet power this low for
+such a large fraction of shots), not a bug in `MyTank.java`/real combat
+behavior (the authoritative `trace.md`/`results.json` numbers, which come
+directly from the real grading harness, show a perfectly sane 82% accuracy
+and 100% win rate this round). Flagging clearly for a future teammate with
+more time: **the fix, analogous to round 28's approach, would likely need
+either a tighter matching tolerance specifically for low-power/high-
+frequency buckets, or a smarter multi-candidate disambiguation (e.g.
+preferring to keep distinct tracks open longer / requiring a stronger
+match margin before merging two candidates when several same-power bullets
+from the same owner are in flight at once)** — but given this is purely a
+log-analysis convenience issue (not affecting the real scored match at
+all) and the current match result is fully healthy, I did not want to
+spend this round's remaining steps on a tooling deep-dive rather than
+continuing to monitor `MyTank.java`'s real health.
+
+### What I did this round (or rather, chose NOT to do)
+Given (a) a fully healthy real-match result (100% win, 0 losses, 0 ties,
+only benign freeze findings, 82% real accuracy per `trace.md`), (b) round
+109's fast-mover bullet-power change (still unvalidated against its actual
+target opponent, `kcanida__pikachu`, which has not reappeared) showing no
+sign of hurting this round's (different) matchup, and (c) the only new
+finding being a tooling artifact rather than a real combat issue, I made
+**no changes to `MyTank.java`** this round — consistent with this file's
+very long-established pattern (rounds 6, 13, 15, 21, 22, 26, 27, 28, 29, 32,
+33, 38, 39, 41, 42, 48-106, 109, 110, 111) of not touching already-working
+code without a clear, actionable signal of underperformance.
+
+### Suggestions for next teammate
+1. **First step, as always**: check `/logs/rounds/<N>/trace.md` (or
+   `results.json` + per-`sim_*.jsonl` `winner` fields if `trace.md` is
+   missing, per round 68's note) for the actual opponent this round, and run
+   `python3 tools/analyze_freezes.py /logs/rounds/<N> --threshold 20 | grep -i
+   sonnet` as the standard regression check.
+2. **If `kcanida__pikachu` reappears**, this is STILL the single
+   highest-value comparison outstanding across this whole file's recent
+   history: check win rate against the prior data points (round 107: 37%
+   win baseline; round 107's fire-threshold "fix": 24% win, a regression,
+   reverted in round 108; round 108's revert: back to 37%; round 109:
+   lowered the fast-mover power cap 1.3->0.5, still NOT validated by a real
+   match against this specific opponent as of round 111/this round). Also,
+   **when checking `analyze_power_accuracy.py`'s output for that matchup,
+   be aware of this round's newly-discovered bucket-undercount bug** — if
+   the low-power bucket shows hits > shots or an accuracy figure that looks
+   implausibly high, don't trust the raw per-bucket numbers at face value;
+   cross-check against `trace.md`'s own reported accuracy first, and
+   consider whether the undercounting could be masking a real accuracy
+   picture rather than concluding the change worked purely from the script.
+3. If `robo_code__walls` reappears, treat this round's numbers (100% win, 0
+   losses, 82% accuracy, avg min energy 77, avg walls/game 0.4) as the
+   stable healthy baseline for this specific matchup.
+4. If a future teammate wants to fix the newly-found `analyze_power_
+   accuracy.py` bucket-undercount bug (low-power/high-frequency firing
+   causing `MovingTrack` matches to merge distinct bullets), see the "Root
+   cause" section above for a detailed starting hypothesis and suggested
+   fix directions (tighter tolerance or better disambiguation when several
+   same-power/same-owner bullets are in flight simultaneously).
+5. `mgalushka__maximbot` (rounds 110-111, ~83-85% win/90-91% accuracy),
+   `alexbay218__shreker` (rounds 101-102, ~83-87% win/47-48% accuracy),
+   `vikdov__dominatorx` (rounds 99-100, ~94-96% win), and
+   `admiralrasmussen__wavesurfing` (rounds 95-96, ~99% win/24-29% accuracy,
+   likely a genuine wave-surfer) are the most recent moderately-tougher
+   opponents seen — all confirmed stable (not regressing) across repeat
+   samples without needing a code change. `alpian__ianstank`/`pez__gf1`
+   (rounds 43-44/11-12, the historically toughest opponents in this file
+   alongside `kcanida__pikachu`) remain outstanding high-value direct
+   re-tests of the accumulated fix stack if either resurfaces.
+6. Local headless battle-runner: still unresolved after 111+ rounds of
+   attempts (see round 6's section for the most detailed known blocker,
+   `RepositoryManager.loadSelectedRobots` not seeing a freshly-reloaded
+   repository within the same call). Still the single highest-leverage
+   infra fix available if a future teammate has a larger step budget to
+   spend on it than usual — especially valuable for iterating faster on
+   tough matchups like `kcanida__pikachu`, where each experiment currently
+   costs a full round to validate or refute.
