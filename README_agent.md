@@ -559,3 +559,51 @@ Re-verified compile: javac --release 8 ... -> major version 52 (Java 8). rc=0. O
 ## For next teammate
 Only act if a NEW /logs shows win rate <100% or our energy collapsing to a loss.
 Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 1 / current pass) — opponent = barriosnahuel__tirolio
+
+## KEY FINDING: opponent is a FULL-SPEED, ENERGY-CONSERVING DODGER (first foe we were LOSING to)
+This is the first opponent that BEATS us. Prior result BEFORE my change:
+- results.json: opus-4-8 26747 vs tirolio 8778 (only 75% share).
+- trace.md: WE WIN ONLY 42% (104/250). Enemy wins 58% (146/250)!!
+- results_0.txt (a 10-round battle): 1585 vs 125, 8/10 firsts — MISLEADING; the
+  full 250-sim trace is the truth: we lose the majority.
+
+## WHY WE LOST: we shot ourselves to death
+Enemy fires ~0.4 shots/GAME (accuracy 0%) — it barely attacks. It moves 83% of
+ticks at up to v=8 (full speed) and DODGES. Our OLD gun = pure head-on (W=1.0),
+power 3.0, firing constantly -> only ~10-13% hit vs this mover. Every power-3
+miss costs 3 energy. By tick ~600 our energy was 18 while enemy sat at 70-84
+(near-zero damage taken). We drained to 0 and died; enemy survived w/ avg 44.7 E.
+It's a pure ENERGY-WAR / survival strategy: let the aggressor waste its energy.
+
+## FIX (this pass): energy-aware low-power gun + closer orbit + better lead
+Replay sim (/tmp/replay.py, rebuilt) over recorded enemy paths showed:
+  * Aim: W=0.5 (50% current + 50% linear lead) = 26.7% hit vs 9.9% head-on.
+    It moves at ~constant velocity so a REAL lead is needed (unlike prior
+    reactive stop-and-go foes where head-on won). Half-lead beats full lead
+    because its reversals make a full lead overshoot.
+  * Hit rate by distance: near(<250)=61%, mid(250-450)=37%, far(>450)=19%.
+  * NET ENERGY per shot (cost -p, gain +3p on hit): power1.0=+0.11, power1.5=+0.05,
+    power3.0=-0.60. => LOW power (far) GAINS energy; HIGH power only pays up close.
+Changes in MyTank.java:
+  1. aimAndFire: W=1.0 -> W=0.5; power now distance-tiered
+     (<200:3.0, <300:2.4, <450:1.6, else:1.0). Cap power<=1.2 if our E < enemy E
+     (stay net-positive in the energy war). Hold far(>550) shots if E tight.
+  2. doMovement range control: orbit CLOSER (~280px; pull in >350, push out <200)
+     to raise hit rate (61% near vs 19% far). Kept anti-GF randomized reversals.
+
+## VALIDATION (energy-war replay sim, 120 games — see /tmp snippet in git/this note)
+  OLD(head-on pw3): ourFinalE avg 7.3 (DEAD), enemyDmg 79 (<100 kill), kills 36/120.
+  NEW(W0.5 adaptive): ourFinalE avg 119.8 (we GAIN E!), enemyDmg 700, kills 120/120.
+This should flip the match from a 42% LOSS to a strong win. (Sim is optimistic —
+enemy path was reactive to our OLD shots — but the direction is overwhelming.)
+Compiles Java 8 (major version 52). Backup of prior version: /tmp/MyTank.bak.java.
+
+## For next teammate
+- If NEW /logs still shows <50% win: enemy may adapt. Re-run /tmp/replay.py to
+  retune W & the distance power tiers. The core principle vs an energy-conserving
+  dodger: NEVER fire net-negative-energy shots (keep power low unless hit rate is
+  high, i.e. close range). Consider WAVE SURFING only if enemy starts firing more.
+- If enemy becomes stationary in some rounds: W=0.5 degrades gracefully (lead=0).
+- Keep MyTank class name + Java-8 bytecode (only hard requirement).

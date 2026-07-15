@@ -100,29 +100,45 @@ public class MyTank extends AdvancedRobot {
     }
 
     private void aimAndFire(double absBearing) {
-        // Data-driven vs trex22__deepthought (stop-and-go wall-hugging dodger):
-        // Replaying its recorded trajectory showed that damage-per-tick is
-        // MAXIMIZED by full-power (3.0) bullets even though hit rate is a bit
-        // lower, because damage/hit (16) dominates the slower cooldown & the
-        // small hit-rate loss. Best aim = 90% current position + 10% linear lead
-        // (blend w=0.9), which measured ~44% hit rate vs ~32% for pure linear.
-        double power = 3.0;
-        if (getEnergy() < 20) power = Math.min(power, 1.5);
-        if (getEnergy() < 10) power = Math.min(power, 0.8);
-        if (getEnergy() < 4)  power = Math.min(power, 0.3);
+        // ==== ENERGY-WAR TUNING vs barriosnahuel__tirolio ====
+        // This opponent is a full-speed dodger that CONSERVES energy (fires ~0.4
+        // shots/game). It wins by SURVIVAL: it lets us drain ourselves with missed
+        // power-3 shots (~13% hit) while it takes almost no damage. Replay sim over
+        // 250 recorded games shows:
+        //   * BEST aim = W=0.5 (50% current + 50% linear lead): 26.7% hit overall
+        //     vs only 9.9% for pure head-on (W=1.0). It moves at constant velocity
+        //     so a real lead is needed, but its reactive reversals mean a full lead
+        //     over-shoots -> half-lead is optimal.
+        //   * Hit rate by distance: near(<250)=61%, mid(250-450)=37%, far(>450)=19%.
+        //   * Net energy per shot (fire cost vs 3*power gained on hit):
+        //       power1.0 -> +0.11/shot, power1.5 -> +0.05, power3.0 -> -0.60.
+        //     => LOW power far away GAINS energy; HIGH power only pays off up close
+        //     where hit rate is high. So: power scales with (short) distance.
+        double dist = Point2D.distance(getX(), getY(), enemyX, enemyY);
+
+        double power;
+        if (dist < 200)       power = 3.0;   // ~61% hit -> high power is net +energy
+        else if (dist < 300)  power = 2.4;
+        else if (dist < 450)  power = 1.6;   // ~37% hit -> moderate, ~net neutral E
+        else                  power = 1.0;   // ~19% hit -> minimal power, conserve E
+
+        // Never drop below the enemy in the energy war: if our energy is lower than
+        // the enemy's, dial power down to stay net-positive (only fire cheap shots).
+        if (getEnergy() < enemyEnergy) power = Math.min(power, 1.2);
+        // Low-energy safety.
+        if (getEnergy() < 15) power = Math.min(power, 1.0);
+        if (getEnergy() < 6)  power = Math.min(power, 0.4);
         power = Math.max(0.1, Math.min(power, 3.0));
 
         double bulletSpeed = 20 - 3 * power;
 
         // Linear lead prediction over bullet flight time.
-        double dist = Point2D.distance(getX(), getY(), enemyX, enemyY);
         double flight = dist / bulletSpeed;
         double leadX = enemyX + Math.sin(enemyHeading) * enemyVelocity * flight;
         double leadY = enemyY + Math.cos(enemyHeading) * enemyVelocity * flight;
 
-        // Blend: heavy weight on current pos (enemy stops ~40% of ticks and its
-        // bursts are reactive/unpredictable, so lead over-shoots).
-        double W = 1.0;  // pure head-on: replay sim shows 27.1% hit vs 22.9% for 0.90 (enemy reactive dodge -> lead overshoots)
+        // Half-lead blend (W=0.5) measured optimal vs this reactive dodger.
+        double W = 0.5;
         double predX = W * enemyX + (1 - W) * leadX;
         double predY = W * enemyY + (1 - W) * leadY;
 
@@ -135,7 +151,13 @@ public class MyTank extends AdvancedRobot {
         double gunTurn = Utils.normalRelativeAngle(aimAngle - getGunHeadingRadians());
         setTurnGunRightRadians(gunTurn);
 
-        if (getGunHeat() == 0 && Math.abs(gunTurn) < 0.12 && getEnergy() > power + 0.2) {
+        // Don't waste far-range shots when energy is tight: only fire far shots if
+        // we still hold an energy lead. Up close always fire (high hit rate).
+        boolean allowFire = true;
+        if (dist > 550 && getEnergy() < enemyEnergy + 5) allowFire = false;
+
+        if (allowFire && getGunHeat() == 0 && Math.abs(gunTurn) < 0.12
+                && getEnergy() > power + 0.5) {
             setFire(power);
         }
     }
@@ -158,8 +180,8 @@ public class MyTank extends AdvancedRobot {
         // Range control: hold a good orbit distance (~400px) but jitter the
         // target so a statistical/GF gun can't fix on a constant orbit radius.
         double rangeBias = 0.0;
-        if (enemyDistance > 500) rangeBias = -0.40;      // pull in
-        else if (enemyDistance < 300) rangeBias = 0.45;  // push out
+        if (enemyDistance > 350) rangeBias = -0.42;      // pull in (target ~280px for higher hit rate)
+        else if (enemyDistance < 200) rangeBias = 0.55;  // push out (avoid ramming)
 
         double desiredDir = absBearing + (Math.PI / 2 + rangeBias) * moveDirection;
 
