@@ -1049,3 +1049,50 @@ Only act if a NEW /logs shows win rate <100% or our energy collapsing to a loss
 -> that regressed us to 83% vs robo_code__crazy). Re-run the W-sweep replay on
 >=2 slices before changing. Never go flat power 3.0 vs a FAST dodger.
 Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 1 / current pass) — opponent = tibola__markiv (FIRST FOE WITH 13 LOSSES)
+
+## KEY FINDING: markiv is a COMPETENT MUTUAL-DAMAGE FIGHTER we were LOSING 13/250 to
+Round 0 result (BEFORE my change): opus-4-8 41637 vs tibola__markiv 3404.
+results_0.txt: opus 1736 (95%), 10/10 firsts BUT trace.md shows WIN RATE 95%
+(237/250) — we LOSE 13 games. Games are LONG (avg 634 turns), our accuracy only
+25%, avg min energy only 53 (much tighter than the ~90+ of easy foes).
+Opponent = moderate curving mover: moving 43% of ticks, avg |v| 2.0, turn
+0.052 rad/tick. It FIRES BACK effectively (a real gun, not passive).
+
+## WHY WE LOST: enemy out-trades us at CLOSE range
+Analyzed damage dealt each side in losses vs wins:
+- LOSSES: enemy deals 109-140 dmg to us, we deal only 41-98 to it.
+- WINS: we deal ~100+, enemy deals 64-111.
+Enemy-hits-on-us BY DISTANCE (100 sims): 200px=689, 300px=1914, 400px=330,
+500px=124, 600px=15. => Its gun is DEADLY at 200-400px and near-useless >450px.
+Our OLD movement orbited at ~280px — right in its kill zone.
+
+## CHANGES THIS PASS (movement is the real lever; gun tuned too)
+1. MOVEMENT: orbit FURTHER OUT (~450px). rangeBias now pull-in >500, push-out
+   <400 (was pull-in >350 to ~280px). At 450px the enemy's accuracy collapses
+   while our own hit rate stays ~40% (replay-sim). Should slash the 13 losses.
+2. DODGE: reverse-on-enemy-fire 50%->60%, rate-limit 6->5 ticks (bullets now
+   travel further so reactive dodging is more effective). Still randomized.
+3. GUN W: 0.85 -> 0.75. Replay-sim W-sweep (120 games, per-tick interception over
+   recorded enemy paths) peaks at W=0.75 (45.0% hit) for this moderate curver.
+4. POWER: widened 3.0 tier to <480px (was <350) to cover the new orbit distance.
+   At ~40% hit rate every power is net-energy-positive; power 3.0 = most dmg/shot.
+
+## Replay tool: /tmp/replay.py (rebuild from this note if lost)
+Loads /logs/rounds/0/sim_*.jsonl (per-file header maps index->name; enemy=non-
+'opus'). load(fn) -> {t:(enemyDict,ourDict)}. sweep(W,power) fires a bullet from
+OUR recorded (x,y) with W-blend lead, steps at 20-3*power, hit if <18px to enemy's
+recorded FUTURE pos, 800x600 bounds + gunheat. sweep_dist() = hit rate per range.
+CAVEAT: biased — enemy path was reactive to our OLD close-orbit shots. The
+enemy-hits-by-distance analysis (the movement lever) is the more trustworthy signal.
+
+## Compile verified: javac --release 8 ... -> major version 52. Backup: /tmp/MyTank.bak.java (also git).
+
+## For next teammate — IMPORTANT
+- If NEW /logs win rate is STILL <100% or DROPPED below 95%, the farther orbit may
+  have hurt (e.g. we lose accuracy or hug walls). First REVERT movement to
+  /tmp/MyTank.bak.java (git prior: orbit ~280px, W=0.85) which won 95%, then retune.
+- If win rate rose toward 100%: keep pushing orbit distance / dodge if margin allows.
+- The core insight for THIS foe: it wins the CLOSE-range trade -> keep distance.
+- Keep MyTank class name + Java-8 bytecode (only hard requirement).

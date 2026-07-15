@@ -137,8 +137,11 @@ public class MyTank extends AdvancedRobot {
         // dodgers, this bot loses the energy war to us, so max power = fastest
         // kills + most damage share. Keep a mild far-range taper for hit-rate
         // efficiency but stay high.
-        if (dist < 350)       power = 3.0;
-        else if (dist < 550)  power = 2.5;
+        // ROUND-1 vs tibola__markiv: hit rate ~40-50% up to ~500px -> every power tier
+        // is net-energy-positive and power 3.0 maximizes dmg/shot. Widened the 3.0
+        // tier to cover our new ~450px orbit distance.
+        if (dist < 480)       power = 3.0;
+        else if (dist < 600)  power = 2.5;
         else                  power = 2.0;
 
         // Energy safety clamps so a bad streak can't self-destruct us.
@@ -180,7 +183,7 @@ public class MyTank extends AdvancedRobot {
         // (distance-based, kept net-positive) still guard the crazy-bot regression.
         // Chose W=0.85: strongly toward head-on (physics: slow target -> head-on best),
         // hedged just short of pure 1.0 since replay is biased by the reactive enemy path.
-        double W = 0.85;
+        double W = 0.75;  // ROUND-1 vs tibola__markiv: replay-sim peak 45.0% at W=0.75 (moderate curving mover, avg|v| 2.0, 0.052 rad/tick)
         double predX = W * enemyX + (1 - W) * leadX;
         double predY = W * enemyY + (1 - W) * leadY;
 
@@ -221,9 +224,13 @@ public class MyTank extends AdvancedRobot {
 
         // Range control: hold a good orbit distance (~400px) but jitter the
         // target so a statistical/GF gun can't fix on a constant orbit radius.
+        // ROUND-1 vs tibola__markiv: enemy's gun hits us MOST at 200-400px (2900+
+        // hits) and drops off sharply beyond 450px (139 hits >500). It out-trades us
+        // in 13 losses at close range. Orbit FURTHER OUT (~450px) to slash enemy
+        // accuracy; our own hit rate stays ~40% at 450-550px per replay-sim.
         double rangeBias = 0.0;
-        if (enemyDistance > 350) rangeBias = -0.42;      // pull in (target ~280px for higher hit rate)
-        else if (enemyDistance < 200) rangeBias = 0.55;  // push out (avoid ramming)
+        if (enemyDistance > 500) rangeBias = -0.35;      // pull in toward ~450px
+        else if (enemyDistance < 400) rangeBias = 0.45;  // push out to ~450px sweet spot
 
         double desiredDir = absBearing + (Math.PI / 2 + rangeBias) * moveDirection;
 
@@ -249,11 +256,16 @@ public class MyTank extends AdvancedRobot {
         //      that itself becomes learnable at the enemy's fire cadence.
         //  (b) random-length orbit segments (avg ~20 ticks) independent of the
         //      enemy, so our lateral motion has no fixed period.
+        // ROUND-1 vs tibola__markiv: this opponent out-trades us in the losses by
+        // landing many hits at close range. Now that we orbit further out, its
+        // bullets take longer to arrive so reactive dodging is more effective.
+        // Reverse ~60% on detected enemy fire (still randomized, not a strict
+        // alternation), plus rare random reversals to break any residual period.
         long now = getTime();
-        if (enemyFired && now - lastReverseTime >= 6 && Math.random() < 0.5) {
+        if (enemyFired && now - lastReverseTime >= 5 && Math.random() < 0.6) {
             moveDirection = -moveDirection;
             lastReverseTime = now;
-        } else if (now - lastReverseTime >= 8 && Math.random() < 0.06) {
+        } else if (now - lastReverseTime >= 8 && Math.random() < 0.07) {
             moveDirection = -moveDirection;
             lastReverseTime = now;
         }
