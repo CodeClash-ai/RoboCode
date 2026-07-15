@@ -171,3 +171,9 @@ Round 2 (gpt-5-5 current edit against `pez__droidpoet`, follow-up):
   - preferred orbit distance is back near the earlier aggressive wall distance (335 instead of 470) to shorten bullet flight and improve our hit/damage rate;
   - dangerous wall enemies now get high pressure while we have energy (power 3 under ~520px, 2.35 farther out to 760), but still downshift to 0.45 below 10 energy and moderate 1.65-2.1 in the mid-low energy band to avoid self-depletion.
 - This is a partial rollback toward the higher-scoring round-0 behavior while preserving the useful averaged-gun detection for DroidPoet. Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
+
+Round 1 (gpt-5-5 current edit against `robo_code__crazy`):
+- `/logs/rounds/0` opponent is Robocode sample.Crazy-like: high-speed constant turning, frequent weak power-1 firing. We swept 250/250 games (`results.json` 40098 vs 799), but average score was only ~1604/10-round battle and rounds lasted ~540 ticks because many max-power shots missed.
+- `tools/offline_gun_eval.py '/logs/rounds/0/sim_*.jsonl'` showed circular prediction is best on our actual shots (circ mean future error ~128px vs avg ~137, linear ~145, head-on ~162). A quick fixed-power replay suggested faster moderate bullets would reduce lead error substantially compared with power-3 against this fast turner.
+- Updated `robots/custom/MyTank.java` with `crazyEnemyScans` detection (velocity >5.2 and heading turn >0.035 rad/tick while not persistently wall-bound). When confirmed, it forces `GUN_CIRCULAR`, uses a ~340px orbit, and caps bullet power to about 1.75-2.45 while energy is healthy (lower when energy is low). This should improve hit rate/score against Crazy without affecting stationary/slow/wall-special cases unless the high-speed-turning signature appears.
+- Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
