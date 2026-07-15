@@ -140,9 +140,20 @@ public class MyTank extends AdvancedRobot {
         // ROUND-1 vs tibola__markiv: hit rate ~40-50% up to ~500px -> every power tier
         // is net-energy-positive and power 3.0 maximizes dmg/shot. Widened the 3.0
         // tier to cover our new ~450px orbit distance.
-        if (dist < 480)       power = 3.0;
-        else if (dist < 600)  power = 2.5;
-        else                  power = 2.0;
+        // ROUND-2 vs tibola__markiv: we win 97% but LOSE 8 long energy-war grinds.
+        // Real hit rate by distance (replay-sim, 120 games, W=0.75):
+        //   <300px 52%, 300-450px 29%, 450-550px 31%, >550px 18.5%.
+        // Net energy/shot = hitrate*3*power - power (positive iff hitrate>1/3).
+        // At our ~450-550px engagement (~30% hit) every power is slightly NET-
+        // NEGATIVE, so power-3 misses drain us faster than this energy-conserving
+        // enemy (it fires only ~14 shots/game vs our ~30). To WIN the grinds:
+        //  - keep power 3.0 only where hit rate clears break-even (<300px, 52%),
+        //  - taper power at mid/long range so each miss costs LESS energy while
+        //    still landing meaningful damage on hits.
+        if (dist < 300)       power = 3.0;   // 52% hit -> net +1.68/shot
+        else if (dist < 450)  power = 2.2;   // ~29% hit -> minimize per-miss cost
+        else if (dist < 550)  power = 2.0;   // ~31% hit
+        else                  power = 1.4;   // 18.5% hit -> low power = tiny drain
 
         // Energy safety clamps so a bad streak can't self-destruct us.
         if (getEnergy() < 30) power = Math.min(power, 2.0);
@@ -198,10 +209,15 @@ public class MyTank extends AdvancedRobot {
 
         // Don't waste far-range shots when energy is tight: only fire far shots if
         // we still hold an energy lead. Up close always fire (high hit rate).
+        // ROUND-2 vs tibola__markiv: skip low-confidence long-range shots that
+        // bleed us in the grind. Only fire far when we hold an energy lead, and
+        // require tighter gun alignment at range (aim error hurts more far away).
         boolean allowFire = true;
-        if (dist > 550 && getEnergy() < enemyEnergy + 5) allowFire = false;
+        if (dist > 500 && getEnergy() < enemyEnergy + 3) allowFire = false;
+        // Tighter alignment for distant shots (bullet spread grows with range).
+        double alignThresh = (dist > 450) ? 0.08 : 0.12;
 
-        if (allowFire && getGunHeat() == 0 && Math.abs(gunTurn) < 0.12
+        if (allowFire && getGunHeat() == 0 && Math.abs(gunTurn) < alignThresh
                 && getEnergy() > power + 0.5) {
             setFire(power);
         }

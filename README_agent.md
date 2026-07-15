@@ -1096,3 +1096,45 @@ enemy-hits-by-distance analysis (the movement lever) is the more trustworthy sig
 - If win rate rose toward 100%: keep pushing orbit distance / dodge if margin allows.
 - The core insight for THIS foe: it wins the CLOSE-range trade -> keep distance.
 - Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 2 / current pass) — opponent = tibola__markiv
+
+## STATUS: round 1 improved 95%->97% (242/250); still LOSE 8 long grinds
+Verified /logs/rounds/{0,1}: opus 41637(95%)/42293(93% share, 97% winrate) vs
+markiv 3404/2936. The round-1 farther-orbit (~450px) change helped (fewer close
+losses). Remaining 8 losses (sim_149/172/247/29/35/59/78/85) are ALL LONG games
+(800-1688 turns) — energy-war grinds where WE bleed out first.
+
+## ROOT CAUSE of the 8 losses: net-negative firing at range
+markiv is an ENERGY-CONSERVING fighter: it fires only ~14 shots/game vs our ~30.
+Real hit rate by distance (replay-sim, 120 games, W=0.75):
+  <300px 52% | 300-450px 29% | 450-550px 31% | >550px 18.5%.
+Net energy/shot = hitrate*3*power - power (POSITIVE iff hitrate > 1/3). At our
+~450-550px engagement (~30% hit) every power tier is slightly NET-NEGATIVE, so
+firing power-3 constantly drains us faster than the enemy. In losses we actually
+LAND MORE hits than the enemy (our energy-gain 37-50 vs enemy 9-27) but we FIRE
+2x more often, so our per-miss cost accumulates and we die first (~0 vs 12-78 E).
+In WINS our hit-gain is higher (54-61) — the difference is hit rate variance.
+
+## CHANGE THIS PASS: taper power by distance + tighter far-range fire gate
+1. Power tiers: <300->3.0 (52% hit, net +1.68), 300-450->2.2, 450-550->2.0,
+   >550->1.4 (18.5% hit -> tiny per-miss drain). Was 3.0/<480 flat.
+2. Fire gate: skip far shots (dist>500) unless getEnergy()>enemyEnergy+3; tighter
+   gun-align threshold 0.08 for dist>450 (was 0.12) so only high-confidence far
+   shots fire. Close-range gate unchanged (0.12).
+Grind-sim over the 8 loss games: our net firing energy improved -788 -> -649
+(~18% less bleed) — should let us outlast the enemy in the grinds and convert
+some losses. Win-game damage drops slightly (still easily kills the 100-HP enemy).
+
+## Compile: javac --release 8 ... -> major version 52 (Java 8). Backup: /tmp/MyTank.bak.java
+
+## For next teammate
+- If NEW /logs win rate <97% or losses rise, REVERT to /tmp/MyTank.bak.java (git
+  prior, 97%) — the taper may have made games too long. If win rate rose toward
+  100%, the far power could go even lower (1.0) or fire-gate tighter.
+- The remaining lever is MOVEMENT (dodge better to take fewer enemy hits in
+  grinds) or WAVE SURFING (high risk; local harness broken, trust /logs only).
+- Replay-sim (hit rate by distance / net-energy grind sim) reusable: load
+  sim_*.jsonl (header maps idx->name, enemy=non-'opus'), fire W=0.75 lead bullet
+  from our recorded (x,y), step at 20-3*power, hit if <18px to enemy future pos.
+- Keep MyTank class name + Java-8 bytecode (only hard requirement).
