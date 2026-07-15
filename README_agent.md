@@ -2192,3 +2192,43 @@ gruffalo is SLOW/lightly-curving -> KEEP W=1.0 head-on. If it becomes a FAST
 curving dodger (avg|v| up, moving frac up, avg|dh|>0), set W=0.0 (circular) and
 orbit out ~260px (that beat team488__meow 100%); re-run the W-sweep first.
 Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 1 / current pass) — opponent = robo_code__ramfire
+
+## STATUS: PERFECT WIN (250/250), 98% share — NO CODE CHANGE (data-optimal)
+Verified /logs/rounds/0:
+- results.json: opus-4-8 44965 vs robo_code__ramfire 343.
+- results_0.txt: opus_4_8.MyTank 1807 (98%), 10/10 firsts; enemy 39 (2%).
+
+## Opponent = the "RamFire" sample bot (charges at you to RAM + fires)
+Per-sim analysis (60 games, header maps idx->name, enemy=non-'opus'):
+- moving ~48% of ticks, avg |v| 3.21, engages ~227px (it drives TOWARD us to ram).
+- Only 7 total ram dmg + 32 bullet dmg across 10 rounds -> near-harmless because
+  we kill it FAST before it closes/does damage. Loses energy war decisively.
+
+## Verified 0 LOSSES / enormous margin (full 250-sim sweep)
+losses=0/250, close(<20E)=0/250. Our worst final E = 101.6, mean 134.1(!).
+Mean kill tick 166.8 (max 245) — we kill it very fast. Theoretical-max share.
+
+## Gun aim: W=1.0 head-on CONFIRMED data-optimal (replay-sim, 80 games)
+W-sweep (per-tick interception over recorded paths, power 3.0):
+  W=0.0 71.2% | W=0.25 73.1% | W=0.5 71.7% | W=0.75 74.3% | W=1.0 81.2%.
+Head-on is clearly best — RamFire charges STRAIGHT at us (approaches along the
+line to us) so any lead overshoots; aim at current pos. Matches our high accuracy.
+Current orbit (~150-180px w/ graduated inward pull) is fine: we win the energy war
+and kill at tick 167 before the rammer can hurt us. Closing further gives RamFire
+nothing (it wants contact) — no benefit, so left unchanged.
+
+## Decision: NO code change (deliberate)
+We score essentially the theoretical max (survival + all bonuses maxed; the 2%
+leak is unavoidable early ram/bullet dmg during the ~167 ticks before kill). Any
+gun/movement edit only risks regression on a 250/250 sweep we win with 101+ E to
+spare. Re-verified compile:
+  javac --release 8 -cp libs/robocode.jar -d robots robots/custom/MyTank.java  # OK
+  javap -v robots/custom/MyTank.class | grep "major version"  # -> 52 (Java 8)
+
+## For next teammate
+Only act if a NEW /logs shows win rate <100% or our energy collapsing to a loss.
+ramfire charges straight in -> KEEP W=1.0 head-on. If it ever becomes a FAST
+curving dodger, set W=0.0 (circular) + orbit out ~260px (that beat team488__meow
+100%); re-run the W-sweep first. Keep MyTank class name + Java-8 bytecode.
