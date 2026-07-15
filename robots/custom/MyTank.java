@@ -41,6 +41,7 @@ public class MyTank extends AdvancedRobot {
     private double enemyVelocityAvg = 0.0;
     private double enemySpeedAvg = 0.0;
     private double enemyTurnRateAvg = 0.0;
+    private double enemyAbsTurnRateAvg = 0.0;
     private boolean haveEnemyAxis = false;
     private double enemyAxisHeading = 0.0;
     private double enemyAxisMin = 0.0;
@@ -117,6 +118,7 @@ public class MyTank extends AdvancedRobot {
         enemyVelocityAvg = 0.84 * enemyVelocityAvg + 0.16 * e.getVelocity();
         enemySpeedAvg = 0.84 * enemySpeedAvg + 0.16 * Math.abs(e.getVelocity());
         enemyTurnRateAvg = 0.84 * enemyTurnRateAvg + 0.16 * scanTurnRate;
+        enemyAbsTurnRateAvg = 0.84 * enemyAbsTurnRateAvg + 0.16 * Math.abs(scanTurnRate);
         updateEnemyAxis(enemyX, enemyY, e.getHeadingRadians(), scanTurnRate);
 
         if (Math.abs(e.getVelocity()) < 0.05) {
@@ -321,7 +323,13 @@ public class MyTank extends AdvancedRobot {
         // inward; too close we open out.  wallSmooth then bends the path away
         // from the battlefield edges before we commit to it.
         double preferredDistance;
-        if (crazyEnemyScans > 3) {
+        if (velociRobotEnemy()) {
+            // VelociRobot-style target in the current logs: medium-fast low-turn
+            // straight runs with frequent weak fire.  It is not a continuous Crazy
+            // turner; keeping a moderate range plus fast head-on shots avoids the
+            // old circular/max-power over-lead and reduces rare self-depletion.
+            preferredDistance = 345.0;
+        } else if (crazyEnemyScans > 3) {
             // team488__meow has a Crazy-like high-speed turn pattern but is much
             // more predictable than sample.Crazy.  Tighten only after virtual waves
             // confirm low circular error, preserving the safer old Crazy spacing.
@@ -535,7 +543,21 @@ public class MyTank extends AdvancedRobot {
             // the round and reduce the time available for close-range Tracker fire.
             power = Math.max(power, distance < 640 ? 3.0 : 2.55);
         }
-        if (crazyEnemyScans > 3) {
+        if (velociRobotEnemy()) {
+            // VelociRobot moves just fast enough that max-power lead shots over-lead
+            // its reversals/turns.  Use moderate, faster bullets while healthy;
+            // the enemy mostly fires weak power-1 rounds, so this preserves survival
+            // while the damped averaged gun improves geometric hit rate over the old
+            // circular/power-3 mode.
+            if (getEnergy() > 36) {
+                power = Math.min(Math.max(power, distance < 380 ? 2.25 : 1.85), 2.30);
+            } else if (getEnergy() > 18) {
+                power = Math.min(power, distance < 360 ? 1.15 : 0.95);
+            } else {
+                power = Math.min(power, getEnergy() < 8 ? 0.15 : 0.45);
+            }
+        }
+        if (crazyEnemyScans > 3 && !velociRobotEnemy()) {
             // High-speed continuous turners are easier to hit with faster,
             // moderate-power circular shots.  For this round's meow opponent the
             // circular virtual gun settles far below the old sample.Crazy errors;
@@ -741,6 +763,8 @@ public class MyTank extends AdvancedRobot {
         int gun = chooseGun();
         if (stationaryScans > 5) {
             gun = GUN_HEAD_ON;
+        } else if (velociRobotEnemy()) {
+            gun = GUN_AVERAGED;
         } else if (crazyEnemyScans > 3) {
             gun = GUN_CIRCULAR;
         } else if (fixedHeadingHighPowerShooter()) {
@@ -882,6 +906,9 @@ public class MyTank extends AdvancedRobot {
             // a tick for a cleaner gun angle saves energy and raises hit rate.
             tolerance = Math.min(tolerance, Math.atan2(17.0, distance));
         }
+        if (velociRobotEnemy()) {
+            tolerance = Math.min(tolerance, Math.atan2(18.0, distance));
+        }
         if (highPowerStopGoDodger()) {
             // Cheap head-on shots are still wasted if the gun is broadside; wait for
             // a clean angle in these long high-power stop/go exchanges.
@@ -924,6 +951,30 @@ public class MyTank extends AdvancedRobot {
             }
         }
         return best;
+    }
+
+
+    private boolean velociRobotEnemy() {
+        // Current robo_code__velocirobot profile: sustained medium-fast straight
+        // movement with intermittent shallow turns, frequent weak (~power-1) fire,
+        // and very few hard stops.  The Crazy detector can briefly trigger during
+        // its turn bursts, but offline trace replay favors fast head-on/wall-damped
+        // shots over circular/linear lead.  Keep this narrow so true Crazy/Meow
+        // continuous turners and active wall runners retain their specialized guns.
+        return enemyFireCount > 4
+                && enemyFirePowerSamples > 2
+                && enemyFirePowerAvg <= 1.45
+                && enemySpeedAvg > 3.35
+                && enemySpeedAvg < 5.25
+                && straightEnemyScans > 6
+                && stopGoEnemyScans <= 8
+                && wallEnemyScans <= 12
+                && enemyAbsTurnRateAvg < 0.060
+                && !fastWallCruiser()
+                && !lowFireTracker()
+                && !lowFireRammer()
+                && !fixedHeadingStopGoEnemy()
+                && !fixedHeadingLineEnemy();
     }
 
     private boolean stationaryShooter() {
@@ -1326,10 +1377,11 @@ public class MyTank extends AdvancedRobot {
             return projectClamped(enemyX, enemyY, heading, drift, bulletSpeed, 70);
         }
         if (gunType == GUN_AVERAGED && !dangerousWallEnemy()
-                && (wallEnemyScans > 4 || (stopGoEnemyScans > 8
-                        && (harmlessLowFireEnemy() || activeStopGoEnemy() || heavyStopGoShooter() || mediumStopGoShooter())))
-                && !(stopGoEnemyScans <= 8 && straightEnemyScans > 12 && harmlessLowFireEnemy()
-                        && (Math.abs(enemyVelocityAvg) > 3.5 || Math.abs(velocity) > 5.0))) {
+                && (velociRobotEnemy()
+                        || ((wallEnemyScans > 4 || (stopGoEnemyScans > 8
+                                && (harmlessLowFireEnemy() || activeStopGoEnemy() || heavyStopGoShooter() || mediumStopGoShooter())))
+                            && !(stopGoEnemyScans <= 8 && straightEnemyScans > 12 && harmlessLowFireEnemy()
+                                && (Math.abs(enemyVelocityAvg) > 3.5 || Math.abs(velocity) > 5.0))))) {
             // A harmless wall-bound or recent stop/go bot often alternates between
             // max-speed bursts and hard stops/reverses.  Damping avoids over-leading
             // those weak opponents.  The current Terminator traces show this helps
