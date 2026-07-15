@@ -363,9 +363,18 @@ public class MyTank extends AdvancedRobot {
         // 100-200px vs only 3.3/1k at 200-300px. So orbit ~260px: same hit rate,
         // ~4x FEWER enemy hits. This directly attacks the 18/250 losses (enemy
         // out-trades us at close range where its gun is deadly).
+        // ROUND-2 vs myfirstrobot: the 1 grind loss (sim_184, 1141 turns) and the
+        // 2 close games stayed at 200-600px (mean 350px) — a FIXED -0.6 inward
+        // bias isn't strong enough to close when the enemy drifts out to range.
+        // GRADUATED inward pull: the further past our ~150px target, the harder we
+        // steer inward (up to nearly head-on toward the enemy), so we actually
+        // close the gap in grind games and reach the 48%-hit net-positive <200px
+        // zone instead of bleeding at range. Symmetric mild push-out when too close.
         double rangeBias = 0.0;
-        if (enemyDistance > 180) rangeBias = -0.6;       // pull in toward ~150px (myfirstrobot: our head-on hit rate 48pct@150 vs 32pct@250; both zones ~10/1k enemy hits but closer = faster kills, less exposure, decisive energy-war win)
-        else if (enemyDistance < 130) rangeBias = 0.6;   // push out if too close
+        if (enemyDistance > 400)      rangeBias = -1.1;  // far: steer strongly inward to close fast
+        else if (enemyDistance > 260) rangeBias = -0.85; // mid: firm inward pull
+        else if (enemyDistance > 180) rangeBias = -0.55; // near target: gentle inward
+        else if (enemyDistance < 120) rangeBias = 0.6;   // too close: push out
 
         double desiredDir = absBearing + (Math.PI / 2 + rangeBias) * moveDirection;
 

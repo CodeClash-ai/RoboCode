@@ -2064,3 +2064,47 @@ Compiles Java 8 (major version 52), rc=0.
 - myfirstrobot is SLOW/near-straight & weak-gunned -> KEEP W=1.0 head-on. If it
   becomes a FAST curving dodger, set W=0.0 (circular) + orbit out ~260px.
 - Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 2 / current pass) — opponent = robo_code__myfirstrobot
+
+## STATUS: round 1 improved 87%->92% share (9->10 firsts), enemy score 4694->3488.
+Verified /logs/rounds/{0,1}: opus 45538/45418 vs myfirstrobot 4694/3488. Round-1
+teammate's closer orbit (~150px) + calmer reversals cut 2 losses -> 1 loss.
+Full 250-sim sweep round 1: losses=1 (sim_184, a 1141-turn grind), close(<20E)=2,
+mean ourFinalE 93.8, mean killtick 346, mean turns 500 (max 1412).
+
+## ROOT CAUSE of the remaining loss/close games: couldn't CLOSE in grinds
+Analyzed sim_184: mean engagement 350px (only 5% of ticks <200px), 42% of ticks
+behind on energy. The FIXED -0.6 inward rangeBias wasn't strong enough to close
+when the enemy drifted out to 400-600px + our wall smoothing pushed us around.
+Measured hit rate / enemy hit density by distance (150 games) — DECISIVE:
+  0-100px:   our hit 50%, enemy 2.8/1k  (BEST net zone)
+  100-200px: our hit 59%, enemy 9.0/1k  (dominant: 59% >> break-even)
+  200-300px: our hit 28%, enemy 7.3/1k  (net-negative)
+  300-400px: our hit 15%, enemy 3.6/1k  (bleed)
+  400-600px: our hit 7-18% (heavy bleed)
+The <200px zone is where we WIN the energy war; we just weren't reaching it in grinds.
+
+## CHANGE THIS PASS (movement only): GRADUATED inward pull by distance
+rangeBias was flat -0.6 (dist>180). NOW distance-graduated so we close HARD when far:
+  dist>400  -> -1.1  (steer strongly inward, ~27deg off direct = fast close)
+  dist>260  -> -0.85 (firm inward)
+  dist>180  -> -0.55 (gentle inward near target)
+  dist<120  -> +0.6  (push out if too close)
+Rationale: the further past our ~150px target, the harder we steer toward the
+enemy, so grind games actually reach the 59%-hit net-positive <200px zone instead
+of bleeding at 350px. Gun (W=1.0 head-on), power tiers, reversals, energy-war taper,
+wall smoothing ALL UNCHANGED. Backup: /tmp/MyTank.bak.java (also git prior).
+Compiles Java 8 (major version 52), rc=0.
+
+## For next teammate — VERIFY
+- Want the sim_184-style grind loss GONE (win rate 100%), mean killtick DOWN from
+  346, mean engagement DOWN from 350px, share UP from 92%. If a regression (new
+  losses / share drop), the aggressive close may expose us to more enemy close
+  hits (unlikely — enemy gun is weak, 4.2 dmg/hit) -> soften the far bias to -0.9
+  or revert to /tmp/MyTank.bak.java (git prior, 92%/1 loss).
+- myfirstrobot is SLOW/near-straight & weak-gunned -> KEEP W=1.0 head-on. If it
+  becomes a FAST curving dodger, set W=0.0 (circular) + orbit out ~260px.
+- Hit-rate/enemy-density-by-distance one-liner is in the step history (bucket by
+  dist at prev tick; our energy drops in (-3.1,-0.05)=fire, gains>0.1=hit,
+  drops<-3.5=enemy hit us). Keep MyTank class name + Java-8 bytecode.
