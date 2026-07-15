@@ -223,6 +223,13 @@ public class MyTank extends AdvancedRobot {
             driveAwayFrom(absBearing, 240.0);
             return;
         }
+        if (fixedHeadingHighPowerShooter() && e.getDistance() < 260.0) {
+            // Exterminador can stop near a wall and trade repeated power-3 shots.
+            // Driving directly away is often into the wall; sidestep the firing line
+            // until the range opens instead of sitting in the corner.
+            drivePerpendicularEscape(absBearing, 260.0);
+            return;
+        }
         if (lowFireRammer() && e.getDistance() < 300.0) {
             // sample.RamFire-style chargers keep driving straight at us and only
             // leak score through point-blank shots/collisions.  Do not wait for the
@@ -287,6 +294,12 @@ public class MyTank extends AdvancedRobot {
             // more predictable than sample.Crazy.  Tighten only after virtual waves
             // confirm low circular error, preserving the safer old Crazy spacing.
             preferredDistance = (virtualSamples > 14 && virtualGunError[GUN_CIRCULAR] < 85.0) ? 260.0 : 305.0;
+        } else if (fixedHeadingHighPowerShooter()) {
+            // A fixed-heading high-power stop/go shooter is more dangerous than
+            // Ian/Tarektank-style weak axis bots.  Keep a short but not point-blank
+            // range: logs show our hits are reliable here, and opening too far can
+            // reduce damage before the opponent's parked power-3 trades arrive.
+            preferredDistance = 300.0;
         } else if (weakFixedAxisOscillator()) {
             // Current Tarektank-style target is a one-dimensional 100px
             // oscillator with a weak fixed-heading gun.  Move closer than the
@@ -457,6 +470,7 @@ public class MyTank extends AdvancedRobot {
             // a larger bullet bonus.  Fast/unknown movers keep the safer ladder.
             power = 3.0;
         }
+        boolean finishingFixedHighPower = fixedHeadingHighPowerShooter() && e.getEnergy() < 17.0 && distance < 460.0 && getEnergy() > 6.0;
         boolean hardToHitMover = virtualSamples > 28 && bestGunError() > 72.0 && stationaryScans <= 5 && slowEnemyScans <= 12;
         // If all virtual guns are missing badly (as with wave-surfing GF-style
         // enemies), do not gamble the whole energy stack on repeated heavy
@@ -500,6 +514,24 @@ public class MyTank extends AdvancedRobot {
                 power = Math.min(Math.max(power, 1.25), 1.85);
             } else {
                 power = Math.min(power, getEnergy() < 9 ? 0.15 : 0.45);
+            }
+        } else if (fixedHeadingHighPowerShooter()) {
+            // Exterminador-like high-power fixed stop/go shooters should not inherit
+            // the Ian low-power conservation cap; in losses we were landing cheap
+            // 1.1-2.0 bullets while eating power-3 hits and leaving it alive on
+            // ~10-18 energy.  Use decisive shots while healthy, then fall back before
+            // true self-depletion.
+            if (finishingFixedHighPower) {
+                // If it is already under one max-power hit of death, finish it before
+                // the next power-3 bullet arrives; low-power pinpricks caused several
+                // logged losses with the opponent surviving on ~12-18 energy.
+                power = Math.max(power, Math.min(3.0, getEnergy() - 0.15));
+            } else if (getEnergy() > 36 && distance < 680) {
+                power = Math.max(power, distance < 540 ? 3.0 : 2.35);
+            } else if (getEnergy() > 16) {
+                power = Math.min(Math.max(power, 1.45), 2.05);
+            } else {
+                power = Math.min(power, getEnergy() < 8 ? 0.15 : 0.45);
             }
         } else if (weakFixedAxisOscillator()) {
             // Tarektank-like: fixed heading, short learned line segment, and
@@ -637,10 +669,11 @@ public class MyTank extends AdvancedRobot {
                 power = Math.min(power, 0.85);
             }
         }
-        if (getEnergy() < 22 && distance > 260 && stationaryScans <= 5 && slowEnemyScans <= 12) {
+        if (getEnergy() < 22 && distance > 260 && stationaryScans <= 5 && slowEnemyScans <= 12
+                && !finishingFixedHighPower) {
             power = Math.min(power, 1.25);
         }
-        if (getEnergy() < 9) {
+        if (getEnergy() < 9 && !finishingFixedHighPower) {
             power = Math.min(power, hardToHitMover || activeHighPowerShooter() ? 0.15 : 0.55);
         }
         power = Math.min(power, Math.max(0.1, getEnergy() - 0.15));
@@ -661,6 +694,11 @@ public class MyTank extends AdvancedRobot {
             gun = GUN_HEAD_ON;
         } else if (crazyEnemyScans > 3) {
             gun = GUN_CIRCULAR;
+        } else if (fixedHeadingHighPowerShooter()) {
+            // When this class parks/stops to fire power-3, the safest aim is nearly
+            // head-on; avoid the weak-axis midpoint/opposite-endpoint gun that was
+            // tuned for power-1 oscillators.
+            gun = Math.abs(e.getVelocity()) < 1.5 ? GUN_HEAD_ON : GUN_LINEAR;
         } else if (fixedHeadingStopGoEnemy()) {
             // Fixed-heading oscillators use the drift-head-on virtual gun slot for
             // learned-axis aiming: tight weak oscillators usually aim near the
@@ -852,11 +890,14 @@ public class MyTank extends AdvancedRobot {
         // high-power-shooter safety can misread our own bullet hits as enemy fire.
         // Require virtual evidence that linear beats both averaged and head-on so
         // MarkIV/Terminator/Gruffalo/Ultron-style stop-go shooters keep their
-        // specialized branches.
+        // specialized branches.  Once repeated power-3 fixed-heading fire is detected,
+        // hand off to fixedHeadingHighPowerShooter() so we do not keep the lower
+        // mid-energy linear-conservation cap.
         return straightEnemyScans > 8
                 && stopGoEnemyScans > 6
                 && wallEnemyScans <= 4
                 && crazyEnemyScans <= 4
+                && !fixedHeadingHighPowerShooter()
                 && !fixedHeadingStopGoEnemy()
                 && !fixedHeadingLineEnemy()
                 && !fastWallCruiser()
@@ -876,6 +917,25 @@ public class MyTank extends AdvancedRobot {
         // active until repeated firing proves otherwise; dangerousWallEnemy()
         // takes over after several shots for DroidPoet-like perimeter gunners.
         return enemyFireCount <= 3;
+    }
+
+    private boolean fixedHeadingHighPowerShooter() {
+        // Exterminador-style failure cases: after an initially mobile straight run,
+        // the enemy parks on a nearly fixed heading and fires repeated power-3 shots.
+        // The older fixedHeadingStopGoEnemy() branch was designed for weak power-1
+        // oscillators and capped our bullets too low, producing a few self-depletion
+        // losses while the opponent survived on 10-18 energy.  The speed-average
+        // guard keeps Ultron-style faster high-power dodgers in their cheaper
+        // head-on conservation branch.
+        return stopGoEnemyScans > 8
+                && enemyFireCount > 3
+                && enemyFirePowerSamples > 2
+                && enemyFirePowerAvg > 2.25
+                && crazyEnemyScans <= 4
+                && enemySpeedAvg < 2.55
+                && Math.abs(enemyVelocityAvg) < 3.8
+                && Math.abs(enemyTurnRateAvg) < 0.008
+                && !fastWallCruiser();
     }
 
     private boolean weakFixedAxisOscillator() {
@@ -960,6 +1020,7 @@ public class MyTank extends AdvancedRobot {
                 && enemySpeedAvg < 5.8
                 && crazyEnemyScans <= 4
                 && Math.abs(enemyTurnRateAvg) < 0.075
+                && !fixedHeadingHighPowerShooter()
                 && !fixedHeadingStopGoEnemy()
                 && !fixedHeadingLineEnemy()
                 && !fastWallCruiser()
@@ -972,6 +1033,7 @@ public class MyTank extends AdvancedRobot {
                 && enemyFirePowerAvg > 2.18
                 && stationaryScans <= 5
                 && !weakFixedAxisOscillator()
+                && !fixedHeadingHighPowerShooter()
                 && !fixedHeadingStopGoEnemy()
                 && !fixedHeadingLineEnemy()
                 && !fastWallCruiser()
@@ -1373,6 +1435,37 @@ public class MyTank extends AdvancedRobot {
         lastDirectionChangeTime = getTime();
     }
 
+
+    private void drivePerpendicularEscape(double threatBearing, double distance) {
+        double best = threatBearing + Math.PI / 2.0;
+        double bestScore = -1.0e9;
+        for (int side = -1; side <= 1; side += 2) {
+            for (int i = -4; i <= 4; i++) {
+                double a = threatBearing + side * Math.PI / 2.0 + i * 0.16;
+                double px = projectX(getX(), a, 170.0);
+                double py = projectY(getY(), a, 170.0);
+                if (!insideBattlefield(px, py, 24.0)) {
+                    continue;
+                }
+                double margin = Math.min(Math.min(px, getBattleFieldWidth() - px),
+                        Math.min(py, getBattleFieldHeight() - py));
+                // Favor getting out of the wall/corner while staying close to a true
+                // perpendicular dodge line; this avoids driving straight into a wall
+                // when the enemy is between us and the battlefield center.
+                double perpendicular = Math.cos(Utils.normalRelativeAngle(a - (threatBearing + side * Math.PI / 2.0)));
+                double score = 2.0 * margin + 120.0 * perpendicular;
+                if (score > bestScore) {
+                    bestScore = score;
+                    best = a;
+                }
+            }
+        }
+        if (bestScore < -1.0e8) {
+            best = Math.atan2(getBattleFieldWidth() / 2.0 - getX(), getBattleFieldHeight() / 2.0 - getY());
+        }
+        setMaxVelocity(8.0);
+        driveAlongAngle(best, distance);
+    }
 
     private void driveAwayFrom(double threatBearing, double distance) {
         double away = threatBearing + Math.PI;
