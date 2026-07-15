@@ -159,10 +159,14 @@ public class MyTank extends AdvancedRobot {
         // 400-500px=9%. Prior versions orbited at ~485px (only 3% of ticks <300px)
         // and LOST the energy war (our finalE 7 vs enemy 26). Fix: orbit CLOSER
         // (~330px) to raise hit rate, and use head-on aim.
-        if (dist < 250)       power = 3.0;
-        else if (dist < 400)  power = 2.5;
-        else if (dist < 500)  power = 2.0;
-        else                  power = 1.5;
+        // ROUND-2 vs regullarmonk power tiers by measured hit rate (net = hr*3p-p,
+        // break-even at hr>1/3): <200px hr~66% & <300px hr~36% are net-POSITIVE at
+        // full power 3.0. The 300-400px zone is only 17% hit (net -1.48 at p3.0),
+        // so taper power there so each miss costs LESS while we pull back inside.
+        if (dist < 300)       power = 3.0;   // 36-66% hit -> full power, big net gain
+        else if (dist < 400)  power = 1.6;   // 17% hit danger zone -> cheap shots
+        else if (dist < 500)  power = 1.8;   // 23% hit
+        else                  power = 1.2;   // low hit far -> minimal drain
 
         // Energy safety clamps so a bad streak can't self-destruct us.
         if (getEnergy() < 30) power = Math.min(power, 2.0);
@@ -221,10 +225,14 @@ public class MyTank extends AdvancedRobot {
         // ROUND-2 vs tibola__markiv: skip low-confidence long-range shots that
         // bleed us in the grind. Only fire far when we hold an energy lead, and
         // require tighter gun alignment at range (aim error hurts more far away).
+        // ROUND-2 vs regullarmonk: conserve energy in the low-hit-rate zones.
+        // Only fire at 300px+ (hit rate <=23%) when we still hold an energy lead,
+        // so a bad long-range streak can't drain us below the enemy in the grind.
+        // Up close (<300px, 36-66% hit) always fire -- those shots gain energy.
         boolean allowFire = true;
-        if (dist > 500 && getEnergy() < enemyEnergy + 3) allowFire = false;
+        if (dist > 300 && getEnergy() < enemyEnergy) allowFire = false;
         // Tighter alignment for distant shots (bullet spread grows with range).
-        double alignThresh = (dist > 450) ? 0.08 : 0.12;
+        double alignThresh = (dist > 350) ? 0.08 : 0.12;
 
         if (allowFire && getGunHeat() == 0 && Math.abs(gunTurn) < alignThresh
                 && getEnergy() > power + 0.5) {
@@ -255,9 +263,17 @@ public class MyTank extends AdvancedRobot {
         // accuracy; our own hit rate stays ~40% at 450-550px per replay-sim.
         // vs regullarmonk (linear oscillator): orbit CLOSER (~330px) to boost our
         // head-on hit rate (66% at 100-200px, 29% at 200-300px, only 9% at 450px).
+        // ROUND-2 vs regullarmonk: analysis of 250 recorded games shows the
+        // 300-400px zone is a LOSE-LOSE (our hit rate only 17%, enemy hit
+        // density HIGHEST at 6.8/1k ticks) yet we spent 41k/68k ticks there
+        // orbiting ~330px and LOST the energy war in 55/250 games. At 200-300px
+        // our hit rate DOUBLES to 36% (net-energy-POSITIVE) while enemy density
+        // DROPS to 5.4/1k; at 100-200px our hit is 66% with only 4.5/1k enemy.
+        // -> Orbit MUCH CLOSER (~230px) to move BOTH our accuracy up and out of
+        // the enemy's kill zone. This flips the energy war in our favor.
         double rangeBias = 0.0;
-        if (enemyDistance > 380) rangeBias = -0.45;      // pull in toward ~330px
-        else if (enemyDistance < 280) rangeBias = 0.45;  // push out if too close
+        if (enemyDistance > 270) rangeBias = -0.55;      // pull in toward ~230px
+        else if (enemyDistance < 180) rangeBias = 0.55;  // push out if too close
 
         double desiredDir = absBearing + (Math.PI / 2 + rangeBias) * moveDirection;
 

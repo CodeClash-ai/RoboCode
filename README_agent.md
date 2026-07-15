@@ -1172,3 +1172,54 @@ Compiles to Java 8 (major version 52), rc=0.
 Check new /logs/rounds/0/results_*.txt: want higher Bullet Dmg AND higher finalE
 (energy war). If enemy suddenly moves differently, re-run tools/replay_hitrate.py.
 Backup of prior MyTank at /tmp (not persisted) -- git has history if needed.
+
+# Agent Notes (Round 2 / current pass) — opponent = robo_code__regullarmonk
+
+## STATUS: round 1 improved 27%->78% winrate; THIS pass targets the 55 losses
+Verified /logs/rounds/{0,1}: opus 19531(54% share)/36066(84%) vs monk 14868/7048.
+Round-1 teammate's head-on gun + closer orbit (~330px) + rescaled power flipped
+winrate 27%->78% (195/250 wins). This is a genuinely COMPETITIVE opponent (a
+linear oscillator with a real gun) — our first non-trivial matchup this game.
+
+## ROOT CAUSE of the remaining 55 losses: the 300-400px LOSE-LOSE zone
+Analyzed round-1's 250 sim logs (per-file header maps idx->name, enemy=non-'opus'):
+- We orbited ~330px -> spent 41629/67956 ticks (61%) in the 300-400px bucket.
+- OUR head-on hit rate by distance: <200px 66%, 200-300px 36%, 300-400px ONLY 17%,
+  400-500px 23%. Net energy/shot @power3 = hr*9-3 (break-even hr=1/3): 300-400px
+  is NET -1.48/shot. We fired ~2500 shots there = massive energy bleed.
+- ENEMY hit DENSITY (hits per 1000 ticks we spend there): 100-200px 4.5, 200-300px
+  5.4, 300-400px 6.8 (HIGHEST), 400-500px 4.1. The enemy is MOST effective exactly
+  where we camped. In losses we fired 54-82 shots (vs enemy 32-48, it conserves)
+  and bled to 0 while enemy kept 11-61 E. Pure energy-war loss.
+
+## FIX THIS PASS: orbit MUCH CLOSER (~230px) + taper power + tighter fire gate
+1. MOVEMENT rangeBias: pull in when dist>270, push out when dist<180 (was >380/<280
+   -> ~330px). New target ~230px = 200-300px zone where OUR hit DOUBLES (17%->36%,
+   net-positive) AND enemy density DROPS (6.8->5.4). Below 200px is even better
+   (66% hit, 4.5 density).
+2. POWER tiers by measured hit rate: <300px=3.0 (net-positive), 300-400px=1.6
+   (cheap misses in the 17% danger zone), 400-500px=1.8, else 1.2. Was
+   3.0/<250,2.5/<400,2.0/<500,1.5.
+3. FIRE GATE: skip shots at dist>300 unless getEnergy()>=enemyEnergy (was >500).
+   Up close (<300px) always fire — those shots gain energy.
+
+## Validation (net-firing-energy model over recorded games)
+Model using MEASURED per-bucket hit rates: OLD config net = -777/1k ticks
+(bleeding — matches the 55 losses); NEW config (closer orbit shifted dists inward
+~100px) = +473/1k ticks (gaining). Direction is overwhelming even discounting
+model optimism. Enemy-hit-density-by-distance is the trustworthy signal (not
+reactive to our aim) and clearly favors closing to 200-300px.
+
+## Compile: javac --release 8 ... -> major version 52 (Java 8). Backup: /tmp/MyTank.bak.java
+
+## For next teammate — VERIFY THIS WORKED
+- Check NEW /logs winrate: want it ABOVE 78% (ideally 90%+) and our avg min-energy
+  UP from 23. If it DROPPED, the close orbit may have exposed us to a better
+  close-range enemy gun -> REVERT to /tmp/MyTank.bak.java (git prior, 78%) or push
+  orbit target back to ~280px (rangeBias thresholds 320/230).
+- If winrate rose but still <95%: try pushing orbit even closer (~200px:
+  thresholds 240/160) since our hit rate is 66% at 100-200px, OR lower the
+  300-400px power to 1.2 and tighten the fire gate to always-skip dist>350.
+- Re-run the distance analyses (hit-rate-by-dist + enemy-hit-density-by-dist) on
+  the NEW logs — one-liners are in the step history / tools/replay_hitrate.py.
+- Keep MyTank class name + Java-8 bytecode (only hard requirement).
