@@ -4428,3 +4428,165 @@ quick diff/revert if next round's numbers look worse.
    repository within the same call). Still the single highest-leverage infra
    fix available if a future teammate has a larger step budget to spend on it
    than usual.
+
+## Round 36 update (this round) — found & fixed a CRITICAL regression: reissueEscape() double-counted stuck-ticks, causing perpetual wall-oscillation
+
+### Context
+Both `/logs/rounds/0/` and `/logs/rounds/1/` exist this round, both real combat
+against a **new** opponent, `andrekorol__oppswantmedead` (round 0 here matches
+round 35's own baseline exactly: 98% win, 245/250, avg walls/game 4.2, 5
+losses — i.e. round 0 is the result of round 34's code, pre-round-35-fix).
+**Round 1 here is the REAL match result of round 35's fix** (reverting
+`onHitWall()`'s wall-escape from round 34's no-turn mode back to round
+23's turn-based, rotating-heading `beginEscape()` aimed at the field center).
+Result: **CATASTROPHIC REGRESSION — 32% win rate (79/250)**, i.e. we LOST
+68% of games to a weak opponent that itself only manages 24% accuracy. Avg
+speed cratered to 2.2 (down from 6.1), avg min energy dropped to 28 (down
+from 75), games ballooned to avg 937 turns (up from 474), max 1460 turns.
+This is by far the worst single-round result in this entire file's history.
+
+### Investigation
+Traced `sim_0.jsonl` and `sim_1.jsonl` (both losses) tick-by-tick, dumping
+x/y/v/bh(body heading)/status/energy. **Both show the tank getting wedged
+against a single wall (not even a corner — e.g. `sim_0`: pinned at
+(490.3, 18.0) near the top wall for 1000+ consecutive ticks; `sim_1`: pinned
+at (18.0, 241.2) near the left wall for 800+ ticks) with velocity frozen at
+exactly 0.0 for the ENTIRE remainder of the game**, `HIT_WALL` status
+re-firing continuously, energy draining ~3/hit from repeated wall-collision
+damage until death. Critically, **body heading (`bh`) was NOT frozen** in
+either case — it was **oscillating back and forth** in a small range (e.g.
+`sim_0`: bouncing between ~2.7 and ~3.7 rad every 1-3 ticks; `sim_1`: bouncing
+between ~4.6 and ~5.4 rad) for the ENTIRE stuck duration, **never converging**
+on any single target heading long enough to actually turn away from the wall
+and build velocity. This is a genuinely new failure signature, distinct from
+every previously-documented freeze pattern in this file (round 25's frozen
+heading, round 34/35's single-axis-blocked no-turn escape, etc.) — here the
+escape mechanism visibly *tries* to turn, repeatedly, but never finishes.
+
+### Root cause found: `reissueEscape()` has no per-tick dedupe, so multiple
+same-tick handler calls double-count the stuck-tick detector
+`reissueEscape()` (round 20) is called from **every** event handler that
+might fire in a given tick while escape mode is active (`onHitWall`,
+`onHitByBullet`, `onHitRobot`, `onScannedRobot` — see the various
+`if (getTime() < escapeUntil) { reissueEscape(); return; }` guards added
+across rounds 20/24). This is by design (so all handlers agree on the same
+command within a tick) — but `reissueEscape()` itself does **stateful
+bookkeeping** every single call: it compares current position to
+`lastEscapeX/Y` and increments `escapeStuckTicks` if we haven't moved >2px,
+then rotates the target heading by 90 degrees (round 23's fix) once
+`escapeStuckTicks >= 3`. **This bookkeeping was never deduplicated per game
+tick** — if 2 handlers both call it in the same tick (extremely common while
+wall-stuck: `onHitWall()` fires because we're still touching the wall, AND
+`onScannedRobot()` fires because the enemy is still in radar view, both in
+the same tick), the stuck-tick counter increments TWICE per real tick,
+causing the 90-degree rotation to trigger roughly 2x too fast (effectively
+every ~1.5 real ticks instead of every 3). This is precisely why the target
+heading kept oscillating rather than settling: by the time the tank had
+turned partway toward one rotated target, the counter had already (due to
+double-counting) decided "still stuck" and rotated the target again, before
+the turn could ever complete — a total deadlock, purely from a counting bug,
+not a fundamentally-wrong escape *strategy* the way rounds 25/34/35's fixes
+each addressed. **This bug was latent since round 23** (when the rotation
+logic was first added) but only became catastrophic once round 35 switched
+`onHitWall()`'s escape from the round-25 no-turn mode (immune to this bug,
+since no-turn mode's ahead/back flip-flop doesn't depend on ever completing
+a turn) to the round-23/35 turn-based mode (which absolutely requires
+completing a turn to make any progress at all) — exposing a bug that had
+been sitting dormant, invisible in every one of rounds 23-34's real matches.
+
+### Fix applied (`robots/custom/MyTank.java`)
+Added a single new field `lastEscapeReissueTick` and a 4-line dedupe guard at
+the very top of `reissueEscape()`: if `getTime() == lastEscapeReissueTick`,
+return immediately (no-op) without touching any stuck-detection state;
+otherwise record `lastEscapeReissueTick = getTime()` and proceed as before.
+This guarantees the stuck-tick bookkeeping and any resulting 90-degree
+rotation only ever advance once per real game tick, no matter how many
+handlers legitimately call `reissueEscape()` within that same tick. This is
+a minimal, surgical, high-confidence fix — it does not change WHEN escape
+mode is entered, WHAT heading/direction is chosen, or any of the
+combat/movement logic outside the escape mechanism; it only fixes the
+*rate* at which the stuck-detector's internal clock advances. Verified
+`javac -Xlint:all -cp libs/robocode.jar -d robots robots/custom/MyTank.java`
+compiles clean (no errors/warnings), `.class` up to date. Old (pre-this-round,
+i.e. round 35's) version preserved at
+`archive/round1_backups/MyTank.java.before_round36_dedupe_fix` for a quick
+diff/revert if next round's numbers somehow still look worse (very unlikely
+given how clearly this explains the observed regression, but flagging per
+this file's usual convention).
+
+### What I did NOT get to
+- **Not validated by a real match** (same long-standing limitation as every
+  previous round — no working local headless battle runner in this sandbox;
+  see round 6's section for the most detailed writeup). This is an extremely
+  high-confidence diagnosis (directly observed oscillating, never-converging
+  headings in 2 independent traced losses, and the code-level "no per-tick
+  dedupe" gap is unambiguous from reading `reissueEscape()`) but genuinely
+  untested. **First thing to check next round**: `trace.md`'s avg speed
+  (should return to ~6+, not 2.2), avg min energy (should return to ~75+,
+  not 28), and especially win rate against `andrekorol__oppswantmedead` if
+  it reappears (should return toward round 0's 98%, not round 1's
+  catastrophic 32%).
+- Did not re-investigate whether the SAME double-counting bug could also
+  explain (or worsen) any of the previously-documented STUCK-RAMMING cases
+  from rounds 14/19/20/23/24/25/26/etc. — those mostly used the no-turn
+  escape variant (round 25 onward for robot-contact), which is much less
+  sensitive to this bug (ahead/back flip-flop doesn't require a turn to
+  complete), but the dedupe fix applies uniformly to both escape modes now,
+  so this should be a strict improvement either way, not just for the
+  wall-only case that exposed it this round.
+- Did not revert or reconsider round 35's turn-based-for-walls /
+  no-turn-based-for-robots split decision itself — that reasoning (walls
+  don't have an `isMyFault`-style turn-cancellation mechanic, so turning is
+  safe there, and turning is *necessary* to escape an actual two-wall
+  corner, which no-turn's single-axis flip-flop can't do) remains sound; the
+  bug was purely in the *counting* underneath it, not the strategy choice.
+  Recommend keeping round 35's strategy AND this round's dedupe fix together.
+- Did not extend `tools/analyze_freezes.py` to specifically detect
+  "oscillating-but-not-progressing" position/heading patterns (as opposed to
+  its existing byte-identical-freeze detection) — this round's bug produced
+  a frozen POSITION (x/y exactly identical) even though heading was
+  oscillating, so the existing tool's position-freeze check DID actually
+  still catch this pattern (would show up as a long "position frozen"
+  finding) — I didn't get a chance to run it against round 1's logs this
+  round (ran out of steps after finding and fixing the root cause via manual
+  traces first), but a future teammate should verify
+  `tools/analyze_freezes.py --threshold 20` on round 1's logs shows a large
+  number of findings on `sonnet_5` (expected, given the severity here) as a
+  sanity check that the tool would have caught this had someone run it
+  immediately upon seeing round 1's numbers.
+
+### Suggestions for next teammate
+1. **First step, as always**: check `/logs/rounds/<N>/trace.md`. This is the
+   highest-priority check possible: avg speed should be back near 6+ (not
+   2.2), avg min energy back near 75+ (not 28), win rate back near
+   90-100% (not 32%) — if `andrekorol__oppswantmedead` reappears, direct
+   comparison against round 0's 98%-win baseline (this environment) is the
+   cleanest validation. If numbers are still bad, run
+   `python3 tools/analyze_freezes.py /logs/rounds/<N> --threshold 20 | grep -i
+   sonnet` immediately and dump per-tick x/y/v/bh for any flagged game (same
+   technique as this round) — check specifically whether body heading (`bh`)
+   is STILL oscillating without converging; if so, the dedupe fix didn't
+   fully solve it and there's a second contributing bug still to find.
+2. **General lesson reinforced this round**: whenever multiple event
+   handlers can fire in the same tick and share mutable state (like the
+   escape-mode fields), remember EVERY access to that shared state needs to
+   be idempotent/deduplicated per tick, not just the *decision* of which
+   command to issue (round 20's original fix) but also any *bookkeeping*
+   counters that assume "called once per tick" (round 23's stuck-tick
+   counter, added 3 rounds after round 20's mechanism, apparently without
+   re-auditing this assumption). Any future extension to the escape
+   mechanism (or any other shared-state-across-handlers mechanism) should
+   explicitly consider whether it can be called multiple times in one tick
+   before adding new counters/timers to it.
+3. If this round's fix is validated, `pez__gf1` (rounds 11-12, ~14% tie rate
+   from mutual energy attrition) remains the single most valuable target for
+   directly re-testing the accumulated stuck-ramming/wall-escape/energy-
+   management fixes since round 12 — still hasn't reappeared after 24 rounds.
+4. Local headless battle-runner: still unresolved after 35+ rounds of
+   attempts (see round 6's section for the most detailed known blocker,
+   `RepositoryManager.loadSelectedRobots` not seeing a freshly-reloaded
+   repository within the same call). Still the single highest-leverage infra
+   fix available if a future teammate has a larger step budget to spend on it
+   than usual — this round's regression is exactly the kind of thing that
+   would have been caught in minutes with working local battle-testing
+   instead of requiring a full extra round to notice and diagnose from logs.

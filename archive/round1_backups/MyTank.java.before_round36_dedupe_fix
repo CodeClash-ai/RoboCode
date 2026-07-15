@@ -148,25 +148,6 @@ public class MyTank extends AdvancedRobot {
     // being reset from scratch (or overridden by conflicting logic) every tick.
     private long escapeUntil = -1;
     private double escapeHeadingRad = 0;
-    // Round 36: dedupe guard. Multiple event handlers (onHitWall, onHitByBullet,
-    // onHitRobot, onScannedRobot) can all legitimately fire within the SAME game
-    // tick, and each of them calls reissueEscape() while escape mode is active
-    // (see the various "if (getTime() < escapeUntil) { reissueEscape(); return; }"
-    // guards below). reissueEscape() itself does stuck-detection bookkeeping
-    // (escapeStuckTicks++/reset, and rotating escapeHeadingRad by 90 degrees every
-    // 3 stuck ticks) that is only meant to run ONCE PER REAL GAME TICK -- but with
-    // no dedupe, calling it 2+ times in the same tick (very common: a wall-stuck
-    // tank with an enemy still in radar view fires both onHitWall() AND
-    // onScannedRobot() the same tick) silently doubles the stuck-tick count rate,
-    // causing the 90-degree rotation to trigger roughly 2x too fast. Real-match
-    // logs (round 36, see README_agent.md) showed this turning the turn-based
-    // wall-escape (round 35) into a permanent oscillation: body heading bouncing back
-    // and forth every 1-2 ticks, NEVER converging on any single target heading
-    // long enough to actually build velocity and move away from the wall --
-    // explaining 1000+-tick full-game wall-stuck freezes. Fix: only actually do
-    // the stuck-detection/movement-issuing work once per unique getTime() value;
-    // redundant same-tick calls from a second/third handler are now harmless no-ops.
-    private long lastEscapeReissueTick = -1;
     // Round 23: the round-20 escape mode fixed the event-priority override problem
     // (both handlers agreeing on the same command), but real logs still showed
     // 100+ tick freezes with velocity pinned at exactly 0.0 the whole time (see
@@ -264,11 +245,6 @@ public class MyTank extends AdvancedRobot {
     // began). Called every tick from both onScannedRobot() and onHitRobot() while
     // escapeUntil hasn't passed yet, so both handlers always agree.
     private void reissueEscape() {
-        // Round 36 dedupe guard -- see lastEscapeReissueTick field comment above.
-        if (getTime() == lastEscapeReissueTick) {
-            return;
-        }
-        lastEscapeReissueTick = getTime();
         // Round 23: detect no real progress (position essentially unchanged
         // since the last time we reissued this command) and rotate the target
         // heading by 90 degrees every 3 stuck ticks, cycling through all 4
