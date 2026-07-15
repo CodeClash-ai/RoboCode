@@ -2,6 +2,7 @@ package custom;
 
 import java.awt.Color;
 import robocode.AdvancedRobot;
+import robocode.BulletHitEvent;
 import robocode.HitByBulletEvent;
 import robocode.HitRobotEvent;
 import robocode.HitWallEvent;
@@ -9,37 +10,43 @@ import robocode.ScannedRobotEvent;
 import robocode.util.Utils;
 
 /**
- * MyTank - compact 1v1 AdvancedRobot.
+ * MyTank - 1v1 AdvancedRobot tuned for unknown single opponents.
  *
- * Strategy:
- *  - independent radar with a tight lock once the opponent is seen
- *  - linear predictive targeting (excellent against corner/wall/sample bots)
- *  - perpendicular orbiting with direction changes on enemy fire / wall / impacts
- *  - distance management and wall-safe turns to avoid becoming a stationary target
+ * It combines a tight radar lock, circular/linear predictive targeting, and a
+ * wall-smoothed perpendicular orbit that reverses on enemy fire.  The movement
+ * is intentionally a little irregular so simple linear/head-on guns have a hard
+ * time collecting repeated hits.
  */
 public class MyTank extends AdvancedRobot {
-    private static final double WALL_MARGIN = 72;
+    private static final double WALL_MARGIN = 42.0;
+    private static final double PREFERRED_DISTANCE = 410.0;
 
     private int moveDirection = 1;
     private double lastEnemyEnergy = 100.0;
-    private long lastScanTime = 0;
+    private double lastEnemyHeading = 0.0;
+    private boolean haveEnemyHeading = false;
+    private long lastScanTime = -1000;
 
     public void run() {
-        setBodyColor(new Color(20, 20, 30));
-        setGunColor(new Color(230, 190, 40));
-        setRadarColor(new Color(90, 210, 255));
+        setBodyColor(new Color(18, 24, 34));
+        setGunColor(new Color(240, 190, 45));
+        setRadarColor(new Color(80, 220, 255));
         setBulletColor(Color.WHITE);
         setScanColor(Color.CYAN);
 
         setAdjustGunForRobotTurn(true);
         setAdjustRadarForGunTurn(true);
 
-        // Keep moving even before first scan; the radar spin will find the enemy.
-        setAhead(120);
-        setTurnRadarRight(Double.POSITIVE_INFINITY);
+        setTurnRadarRightRadians(Double.POSITIVE_INFINITY);
+        setAhead(160);
         while (true) {
-            if (getTime() - lastScanTime > 18) {
-                setTurnRadarRight(Double.POSITIVE_INFINITY);
+            // If radar lock is lost, sweep.  Keep issuing movement so we never
+            // sit still during a long initial search or after a missed scan.
+            if (getTime() - lastScanTime > 12) {
+                setTurnRadarRightRadians(Double.POSITIVE_INFINITY);
+                if (Math.abs(getDistanceRemaining()) < 20) {
+                    setAhead(140 * moveDirection);
+                }
             }
             execute();
         }
@@ -52,114 +59,157 @@ public class MyTank extends AdvancedRobot {
         double enemyX = getX() + Math.sin(absBearing) * e.getDistance();
         double enemyY = getY() + Math.cos(absBearing) * e.getDistance();
 
-        // Tight radar lock: overshoot a little so we do not lose fast movers.
+        // Narrow radar lock with overshoot in the direction we need to turn.
         double radarTurn = Utils.normalRelativeAngle(absBearing - getRadarHeadingRadians());
         setTurnRadarRightRadians(radarTurn * 2.0);
 
-        doMovement(e, absBearing, enemyX, enemyY);
+        doMovement(e, absBearing);
         doGun(e, absBearing, enemyX, enemyY);
 
         lastEnemyEnergy = e.getEnergy();
+        lastEnemyHeading = e.getHeadingRadians();
+        haveEnemyHeading = true;
     }
 
-    private void doMovement(ScannedRobotEvent e, double absBearing, double enemyX, double enemyY) {
+    private void doMovement(ScannedRobotEvent e, double absBearing) {
         double enemyDrop = lastEnemyEnergy - e.getEnergy();
-        if (enemyDrop > 0.09 && enemyDrop <= 3.01) { // enemy probably fired
+        if (enemyDrop > 0.09 && enemyDrop <= 3.01) {      // likely enemy bullet
             moveDirection = -moveDirection;
         }
-        if (getTime() % 47 == 0 || e.getDistance() < 140 || e.getDistance() > 560) {
+        // Irregular reversals break simple linear targeting and prevent long
+        // straight runs.  Reverse more aggressively at dangerous ranges.
+        if ((getTime() + 17) % 61 == 0 || e.getDistance() < 150 || e.getDistance() > 610) {
             moveDirection = -moveDirection;
         }
 
-        // Orbit mostly perpendicular.  Add distance correction: close in when far,
-        // widen when too close.  This also makes our path less linear.
-        double turn = e.getBearing() + 90.0;
-        if (e.getDistance() > 430) {
-            turn -= 25.0 * moveDirection;
-        } else if (e.getDistance() < 230) {
-            turn += 35.0 * moveDirection;
+        // Orbit perpendicular, with a distance-control offset.  Far away we cut
+        // inward; too close we open out.  wallSmooth then bends the path away
+        // from the battlefield edges before we commit to it.
+        double distanceOffset = limit(-0.62, (e.getDistance() - PREFERRED_DISTANCE) / 430.0, 0.55);
+        double desired = absBearing + moveDirection * (Math.PI / 2.0 - distanceOffset);
+        desired = wallSmooth(desired, moveDirection);
+
+        double turn = Utils.normalRelativeAngle(desired - getHeadingRadians());
+        double ahead = 150.0;
+        // Robocode turns faster when we drive backward rather than demanding a
+        // turn of more than 90 degrees.
+        if (Math.cos(turn) < 0) {
+            turn = Utils.normalRelativeAngle(turn + Math.PI);
+            ahead = -ahead;
         }
 
-        // Wall smoothing: if the projected point is unsafe, flip and turn away.
-        double projectedHeading = getHeadingRadians() + Math.toRadians(turn);
-        double px = getX() + Math.sin(projectedHeading) * 120.0 * moveDirection;
-        double py = getY() + Math.cos(projectedHeading) * 120.0 * moveDirection;
-        if (!insideBattlefield(px, py)) {
-            moveDirection = -moveDirection;
-            turn += 75.0;
-        }
-
-        setTurnRight(Utils.normalRelativeAngleDegrees(turn));
-        setAhead(150.0 * moveDirection);
-        setMaxVelocity(Math.abs(getTurnRemaining()) > 45 ? 6.0 : 8.0);
+        setTurnRightRadians(turn);
+        setAhead(ahead);
+        setMaxVelocity(Math.abs(turn) > Math.PI / 3 ? 5.5 : 8.0);
     }
 
     private void doGun(ScannedRobotEvent e, double absBearing, double enemyX, double enemyY) {
         double distance = e.getDistance();
         double power;
-        if (distance < 170) {
+        if (distance < 155) {
             power = 3.0;
-        } else if (distance < 360) {
-            power = 2.4;
-        } else if (distance < 560) {
-            power = 1.8;
+        } else if (distance < 300) {
+            power = 2.55;
+        } else if (distance < 500) {
+            power = 2.0;
         } else {
-            power = 1.2;
+            power = 1.45;
         }
-        power = Math.min(power, Math.max(0.1, getEnergy() - 0.2));
-        if (getEnergy() < 18 && distance > 260) {
-            power = Math.min(power, 1.4);
+        if (getEnergy() < 22 && distance > 260) {
+            power = Math.min(power, 1.35);
         }
+        if (getEnergy() < 9) {
+            power = Math.min(power, 0.9);
+        }
+        power = Math.min(power, Math.max(0.1, getEnergy() - 0.15));
 
-        // Iterative linear prediction.  Clamp predictions to the field, which is
-        // especially useful against corner/wall movers.
         double bulletSpeed = 20.0 - 3.0 * power;
         double predictedX = enemyX;
         double predictedY = enemyY;
-        double enemyHeading = e.getHeadingRadians();
-        double enemyVelocity = e.getVelocity();
-        double deltaTime = 0.0;
-        while (++deltaTime * bulletSpeed < distance(getX(), getY(), predictedX, predictedY)
-                && deltaTime < 80) {
-            predictedX += Math.sin(enemyHeading) * enemyVelocity;
-            predictedY += Math.cos(enemyHeading) * enemyVelocity;
-            predictedX = limit(18.0, predictedX, getBattleFieldWidth() - 18.0);
-            predictedY = limit(18.0, predictedY, getBattleFieldHeight() - 18.0);
+        double predictedHeading = e.getHeadingRadians();
+        double velocity = e.getVelocity();
+        double turnRate = haveEnemyHeading ? Utils.normalRelativeAngle(e.getHeadingRadians() - lastEnemyHeading) : 0.0;
+
+        // Circular prediction when the enemy is consistently turning, linear
+        // prediction otherwise.  Clamp at the wall, because many bots turn or
+        // stop there and unclamped prediction tends to shoot outside the field.
+        double time = 0.0;
+        while ((++time) * bulletSpeed < distance(getX(), getY(), predictedX, predictedY) && time < 85) {
+            if (Math.abs(turnRate) > 0.0005) {
+                predictedHeading += turnRate;
+            }
+            predictedX += Math.sin(predictedHeading) * velocity;
+            predictedY += Math.cos(predictedHeading) * velocity;
+            if (!insideBattlefield(predictedX, predictedY, 18.0)) {
+                predictedX = limit(18.0, predictedX, getBattleFieldWidth() - 18.0);
+                predictedY = limit(18.0, predictedY, getBattleFieldHeight() - 18.0);
+                break;
+            }
         }
 
         double aim = Math.atan2(predictedX - getX(), predictedY - getY());
         setTurnGunRightRadians(Utils.normalRelativeAngle(aim - getGunHeadingRadians()));
 
-        double gunError = Math.abs(getGunTurnRemainingRadians());
-        if (getGunHeat() == 0 && gunError < Math.atan2(36.0, distance) && getEnergy() > 0.3) {
+        // Fire when the gun is essentially on target.  The tolerance scales with
+        // target width, so we still shoot promptly at close range.
+        double tolerance = Math.atan2(28.0, distance);
+        if (getGunHeat() == 0 && Math.abs(getGunTurnRemainingRadians()) < tolerance && getEnergy() > 0.25) {
             setFire(power);
         }
     }
 
     public void onHitByBullet(HitByBulletEvent e) {
         moveDirection = -moveDirection;
-        setTurnRight(Utils.normalRelativeAngleDegrees(90.0 - e.getBearing()));
+        setTurnRightRadians(Utils.normalRelativeAngle(Math.PI / 2.0 - e.getBearingRadians()));
         setAhead(170.0 * moveDirection);
     }
 
     public void onHitWall(HitWallEvent e) {
         moveDirection = -moveDirection;
-        setBack(120);
-        setTurnRight(60);
+        setBack(130);
+        setTurnRight(70);
     }
 
     public void onHitRobot(HitRobotEvent e) {
         moveDirection = -moveDirection;
-        setTurnGunRight(Utils.normalRelativeAngleDegrees(getHeading() + e.getBearing() - getGunHeading()));
+        double gunTurn = Utils.normalRelativeAngle(getHeadingRadians() + e.getBearingRadians() - getGunHeadingRadians());
+        setTurnGunRightRadians(gunTurn);
+        if (e.isMyFault()) {
+            setBack(90);
+        } else {
+            setAhead(90 * moveDirection);
+        }
         if (getGunHeat() == 0 && getEnergy() > 3) {
             setFire(3.0);
         }
-        setBack(80);
     }
 
-    private boolean insideBattlefield(double x, double y) {
-        return x > WALL_MARGIN && x < getBattleFieldWidth() - WALL_MARGIN
-                && y > WALL_MARGIN && y < getBattleFieldHeight() - WALL_MARGIN;
+    public void onBulletHit(BulletHitEvent e) {
+        // Keep the enemy energy estimate sane when our bullet lands between scans.
+        lastEnemyEnergy = Math.max(0.0, e.getEnergy());
+    }
+
+    private double wallSmooth(double angle, int orientation) {
+        double smoothed = angle;
+        int tries = 0;
+        while (!insideBattlefield(projectX(getX(), smoothed, 155.0), projectY(getY(), smoothed, 155.0), WALL_MARGIN)
+                && tries++ < 28) {
+            smoothed += orientation * 0.075;
+        }
+        return smoothed;
+    }
+
+    private boolean insideBattlefield(double x, double y, double margin) {
+        return x > margin && x < getBattleFieldWidth() - margin
+                && y > margin && y < getBattleFieldHeight() - margin;
+    }
+
+    private static double projectX(double x, double angle, double length) {
+        return x + Math.sin(angle) * length;
+    }
+
+    private static double projectY(double y, double angle, double length) {
+        return y + Math.cos(angle) * length;
     }
 
     private static double limit(double min, double value, double max) {
