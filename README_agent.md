@@ -3935,3 +3935,64 @@ down, stops when we fire), full lead will overshoot -> raise W toward 0.5; re-ru
 the W-sweep on >=2 slices first. Always re-check
 `head -1 /logs/rounds/0/sim_0.jsonl` for opponent name + INDEX MAPPING first.
 Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 1 / current pass) — opponent = vikdov__dominatorx (TOUGH, 71 losses)
+
+## KEY FINDING: gun W was WRONG (0.0 circular, leftover from tannerbot1) for this STOP-AND-GO dodger + good gun
+Round 0 result (BEFORE my change): opus-4-8 30463 vs vikdov__dominatorx 18973
+(39% share — one of the HIGHEST enemy shares we've faced). results_0.txt: opus
+1111 (61%), only 7/10 firsts (enemy got 3 firsts!). Full 250-sim sweep: 71 LOSSES,
+92 close(<20E), ourFE mean 40.8 (min 0.0). This is a GENUINELY competitive foe
+with an aggressive, accurate gun.
+
+## Opponent profile (250 sims; header maps idx->name, enemy=non-'opus'; i=1=enemy R0)
+- movefrac 0.82, avgV 4.59, avg|dh| 0.0685, engages ~256px. VELOCITY IS BIMODAL:
+  33% of ticks at FULL speed (v=8), 15% stopped, rest spread -> a STOP-AND-GO /
+  accelerate-decelerate DODGER, NOT a smooth circler. Fires ~22 shots/game = SAME
+  as us (aggressive, NOT energy-conserving). Its gun hits us ~7-9/1k at ALL ranges
+  100-400px (a good gun that stays effective at range).
+
+## ROOT CAUSE of the 71 losses: our circular gun was NET-ENERGY-NEGATIVE
+Under the OLD W=0.0 circular gun our real hit rate by distance (150 games):
+  0-100px 0.99 | 100-200 0.38 | 200-300 0.25 | 300-400 0.21 | 400-500 0.26.
+We engage ~256px (200-300 zone) at only 25% hit -> net -657 in the damage model
+(BLEEDING). Enemy hit density stays high everywhere -> it out-trades us -> 71 losses.
+
+## CHANGES THIS PASS (gun aim + orbit; both replay+model validated)
+1. GUN aim W: 0.0 (circular) -> 1.0 (HEAD-ON). W-sweep replay 2 independent 80-game
+   slices MONOTONIC to head-on: W=1.0 0.440/0.416 vs W=0.0 circular 0.265/0.245.
+   CRITICAL: the replay is BIASED TOWARD W=0.0 (enemy path was reactive to our OLD
+   circular shots) yet head-on wins by ~18pts DESPITE the anti-bias -> VERY strong
+   signal (opposite of the usual spinbot/meow bias which favored the tested aim).
+   A stop-and-go dodger defeats any lead (it stops/reverses) so head-on is correct
+   (matches alpian__ianstank, trex22__deepthought). Damage/net-energy model (120
+   games, w/ gunheat): W=0.0 dmg 15210 net -657 (bleeding) -> W=1.0 dmg 21734
+   (+43%) net +3171 (we now GAIN energy). W=0.9 ties W=1.0 (net 3214) so head-on
+   is clean-optimal.
+2. MOVEMENT orbit ~225px -> ~190px. Our head-on HR is 38% at 100-200px vs 25% at
+   200-300px while enemy density is similar (8.8 vs 7.8/1k) -> closer = more
+   accurate at ~same defensive cost. rangeBias: >420 -1.2, >300 -0.9, >210 -0.5,
+   <150 +0.5 (don't ram inside 100px where enemy density is 13.2/1k).
+Power tiers (3.0/<250 2.0/<320 0.8/<400 0.4/<500 0.2/else), dodge (0.45..0.60 on
+enemy fire), energy-war taper, fire gates, enemyPassive mode ALL UNCHANGED.
+Compiles Java 8 (major version 52). Backup of prior source: /tmp/MyTank.bak.java.
+
+## For next teammate — VERIFY
+- Want NEW /logs: the 71 losses REDUCED (ideally <20), ourFE mean UP from 40.8,
+  enemy score DOWN from 18973, share UP from 61%. If it REGRESSED (new losses /
+  share drop): (a) head-on may have been over-fit to the biased replay — but the
+  stop-and-go profile + anti-bias strongly support it; try W=0.75 hedge and re-run
+  /tmp/wsweep.py + /tmp/dmg.py; (b) closer orbit may expose us to the enemy's good
+  close gun -> push orbit back to ~230px (thresholds 450/330/240/<190); (c) full
+  revert = /tmp/MyTank.bak.java (git prior = the 71-loss W=0.0 config, still won 61%).
+- dominatorx is a STOP-AND-GO dodger with a GOOD gun -> KEEP W=1.0 head-on. If it
+  becomes a SMOOTH constant-velocity mover (avg|dh| down, bimodal velocity gone),
+  switch to W=0.0 (circular/linear lead). Re-run /tmp/wsweep.py on >=2 slices first
+  BUT weight the anti-bias correctly (here bias favors circular, so head-on's win
+  is trustworthy).
+- The remaining lever if losses persist vs its good gun is WAVE SURFING (high-risk,
+  local harness broken, trust /logs only).
+- Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING.
+- Tools: /tmp/wsweep.py (W-sweep 2 slices), /tmp/dmg.py (damage/net-energy model
+  w/ gunheat) — rebuild from these notes if lost.
+- Keep MyTank class name + Java-8 bytecode (only hard requirement).

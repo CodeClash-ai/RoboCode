@@ -325,7 +325,7 @@ public class MyTank extends AdvancedRobot {
         // (distance-based, kept net-positive) still guard the crazy-bot regression.
         // Chose W=0.85: strongly toward head-on (physics: slow target -> head-on best),
         // hedged just short of pure 1.0 since replay is biased by the reactive enemy path.
-        double W = 0.0;  // vs tannerrogalsky__tannerbot1 (moderate-fast near-straight mover, movefrac 0.62, avgV 4.26, avg|dh| 0.019, engages ~324px). W-sweep replay 2 slices MONOTONIC to full lead: W=0.0 0.156/0.134 vs W=0.75 0.109/0.093 vs W=1.0 0.095/0.084. Smooth mover -> full linear lead best. [OLD: W=0.75 vs it_economics__ite_m9] (SLOW near-straight mover: movefrac 0.37, avgv 1.23, avg|dh| 0.011, engages ~300px). W-sweep 2 independent slices (80 games each): W=0.75 hits 44.7/44.7pct = PEAK vs W=1.0 head-on 35.1/37.1pct. Replay BIASED toward W=1.0 (our old aim) yet W=0.75 wins by ~9pts DESPITE bias = strong signal. This slow mover has a tiny curve/drift so a partial lead beats pure head-on. Higher HR = faster kills = fewer of the 22 grind losses.
+        double W = 1.0;  // vs vikdov__dominatorx (STOP-AND-GO dodger: bimodal velocity 33% full-speed v=8, 15% stopped, movefrac 0.82, avgV 4.59, avg|dh| 0.0685, engages ~256px, aggressive good gun fires ~22/game like us). W-sweep replay 2 slices MONOTONIC to head-on: W=1.0 0.440/0.416 vs W=0.0 circular 0.265/0.245. Replay is BIASED TOWARD W=0.0 (enemy path reactive to our OLD circular shots) yet head-on wins by ~18pts DESPITE the anti-bias -> very strong signal. Stop-and-go dodgers defeat any lead (they stop/reverse) -> head-on best (matches alpian__ianstank, trex deepthought). Was 71/250 losses under W=0.0; head-on should raise hit rate ~25%->38% and cut losses.  [prior tuning history in comment block above]
         // [prev] double W = 1.0; // vs iagomonteiro13579__npcsniper
         // [old] double W = 1.0; // HEAD-ON best vs alpian__ianstank (stop-and-reverse oscillator, ~50% stationary). Replay-sim 80 games: W=1.0 hits 40.3% vs W=0.0 21.4%.
         double predX = W * enemyX + (1 - W) * leadX;
@@ -544,10 +544,14 @@ public class MyTank extends AdvancedRobot {
         // HARDER to reach the ~230px zone (32% hit, net-positive) instead of bleeding
         // at 300-400px. Enemy gun is MORE dangerous <200px (15/1k @0-100 vs 9.9/1k
         // @200-300) so don't overshoot inside ~200px.
-        if (enemyDistance > 450)      rangeBias = -1.2;  // far: strong inward pull to close
-        else if (enemyDistance > 330) rangeBias = -0.9;  // mid-far: firm inward
-        else if (enemyDistance > 240) rangeBias = -0.5;  // approaching target ~225px
-        else if (enemyDistance < 190) rangeBias = 0.5;   // too close (lead-gun kill zone): push out
+        // vs vikdov__dominatorx (STOP-AND-GO dodger, good gun at all ranges): our
+        // hit rate is 38% at 100-200px vs only 25% at 200-300px, while enemy hit
+        // density is similar (8.8 vs 7.8/1k). So orbit ~190px (100-200px zone) for
+        // higher accuracy. Enemy gun IS dangerous <100px (13.2/1k) so don't ram in.
+        if (enemyDistance > 420)      rangeBias = -1.2;  // far: strong inward pull to close
+        else if (enemyDistance > 300) rangeBias = -0.9;  // mid-far: firm inward
+        else if (enemyDistance > 210) rangeBias = -0.5;  // approaching target ~190px
+        else if (enemyDistance < 150) rangeBias = 0.5;   // too close (lead-gun kill zone): push out
 
         double desiredDir = absBearing + (Math.PI / 2 + rangeBias) * moveDirection;
 
