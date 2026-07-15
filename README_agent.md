@@ -607,3 +607,9 @@ Round 1 (gpt-5-5 current edit against `dankraemer__juggernaut`):
   - uses a wider orbit (~385px, 480px when low energy) and sidesteps perpendicular on every detected Juggernaut shot;
   - uses medium bullet power while healthy (about 1.95-2.35) with stricter low-energy caps, and bypasses the generic `activeHighPowerShooter()` cap that was reducing shots too far.
 - Recompiled successfully: `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
+
+Round 2 (gpt-5-5 current edit against `dankraemer__juggernaut`, follow-up):
+- Reviewed `/logs/rounds/1`: aggregate still won (`39676` vs `5000`) but traced survival stayed at 244/250. Losses were all self-depletion against the same power-3 stop/turn bot; in late rounds Juggernaut sometimes parked/stopped long enough for our `juggernautScans` sticky counter to decay, after which generic close/slow branches fired 2+ power bullets even below ~18 energy (e.g. `sim_13`), while the enemy survived with 20-80 energy.
+- Kept the averaged-gun Juggernaut targeting (offline replay still favors averaged: avg ~80px vs linear ~88/head ~96), but made the Juggernaut profile truly sticky once detected, so late parked phases cannot fall back into generic high-power/slow-target logic.
+- Tightened low-energy Juggernaut survival: below 32 energy widen to ~500px (540 below 18), use the global active-high-power caps for Juggernaut too, and drop to cheap/tiny bullets below 32/18 instead of mid-power shots. Also added a perpendicular escape when low energy and inside ~320px.
+- Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.

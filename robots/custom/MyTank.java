@@ -223,9 +223,16 @@ public class MyTank extends AdvancedRobot {
             npcSniperScans = Math.max(0, npcSniperScans - 1);
         }
         if (juggernautSignatureRaw()) {
-            juggernautScans = Math.min(70, juggernautScans + 4);
-        } else {
-            juggernautScans = Math.max(0, juggernautScans - 1);
+            juggernautScans = Math.min(90, juggernautScans + 5);
+        } else if (juggernautScans > 0) {
+            // Once the dankraemer__juggernaut power-3 stop/turn signature has been
+            // seen, keep it for the rest of the round.  Round-1 follow-up losses had
+            // Juggernaut park/stop long enough that the old sticky counter decayed to
+            // zero; then generic slow/close branches fired 2+ power bullets while our
+            // energy was under ~18, self-depleting with the enemy still alive.  The raw
+            // signature is narrow (repeated p3 fire plus fast turning bursts), so a
+            // permanent confirmation is safer than falling out during late parked phases.
+            juggernautScans = Math.max(1, juggernautScans - 1);
         }
 
         updateVirtualGuns(enemyX, enemyY);
@@ -318,6 +325,14 @@ public class MyTank extends AdvancedRobot {
             // Driving directly away is often into the wall; sidestep the firing line
             // until the range opens instead of sitting in the corner.
             drivePerpendicularEscape(absBearing, 260.0);
+            return;
+        }
+        if (juggernautEnemy() && getEnergy() < 32.0 && e.getDistance() < 320.0) {
+            // Juggernaut's remaining wins are late low-energy scrambles after several
+            // power-3 hits.  Do not resume the normal 385px orbit from inside its
+            // high-damage band; spend the movement command crossing/perpendicular to
+            // the gun line until the range reopens.
+            drivePerpendicularEscape(absBearing, 330.0);
             return;
         }
         if (lowFireTracker() && e.getDistance() < 415.0) {
@@ -484,7 +499,7 @@ public class MyTank extends AdvancedRobot {
         } else if (juggernautEnemy()) {
             // Juggernaut is a dangerous power-3 stop/turn bot; stay a bit wider than
             // the Ultron farming band and open further once the reserve falls.
-            preferredDistance = getEnergy() < 30.0 ? 480.0 : 385.0;
+            preferredDistance = getEnergy() < 18.0 ? 540.0 : (getEnergy() < 32.0 ? 500.0 : 385.0);
         } else if (highPowerStopGoDodger()) {
             // Current Ultron-style target: frequent power-3 firing, lots of stops,
             // but enough max-speed reversing that the high-pressure Florian branch
@@ -838,12 +853,12 @@ public class MyTank extends AdvancedRobot {
             // while healthy, then downshift before true self-depletion.
             if (getEnergy() > 50 && distance < 720) {
                 power = Math.min(Math.max(power, distance < 420 ? 2.25 : 1.95), 2.35);
-            } else if (getEnergy() > 28) {
-                power = Math.min(Math.max(power, distance < 360 ? 1.35 : 1.05), 1.55);
-            } else if (getEnergy() > 10) {
+            } else if (getEnergy() > 32) {
+                power = Math.min(Math.max(power, distance < 360 ? 1.25 : 0.95), 1.45);
+            } else if (getEnergy() > 18) {
                 power = Math.min(power, distance < 320 ? 0.55 : 0.35);
             } else {
-                power = Math.min(power, getEnergy() < 7 ? 0.15 : 0.25);
+                power = Math.min(power, getEnergy() < 8 ? 0.15 : 0.25);
             }
         } else if (highPowerStopGoDodger()) {
             // Ultron-like evasive high-power stop/go shooters made the old generic
@@ -928,7 +943,7 @@ public class MyTank extends AdvancedRobot {
                 power = Math.min(power, 0.75);
             }
         }
-        if (activeHighPowerShooter() && !juggernautEnemy()) {
+        if (activeHighPowerShooter()) {
             // A few Ultron losses/draws still came from falling out of the narrow
             // highPowerStopGoDodger() signature late in a round, then spending 2+
             // energy slow-target shots while already below ~12 energy.  Any opponent
