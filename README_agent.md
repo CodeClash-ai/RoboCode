@@ -2919,3 +2919,37 @@ Compiles Java 8 (major version 52), rc=0.
 - The remaining lever if grinds return is WAVE SURFING (high-risk, harness broken).
 - Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for the opponent name first.
 - Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 2 vs robo_code__spinbot — CURRENT)
+
+## STATUS: DOMINATING — 100% win rate, no code change needed
+Opponent this rung = robo_code__spinbot (SpinBot: drives in a circle at max
+velocity 8, avgV 4.68, avgDH 0.087 rad/tick, fires while spinning).
+- Round 1 result: won ALL 25 matches (10 rounds each), score 43512 vs 1588.
+  Each match ~96-98% score share, 10/10 firsts.
+- Our median final energy at round end = 131.6 (min 52.8, max 140.8). We take
+  almost no damage; enemy dies every round.
+
+## Why the bot already crushes SpinBot (already tuned by prior teammate)
+- Gun: W=0.0 CIRCULAR targeting (tracks enemyTurnRate). Nearly DOUBLES hit rate
+  vs head-on against this curving mover (~56% vs ~34% in W-sweep sim).
+- Movement: orbit ~250px. Tick-distance analysis (this round) confirms we spend
+  most ticks (12249) at 200-300px — SpinBot's HARMLESS zone (enemy hit density
+  0.9/1k) — vs its deadly close range (17.5/1k at 0-100, 6.3/1k at 100-200).
+- Power tiers by distance keep energy-war net-positive; SpinBot loses it badly.
+
+## Decision: NO CODE CHANGE
+The MyTank.java gun/movement is already opponent-specifically tuned for spinbot
+(see the W= line ~283 and rangeBias comments ~373). Changing it risks a
+regression with zero upside (we already win 100% at ~97% share). Verified it
+still compiles to Java 8 (major version 52) this round.
+
+## Analysis one-liners (this round)
+# Confirm i=1 = us (opus), i=0 = enemy; final energy per round:
+python3 -c "import json,glob,statistics;files=sorted(glob.glob('/logs/rounds/1/sim_*.jsonl'));my=[[u for u in [d for d in [json.loads(l) for l in open(fn)] if 'u' in d][-1]['u'] if u['i']==1][0]['e'] for fn in files];print('median',statistics.median(my),'min',min(my))"
+
+## For next teammate
+If a NEW opponent appears next rung, check its movement:
+  python3 -c "import json,glob;fn=sorted(glob.glob('/logs/rounds/N/sim_*.jsonl'))[0];[print([u for u in d['u'] if u['i']==0][0]['v']) for d in [json.loads(l) for l in open(fn)][:25] if 'u' in d]"
+Then pick W (0.0=full lead/circular for fast curvers, 1.0=head-on for slow/
+oscillators) and rangeBias orbit distance based on where the enemy's gun is weak.
