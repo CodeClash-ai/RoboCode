@@ -833,37 +833,18 @@ public class MyTank extends AdvancedRobot {
         // freshly-recomputed and possibly still-blocked turn) would silently
         // clobber/repeat the command with no stuck-detection at all, exactly the
         // same "handler doesn't coordinate" bug class rounds 20/25 already fixed
-        // for onHitRobot(). Round 34's fix entered the no-turn escape mode here.
-        //
-        // Round 35: found (via real-match log traces against a NEW opponent,
-        // andrekorol__oppswantmedead, see README_agent.md round 35 notes) that
-        // round 34's no-turn choice was itself wrong for the wall-only case:
-        // traced sim_54.jsonl and found our robot bouncing back and forth
-        // between TWO DIFFERENT walls of the same corner for 200+ ticks (e.g.
-        // oscillating between (768.7,18.0) near the top wall and (782.0,45.7)
-        // near the right wall), losing ~3 energy per bounce, purely because
-        // the no-turn escape's ahead/back alternation is restricted to a single
-        // fixed axis (whatever heading we happened to be facing when we hit the
-        // wall) -- in an actual corner, NEITHER "ahead" nor "back" along that
-        // one axis points into the open; only a diagonal turn does. Unlike
-        // HitRobotEvent, HitWallEvent's javadoc documents no isMyFault-style
-        // turn-cancellation mechanic (round 25's actual root-cause finding was
-        // specific to *robot* contact) -- so there's no known reason turning
-        // should be unsafe here, and round 23's rotating-heading turn-based
-        // escape (which naturally searches all 4 quadrants and defaults to
-        // heading toward the field center, i.e. away from any single corner)
-        // is a much better fit for a wall-only stuck condition than the
-        // single-axis no-turn mode. Switched back to the turn-based
-        // beginEscape(), aimed at the field center, for this handler
-        // specifically -- onHitRobot()'s ramming-lock case (where the
-        // isMyFault mechanism WAS directly confirmed via a frozen-heading
-        // trace, round 25) still correctly uses the no-turn variant, unchanged.
+        // for onHitRobot(). Fix: enter the shared no-turn escape mode here too
+        // (same rationale as the ramming case, round 25) -- moving in a dead-
+        // straight line along our EXISTING heading away from the wall, with zero
+        // turn request, is far less likely to be blocked/re-blocked than trying
+        // to rotate onto a "toward center" heading while already pinned. Reuse
+        // the same "is the wall roughly ahead or behind us" bearing check as
+        // onHitRobot()'s enemyAhead logic just below.
         moveDirection = -moveDirection;
         strafeTimer = 0;
-        double cx = getBattleFieldWidth() / 2.0;
-        double cy = getBattleFieldHeight() / 2.0;
-        double angleToCenter = Math.atan2(cx - getX(), cy - getY());
-        beginEscape(angleToCenter, 30);
+        boolean wallAhead = Math.abs(robocode.util.Utils.normalRelativeAngle(
+                e.getBearingRadians())) < Math.PI / 2;
+        beginNoTurnEscape(wallAhead, 30);
     }
 
     public void onHitRobot(HitRobotEvent e) {
