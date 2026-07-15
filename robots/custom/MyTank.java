@@ -187,7 +187,7 @@ public class MyTank extends AdvancedRobot {
         // Orbit perpendicular, with a distance-control offset.  Far away we cut
         // inward; too close we open out.  wallSmooth then bends the path away
         // from the battlefield edges before we commit to it.
-        double preferredDistance = (straightEnemyScans > 4 && enemyFireCount == 0) ? 305.0 : (wallEnemyScans > 4 ? 315.0 : (headOnGunIsBest() ? 330.0 : (slowEnemyScans > 12 ? 285.0 : PREFERRED_DISTANCE)));
+        double preferredDistance = (straightEnemyScans > 4 && enemyFireCount == 0) ? 275.0 : (wallEnemyScans > 4 ? 315.0 : (headOnGunIsBest() ? 330.0 : (slowEnemyScans > 12 ? 285.0 : PREFERRED_DISTANCE)));
         // Against the current GF-style opponent our gun struggles mostly due
         // to long bullet flight, while its own gun almost never connects.  Once
         // virtual guns report a hard-to-hit mover, tighten the orbit a bit to
@@ -299,17 +299,13 @@ public class MyTank extends AdvancedRobot {
         int gun = chooseGun();
         if (stationaryScans > 5) {
             gun = GUN_HEAD_ON;
-        } else if (straightEnemyScans > 2 && enemyFireCount == 0 && Math.abs(e.getVelocity()) > 0.55 && Math.abs(turnRate) < 0.025
-                && (virtualSamples < 22 || virtualGunError[GUN_LINEAR] <= virtualGunError[GUN_AVERAGED] + 5.0)) {
-            // Anti-walls style movement can be straight and predictable even
-            // when it is not literally near a wall; cold-start with linear
-            // prediction on a confirmed harmless line.  After enough virtual
-            // waves, stop forcing it unless linear remains competitive: the
-            // current Tirolio traces contain many straight-looking snippets
-            // where the damped averaged predictor is measurably better overall.
-            // If an opponent has fired, leave selection to the virtual guns so
-            // GF/surfing movers are not over-fit to linear shots.
-            gun = GUN_LINEAR;
+        } else if (straightEnemyScans > 2 && enemyFireCount == 0 && wallEnemyScans <= 4) {
+            // Tirolio-style harmless movers show lots of short straight-looking
+            // snippets, but they stop/reverse and hit walls often enough that
+            // full linear over-leads.  For non-wall straight motion, prefer the
+            // damped averaged predictor immediately; the separate wall branch
+            // below still preserves the antiwalls edge-slide linear cold start.
+            gun = GUN_AVERAGED;
         } else if (wallEnemyScans > 4 && Math.abs(e.getVelocity()) > 0.55 && Math.abs(turnRate) < 0.025
                 && (virtualSamples < 22 || virtualGunError[GUN_LINEAR] <= virtualGunError[GUN_AVERAGED] + 5.0)) {
             // Antiwalls-style bots often sit still, then run in a straight line

@@ -146,3 +146,11 @@ Round 1 (gpt-5-5 current edit against `barriosnahuel__tirolio`):
 - Ran `tools/offline_gun_eval.py '/logs/rounds/0/sim_*.jsonl'`. Unlike the previous antiwalls opponent, the damped averaged predictor is best on these traces (mean error ~64px) while full linear/circular are worse (~87px) and head-on is much worse (~125px).
 - Small retune in `robots/custom/MyTank.java`: the harmless straight-run / wall-straight branches still cold-start `GUN_LINEAR`, preserving the prior antiwalls behavior, but after ~22 virtual-gun samples they only force linear if its rolling error remains within 5px of the averaged gun. This lets the virtual gun chooser switch to averaged for Tirolio-style stop/reverse/random wall movement.
 - Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
+
+Round 2 (gpt-5-5 current edit against `barriosnahuel__tirolio`, follow-up):
+- Reviewed `/logs/rounds/1`: still swept 250/250 games. Score stayed near max (`44992` vs `12`), average round length improved to ~538 turns and accuracy to ~31%, but Tirolio remains a harmless mover with many short straight-looking segments that stop/reverse/wall-bounce unpredictably.
+- `tools/offline_gun_eval.py '/logs/rounds/1/sim_*.jsonl'` again shows the damped averaged predictor best for this opponent (`avg` mean error ~66px vs linear/circular ~86px, head-on ~124px). A separate shot-time replay approximation also favored averaged (~67px vs linear ~92px).
+- Small targeted tweak in `robots/custom/MyTank.java`:
+  - for harmless straight motion that is *not* wall-bound, force `GUN_AVERAGED` instead of cold-starting/forcing `GUN_LINEAR`; the wall-bound straight branch still preserves antiwalls-style linear edge-slide behavior;
+  - tightened harmless straight-run orbit from ~305px to ~275px to shorten bullet flight against this effectively non-firing opponent.
+- Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
