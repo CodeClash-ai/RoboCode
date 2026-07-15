@@ -152,7 +152,7 @@ public class MyTank extends AdvancedRobot {
         // Orbit perpendicular, with a distance-control offset.  Far away we cut
         // inward; too close we open out.  wallSmooth then bends the path away
         // from the battlefield edges before we commit to it.
-        double preferredDistance = slowEnemyScans > 12 ? 285.0 : PREFERRED_DISTANCE;
+        double preferredDistance = headOnGunIsBest() ? 330.0 : (slowEnemyScans > 12 ? 285.0 : PREFERRED_DISTANCE);
         double distanceOffset = limit(-0.62, (e.getDistance() - preferredDistance) / 430.0, 0.55);
         double desired = absBearing + moveDirection * (Math.PI / 2.0 - distanceOffset);
         desired = wallSmooth(desired, moveDirection);
@@ -194,6 +194,12 @@ public class MyTank extends AdvancedRobot {
         // kill reduces exposure.  Moving opponents keep the conservative ladder.
         if (stationaryScans > 5 && getEnergy() > 12) {
             power = 3.0;
+        } else if (headOnGunIsBest() && getEnergy() > 18 && distance < 720) {
+            // The current DeepThought opponent dodges/reverses enough that a
+            // head-on gun wins the virtual-gun race.  Once detected, spend more
+            // energy on heavier bullets: its own hit rate is tiny, and the
+            // shorter rounds are worth the slightly slower bullet speed.
+            power = Math.max(power, distance < 360 ? 3.0 : (distance < 520 ? 2.8 : 2.35));
         } else if (slowEnemyScans > 8 && getEnergy() > 12 && distance < 720) {
             // The current recorded opponent is a very slow stop-and-go shooter.
             // Once a target has proven it cannot exceed about speed 3, heavier
@@ -240,7 +246,7 @@ public class MyTank extends AdvancedRobot {
     }
 
     private int chooseGun() {
-        int best = GUN_CIRCULAR;
+        int best = GUN_HEAD_ON;
         if (slowEnemyScans > 12) {
             best = GUN_AVERAGED;
         }
@@ -253,6 +259,17 @@ public class MyTank extends AdvancedRobot {
             }
         }
         return best;
+    }
+
+    private boolean headOnGunIsBest() {
+        if (stationaryScans > 5) {
+            return true;
+        }
+        if (virtualSamples < 16) {
+            return false;
+        }
+        double bestOther = Math.min(Math.min(virtualGunError[GUN_LINEAR], virtualGunError[GUN_CIRCULAR]), virtualGunError[GUN_AVERAGED]);
+        return virtualGunError[GUN_HEAD_ON] <= bestOther + 3.0;
     }
 
     private void addVirtualWave(double[][] candidates, double bulletSpeed) {

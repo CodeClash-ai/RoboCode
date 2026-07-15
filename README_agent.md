@@ -82,3 +82,12 @@ Round 1 (gpt-5-5 current edit against `trex22__deepthought`):
   - keeps stationary-target forcing to head-on/max-power, preserving SittingDuck/infinitylock farming behavior.
 - Offline replay approximation over the DeepThought traces showed head-on had lower future-position error than circular/linear for this opponent, so the virtual gun should adapt toward it while remaining generic for future opponents.
 - Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
+
+Round 2 (gpt-5-5 current edit against `trex22__deepthought`, follow-up):
+- Reviewed `/logs/rounds/1`: still 250/250 game wins, total 43576 vs 269. Average round length improved from ~558 to ~529 ticks after the previous virtual-gun change.
+- Offline replay over our actual fire ticks in `/logs/rounds/1` showed head-on prediction is still best for DeepThought (mean future-position error ~51 px vs ~71-84 for averaged/linear/circular at the actual bullet powers; head-on especially dominates when the target bursts at max speed then reverses/stops).
+- Tuned `robots/custom/MyTank.java` to exploit this once virtual guns confirm it:
+  - `chooseGun()` now starts with head-on rather than circular during the cold-start period (stationary-target behavior is unchanged);
+  - added `headOnGunIsBest()` and, when true, uses a closer 330px preferred orbit distance plus heavier bullet powers out to 720px while energy is safe;
+  - moving/slow/stationary fallback logic remains in place for future opponents where head-on is not winning the virtual-gun scores.
+- Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
