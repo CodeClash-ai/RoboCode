@@ -6425,3 +6425,54 @@ switch to head-on off any W-sweep replay (biased trap, documented). Do NOT chang
 dodge/movement (REPEATEDLY backfires — see superwalls/wallspoet/juggernaut/haikupoet
 notes). Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX
 MAPPING first. Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 1 / current pass) — opponent = johan_adriaans__berendbotje (WE WERE LOSING THE MATCH)
+
+## CRITICAL: we LOST round 0 — opus 17538 vs berendbotje 29907 (winner=berendbotje)
+results_0.txt: berendbotje 1290 (66%, survival 450, 9 firsts) vs opus 676 (34%,
+survival 50, 1 first). We WIN bullet dmg roughly even (590 vs 625) but LOSE
+SURVIVAL badly (50 vs 450) — we DIE FIRST. Full 120-sim sweep: 23 WINS / 96
+LOSSES, ourFE mean only 6.4 vs enemyFE 42.2. This is a SURVIVAL/damage-taken problem.
+
+## Opponent = FAST HEAVILY-CURVING spinner with a LEAD gun (index i=0; read header)
+movefrac 0.76, avgV 4.33, avg|dh| 0.11 (HEAVY spin/curve), engages ~210px. Enemy
+gun offset when firing: median 0.45 rad = a strong LEAD gun. Our gun is already
+W=0.0 (full circular lead — correct for a heavy spinner, per spinbot/meow/crawler).
+Real in-game hit rate only 14.4% (heavy spinner is hard to hit at close range).
+
+## ROOT CAUSE: we camped ~200-250px in the EVEN-TRADE zone -> bled out on survival
+UNBIASED hit density by distance (120 sims, our/enemy hits per 1k ticks, ratio):
+  50-100px  1.13 | 100-150px 0.82 | 150-200px 1.24 | 200-250px 1.10 |
+  250-300px 0.89 | 300-350px 4.00 (our 5.5/1k vs enemy 1.4/1k) | 350-400px 1.50.
+At 100-300px (where we spent ~57k ticks, ~210px avg) the exchange is EVEN (~1.06).
+The enemy's LEAD gun COLLAPSES beyond 300px (1.4/1k) while our CIRCULAR gun holds
+(5.5/1k) -> 300-350px is a 4.0:1 DOMINANCE zone. We were fighting in the wrong zone.
+
+## CHANGE THIS PASS (movement only): orbit ~250px -> ~320px (target the 4.0:1 zone)
+rangeBias retuned (lines ~679-684): >430 -0.9, >360 -0.45, >320 -0.15, <240 +0.75
+(push OUT of the even-trade 0-300px zone), <300 +0.35, else 0.0 (hold ~320px).
+At 320px the enemy hits us ~4x less while our circular gun still hits -> the
+survival differential (our losing metric: 50 vs 450) should flip. Power at 320px =
+2.2 (existing <380 tier, kill speed OK) and the existing energy-war taper
+(getEnergy()<enemyEnergy && dist>300 -> power<=0.8) auto-cuts bleed when we fall
+behind in a grind. Gun W=0.0 (circular, correct for heavy spinner — do NOT switch
+to head-on off any W-sweep replay, documented bias trap), dodge-on-fire 0.30
+(anti-LEAD-gun, correct for offset 0.45) UNCHANGED. Only the rangeBias block changed.
+Backup of losing R0 source: /tmp/MyTank.bak.java. Compiles Java 8 (major version 52).
+
+## For next teammate — VERIFY (this is a MATCH-LOSS we're trying to flip)
+- Want NEW /logs: winner=opus-4-8, the 96 losses REDUCED, our SURVIVAL score UP
+  from 50, ourFE mean UP from 6.4, enemy score DOWN from 29907, engagement dist UP
+  from 210 toward ~320px. If it REGRESSED (still losing / can't reach 320px because
+  the spinner keeps closing): (a) the enemy may pin us close -> push the inward-
+  escape harder (<300 +0.5, <260 +0.8) or accept a compromise ~280px; (b) if wider
+  orbit slowed kills too much (giving its LEAD gun more shots), that's the wilde
+  risk — verify killtick; (c) full revert = /tmp/MyTank.bak.java (git prior = the
+  96-loss config that LOST).
+- berendbotje is a FAST HEAVY spinner with a LEAD gun -> KEEP W=0.0 circular +
+  dodge 0.30. The orbit-to-the-3.4:1-zone is the decisive lever (same principle
+  that beat spinbot/team488__meow/jeujdapeu). If it changes profile, re-run the
+  UNBIASED hit-density-by-distance analysis (bucket by dist at prev tick; our
+  energy drops <-3.5 = we hit enemy, enemy drops <-3.5 = enemy hit us).
+- Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING.
+- Keep MyTank class name + Java-8 bytecode (only hard requirement).
