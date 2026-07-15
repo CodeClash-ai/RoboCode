@@ -855,19 +855,23 @@ public class MyTank extends AdvancedRobot {
             power = Math.max(power, distance < 640 ? 3.0 : 2.55);
         }
         if (dominatorEnemy()) {
-            // DominatorX losses are self-depletion medium-power duels.  Head-on is the
-            // best replay gun, and faster medium bullets improve geometry; use decisive
-            // pressure while healthy, then cheap/tiny shots before our energy can hit zero.
-            if (e.getEnergy() < 9.0 && getEnergy() > 5.5) {
-                power = Math.min(Math.max(power, lethalPower(e.getEnergy())), 1.55);
-            } else if (getEnergy() > 58.0) {
-                power = Math.min(Math.max(power, distance < 380 ? 1.95 : 1.60), 2.05);
-            } else if (getEnergy() > 34.0) {
-                power = Math.min(Math.max(power, distance < 360 ? 1.25 : 0.95), 1.35);
-            } else if (getEnergy() > 16.0) {
-                power = Math.min(power, distance < 325 ? 0.50 : 0.30);
+            // DominatorX losses are self-depletion medium-power duels.  Round-1 traces
+            // showed our first detector was too strict: several losing games still spent
+            // power-3 shots down into the 20-energy range before this branch stuck.  Once
+            // the p~2 mixed straight/turn signature is present, use head-on pressure but
+            // cap it earlier and keep a real reserve instead of dribbling to zero.
+            if (e.getEnergy() < 8.0 && getEnergy() > 5.5) {
+                power = Math.min(Math.max(power, lethalPower(e.getEnergy())), 1.35);
+            } else if (getEnergy() > 68.0) {
+                power = Math.min(Math.max(power, distance < 360 ? 1.85 : 1.55), 1.90);
+            } else if (getEnergy() > 44.0) {
+                power = Math.min(Math.max(power, distance < 360 ? 1.15 : 0.90), 1.25);
+            } else if (getEnergy() > 24.0) {
+                power = Math.min(power, distance < 330 ? 0.42 : 0.28);
+            } else if (getEnergy() > 11.0) {
+                power = Math.min(power, distance < 330 ? 0.20 : 0.12);
             } else {
-                power = Math.min(power, getEnergy() < 8.0 ? 0.15 : 0.22);
+                power = Math.min(power, 0.10);
             }
         }
         if (npcSniperEnemy()) {
@@ -1491,6 +1495,12 @@ public class MyTank extends AdvancedRobot {
             // remaining energy and try to win/draw on survival instead of self-killing.
             fireAllowed = false;
         }
+        if (dominatorEnemy() && getEnergy() < 9.0 && e.getEnergy() > 12.0) {
+            // DominatorX can only convert many of the remaining losses after we self-disable
+            // with harmless 0.1-0.2 bullets while it still has tens of energy.  Preserve the
+            // last reserve unless a lethal/near-lethal finish is actually available.
+            fireAllowed = false;
+        }
         if (getGunHeat() == 0
                 && Math.abs(getGunTurnRemainingRadians()) < tolerance && getEnergy() > 0.25 && fireAllowed) {
             setFire(power);
@@ -1563,16 +1573,16 @@ public class MyTank extends AdvancedRobot {
         // wall/corner stops, and enough turning/reversing that head-on beats full lead.
         // Keep this ahead of NPCSniper/Tanner wall-cruiser signatures, which would force
         // averaged/linear guns and produced many self-depletion losses in round 0.
-        return enemyFireCount > 3
-                && enemyFirePowerSamples > 2
-                && enemyFirePowerAvg > 1.45
-                && enemyFirePowerAvg <= 2.65
-                && enemySpeedAvg > 3.0
-                && enemySpeedAvg < 6.4
-                && straightEnemyScans > 3
-                && enemyAbsTurnRateAvg > 0.018
-                && enemyAbsTurnRateAvg < 0.100
-                && stationaryScans <= 5
+        return enemyFireCount > 2
+                && enemyFirePowerSamples > 1
+                && enemyFirePowerAvg > 1.20
+                && enemyFirePowerAvg <= 2.85
+                && enemySpeedAvg > 2.15
+                && enemySpeedAvg < 7.0
+                && (straightEnemyScans > 2 || wallEnemyScans > 5 || stopGoEnemyScans > 6)
+                && enemyAbsTurnRateAvg > 0.006
+                && enemyAbsTurnRateAvg < 0.125
+                && stationaryScans <= 12
                 && !spinBotEnemy()
                 && !crazyEnemyScansActive()
                 && !fixedHeadingStopGoEnemy()

@@ -699,3 +699,12 @@ Round 1 (gpt-5-5 current edit against `vikdov__dominatorx`):
 - Added a sticky `dominatorEnemy()` signature in `robots/custom/MyTank.java`: repeated p~2 fire, speed avg ~3-6.4, some straight motion, nontrivial but not crazy turn rate. It is checked before NPCSniper/Tanner/wave-surfer-style branches.
 - For DominatorX the bot now forces `GUN_HEAD_ON`, uses a moderate/widening orbit (~365 healthy, 440/500 when energy drops), sidesteps on detected fire, tightens gun tolerance, and caps bullet power to faster medium shots while healthy (~1.6-2.05) with cheap/tiny low-energy tiers plus small lethal finishers. Also excluded DominatorX from the dangerous-wall max-power safety net.
 - Recompiled successfully: `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
+
+Round 2 (gpt-5-5 current edit, DominatorX follow-up):
+- Reviewed `/logs/rounds/1`: aggregate improved from round 0 (`34068` vs `10579`, traced ~219/250 wins vs ~216/250), but remaining losses were still self-depletion. Several loss traces showed the DominatorX branch not engaging/sticking early enough: our bot fired power-3 shots down to ~20 energy in some games, then dribbled 0.1-0.3 bullets to zero while DominatorX retained 40-100+ energy.
+- Kept DominatorX forced to `GUN_HEAD_ON` (offline replay on round-1 traces still favors head-on across win/loss buckets; linear/circular badly over-lead, wallavg is close but worse than head-on).
+- Tightened `robots/custom/MyTank.java` Dominator handling:
+  - `dominatorSignatureRaw()` now engages earlier and with a stickier/broader mixed straight/wall/stop-go p~2 signature (lower fire/sample/speed/turn thresholds), to avoid falling into generic max-power wall/slow branches during early or late parked phases.
+  - Dominator power caps are more conservative: only ~1.55-1.9 above 68 energy, ~0.9-1.25 mid, sub-0.42 below 24, and tiny reserve shots thereafter.
+  - Added a final reserve guard: below 9 energy, stop firing if Dominator still has >12 energy, instead of self-disabling with harmless pinpricks.
+- Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
