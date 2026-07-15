@@ -302,3 +302,12 @@ Round 2 (gpt-5-5 current edit against `philipmjohnson__dacruzer`, follow-up):
 - `tools/offline_gun_eval.py '/logs/rounds/1/sim_*.jsonl'` again strongly favors full linear/circular prediction (`lin/circ` mean ~96px vs averaged ~125 and wall-damped ~134). My shot-time replay also shows linear is best on fast wall-straight segments, while our old dangerous-wall fallback can take over after the opponent's fire count passes 8 in long games and wrongly force averaged.
 - Small code tweak in `robots/custom/MyTank.java`: relaxed `fastWallCruiser()` only after virtual guns have evidence that linear beats averaged by >12px, allowing daCruzer to stay in the close-orbit/full-linear branch up to 16 detected energy drops. Early behavior and DroidPoet-style active wall shooter safeguards remain unchanged.
 - Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
+
+Round 1 (gpt-5-5 current edit against `alpian__ianstank`):
+- `/logs/rounds/0` is a real fixed-heading stop/go shooter. Aggregate is safely winning (`results.json` 40821 vs 1524; all 25 ten-round result files first place), but traced per-game survival has leakage: about 230/250 outright wins, 10 losses, 10 mutual-zero/draw-ish endings. Losses are mostly long games where we spend ourselves to zero while Ian's Tank keeps ~8-50 energy.
+- Opponent signature from traces: body heading is constant (turn rate/span 0), it stops about 51% of ticks, moves in a small ~90px back/forth patch at max speed bursts, and fires regularly (~14 detected drops/game). `tools/offline_gun_eval.py '/logs/rounds/0/sim_*.jsonl'` says head-on is best (mean ~68px) and lower-power/faster head-on bullets have much lower future-position error than old power-3 shots.
+- Retuned only the `fixedHeadingStopGoEnemy()` branch in `robots/custom/MyTank.java`:
+  - force pure `GUN_HEAD_ON` instead of the tiny drift-head-on gun (the drift was meant for max-power farming and can over-lead Ian's jitter);
+  - cap bullet power to moderate/fast shots while healthy (about 1.75 under 430px, 1.45 farther), then 1.15/0.85 in mid energy, 0.45 below 18 energy, and 0.15 below 8 energy to avoid self-depletion;
+  - tightened fixed-heading firing tolerance modestly (`atan2(18, distance)`).
+- Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`. If round-1 score drops too much, consider a middle ground (power ~2.0 early), but the main goal was eliminating the rare self-depletion losses.

@@ -366,15 +366,21 @@ public class MyTank extends AdvancedRobot {
             }
         }
         if (fixedHeadingStopGoEnemy()) {
-            // This fixed-heading stop/go shooter is much less dangerous than
-            // RegullarMonk.  Head-on is geometrically best and our end energy in
-            // traces is high, so keep max-pressure bullets until energy is low.
-            if (getEnergy() > 18 && distance < 680) {
-                power = Math.max(power, distance < 500 ? 3.0 : 2.45);
-            } else if (getEnergy() < 10) {
-                power = Math.min(power, 0.55);
+            // Ian's Tank / OppsWantMeDead-style fixed-heading stop/go shooters fire
+            // steadily while barely turning their body.  Head-on is best, but logs
+            // for Ian's Tank showed max-power spraying can self-deplete in long
+            // games: lower power gives much faster bullets and far better geometric
+            // hit rate against the 90px back-and-forth jiggle.  Keep enough pressure
+            // while healthy, then fall to energy-positive pinpricks instead of dying
+            // with repeated power-3 misses.
+            if (getEnergy() > 42) {
+                power = Math.min(power, distance < 430 ? 1.75 : 1.45);
+            } else if (getEnergy() > 18) {
+                power = Math.min(power, distance < 380 ? 1.15 : 0.85);
+            } else if (getEnergy() > 8) {
+                power = Math.min(power, 0.45);
             } else {
-                power = Math.min(Math.max(power, 1.65), 2.2);
+                power = Math.min(power, 0.15);
             }
         } else if (activeStopGoShooter()) {
             // RegullarMonk-like active stop/go shooters made us lose games by
@@ -434,10 +440,10 @@ public class MyTank extends AdvancedRobot {
         } else if (crazyEnemyScans > 4) {
             gun = GUN_CIRCULAR;
         } else if (fixedHeadingStopGoEnemy()) {
-            // Fixed-heading stop/go movement has no lateral turn component; the
-            // simple head-on gun beats our averaged/linear predictors in trace
-            // replay and should be used as soon as the signature is clear.
-            gun = GUN_DRIFT_HEAD_ON;
+            // Fixed-heading stop/go movement has no body turn component.  Use the
+            // pure head-on gun with fast low-power bullets; the older drift variant
+            // was tuned for max-power farming and over-leads Ian's Tank jitter.
+            gun = GUN_HEAD_ON;
         } else if (activeStopGoShooter()) {
             // Current RegullarMonk traces: very frequent stops/reverses and
             // power-1 firing.  Offline shot replay favored head-on over linear,
@@ -515,10 +521,10 @@ public class MyTank extends AdvancedRobot {
             // closely aligned.
             tolerance = Math.min(tolerance, Math.atan2(15.0, distance));
         } else if (fixedHeadingStopGoEnemy()) {
-            // Max-power farming still benefits from clean alignment, but keep a
-            // little more width than the conservative RegullarMonk branch so we
-            // do not miss firing windows against a harmless fixed-heading bot.
-            tolerance = Math.min(tolerance, Math.atan2(22.0, distance));
+            // Low-power head-on shots are cheap, but long Ian's Tank losses came
+            // from spraying while not quite aligned.  Tighten aim modestly, without
+            // becoming stricter than the generic hard-to-hit tolerance.
+            tolerance = Math.min(tolerance, Math.atan2(18.0, distance));
         }
         if (getGunHeat() == 0
                 && Math.abs(getGunTurnRemainingRadians()) < tolerance && getEnergy() > 0.25) {
