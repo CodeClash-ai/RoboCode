@@ -5040,3 +5040,36 @@ benefit, only cuts our hit rate). Do NOT switch to head-on off any biased replay
 becomes SLOW/near-straight (avg|dh| <0.03), raise W toward 0.9-1.0 (head-on).
 Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING.
 Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 1, THIS opponent = sacdalance__robrrrat)
+
+## OPPONENT PROFILE (measured from /logs/rounds/0/sim_*.jsonl, 250 sims)
+- robrrrat is a FAST mover: avg|v| 5.76, max 8.0 (often full speed).
+- NEAR-STRAIGHT: avg|dh| 0.035 rad/tick (lightly curving).
+- movefrac 0.86. Engages ~301px avg (200-400px dominant).
+- GUN = LEAD gun: median offset from head-on 0.136 rad, mean 0.306 (aims ahead of us).
+
+## RESULT with prior code: 248/250 sims WON (99.2%). Match logs: ~81-84% score
+share, 10/10 firsts EVERY 10-round match. We already DOMINATE.
+
+## W-SWEEP (2 independent 80-sim slices, per-tick interception on real paths):
+  W=0.00 hit 0.675/0.665  <-- OPTIMAL (full lead), matches a fast near-straight mover
+  W=0.25 0.611  W=0.50 0.515  W=0.75 0.48  W=1.00 0.43
+Current W=0.0 is correct. DO NOT change the gun. Tool: /tmp/wsweep.py (edit slice).
+
+## CHANGES THIS ROUND (both compile Java 8, major version 52; backup /tmp/MyTank.bak.java)
+1. rangeBias: added <130px -> 0.9 (bolt out) and <260px -> 0.6 (was 0.5). The ONLY
+   2 losses were point-blank (~45px) ramming grinds where the fast enemy pinned us
+   in a mutual full-power slugfest. Stronger close escape targets those.
+2. dodge-on-fire raised 0.10 -> 0.30 (rate-limit 10 -> 8). robrrrat uses a LEAD gun,
+   so reversing when it fires makes its lead shot miss (0.10 was tuned vs a head-on
+   gunner). Should cut hits taken + help close-range exchanges.
+
+## FOR NEXT TEAMMATE — VERIFY in NEW /logs
+- Want: 2 losses -> 0, close-range (<100px) tick frac DOWN from 5%, our score share
+  UP from ~82%, enemy bullet dmg DOWN. If it REGRESSED (unlikely, changes only touch
+  <260px behavior + dodge vs a confirmed lead gun), revert via /tmp/MyTank.bak.java
+  or git. Gun (W=0.0) is data-confirmed optimal -- keep it.
+- Re-check `head -1 /logs/rounds/0/sim_0.jsonl` for opponent identity + index map
+  (i=0=opus_4_8, i=1=opponent) BEFORE trusting any tuning.
+- Keep MyTank class name + Java-8 bytecode (javac --release 8 ...; want major 52).

@@ -641,10 +641,17 @@ public class MyTank extends AdvancedRobot {
         // (lead=0) hits at ANY range with SAME accuracy -> wider orbit is pure upside
         // (fewer enemy hits = more survival+energy, ZERO accuracy loss). Wall-hug was
         // only 7.6pct at the achieved ~287px orbit so ~330px is safe on 800x600.
+        // vs sacdalance__robrrrat (FAST v~5.8, near-straight avg|dh| 0.035): W=0.0
+        // full lead is optimal (W-sweep 2 slices: 0.67 hit vs 0.43 head-on). We win
+        // 248/250 sims; the ONLY 2 losses were point-blank (~45px) ramming grinds
+        // where the fast enemy closed in and we got stuck in a mutual full-power
+        // slugfest. FIX: escape the close kill zone HARDER -- strong outward bias at
+        // <260px and a very strong push at <130px so we don't get pinned point-blank.
         if (enemyDistance > 430)      rangeBias = -0.7;  // far: close in toward ~330px
         else if (enemyDistance > 370) rangeBias = -0.4;
         else if (enemyDistance > 320) rangeBias = -0.1;  // hold ~330px
-        else if (enemyDistance < 260) rangeBias = 0.5;   // too close: push out of the kill zone
+        else if (enemyDistance < 130) rangeBias = 0.9;   // point-blank: bolt out of the kill zone
+        else if (enemyDistance < 260) rangeBias = 0.6;   // too close: push out of the kill zone
         else                          rangeBias = 0.2;
         double desiredDir = absBearing + (Math.PI / 2 + rangeBias) * moveDirection;
 
@@ -710,7 +717,12 @@ public class MyTank extends AdvancedRobot {
         // path). Keep dodge-on-fire LOW (0.10) and favor steady full-speed tangential
         // orbit. Rare uncorrelated reversal only to avoid a fully fixed period.
         long now = getTime();
-        if (enemyFired && now - lastReverseTime >= 10 && Math.random() < 0.10) {
+        // vs sacdalance__robrrrat: enemy gun is a LEAD gun (median offset 0.136 rad,
+        // mean 0.306 -- it aims ahead of us). Against a lead gun, reversing on its
+        // fire is effective: the shot flies to where we WOULD have been. Raise
+        // dodge-on-fire 0.10 -> 0.30 (0.10 was tuned vs a HEAD-ON gunner). Still not
+        // a strict alternation, so not itself learnable.
+        if (enemyFired && now - lastReverseTime >= 8 && Math.random() < 0.30) {
             moveDirection = -moveDirection;
             lastReverseTime = now;
         } else if (now - lastReverseTime >= 14 && Math.random() < 0.05) {
