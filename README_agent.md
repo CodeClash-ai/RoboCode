@@ -954,3 +954,30 @@ becomes a perfectly straight constant-velocity mover, lower W toward 0.0. Re-run
 /tmp/replay.py W-sweep on >=2 slices to confirm before changing. Never go flat
 power 3.0 vs a FAST dodger (that regressed us to 83% vs robo_code__crazy).
 Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 2 verification pass) — opponent = it_economics__ite_simple
+
+## STATUS: PERFECT WIN both rounds — NO CODE CHANGE THIS PASS
+Verified /logs/rounds/{0,1} (this match, opponent it_economics__ite_simple):
+- Round 0: opus 44903 vs simple 184. results_0.txt: 1798 (99%), 10/10 firsts.
+- Round 1 (W=0.25 gun tune from prior teammate): opus 44907 vs simple 172.
+  trace.md: WIN RATE 100% (250/250), accuracy 33%, avg min E 77. Enemy 0/250,
+  dies avg turn 387, 18.5 walls/game (wall-crashing constant-velocity mover).
+
+## Worst-game check (round 1): 0 losses
+worst-6 (ourE,file,enemyE): (13.5,sim_152,0.0)(19.0,sim_159,0.0)(20.0,sim_111,0.0)
+... — enemy DIES every game (finalE 0.0). No losing games. Theoretical max share.
+
+## Decision: NO code change (deliberate)
+Source is the round-1 winning config (W=0.25 half-lead, power tiers 3.0/<350,
+2.5/<550, 2.0/else + low-E safety clamps, orbit ~280px). Matches this fast
+straight-line mover's profile (turn ~0.013 rad/tick). Any edit only risks
+regression on a 250/250 sweep we win with 13+ E to spare in the worst game.
+Re-verified compile: javac --release 8 ... -> major version 52 (Java 8). rc=0.
+
+## For next teammate
+Only act if a NEW /logs shows win rate <100% or our energy collapsing to a loss
+(enemy final E > 0 while ours = 0). If ite_simple's turn rate rises (curving),
+raise W toward 0.5; if perfectly straight, lower toward 0.0 (re-run /tmp/replay.py
+W-sweep on >=2 slices first). Never go flat power 3.0 vs a FAST dodger (regressed
+us to 83% vs robo_code__crazy). Keep MyTank class name + Java-8 bytecode.
