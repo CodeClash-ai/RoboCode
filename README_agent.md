@@ -4221,3 +4221,53 @@ Backup of prior source: /tmp/MyTank.bak.java (git prior = the 88-loss config).
   That's the real next lever if conservation isn't enough.
 - Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING.
 - Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 2 / current pass) — opponent = pez__wallspoet — REVERTED R1 CONSERVATION REGRESSION
+
+## CRITICAL: R1's energy-conservation change LOST the match — reverted to R0 (winning) config
+Opponent = pez__wallspoet, an ACTIVE WAVE SURFER (fires back power-3, dodges near-
+perfectly). BOTH bots hit ~5%% at ALL ranges. This is a SLUGFEST decided by SCORE
+components (bullet damage + bonus + survival), NOT by who "wins" survival games.
+
+## REAL cross-round MATCH results (results.json winner — the decisive signal):
+- ROUND 0 (AGGRESSIVE gun: power 3.0/<400, 2.0/<500; fire out to 550px; orbit
+  ~370px; W=1.0): WON — opus 26470 vs wallspoet 19617. We out-fired the enemy
+  (~1.75x shots) and won the bullet-damage race (we deal 59.4 vs take 55.0/game).
+- ROUND 1 (prior teammate's CONSERVATION: power 2.0/<250 1.2/<400 0.6; HOLD FIRE
+  >450px; orbit ~420px; W=0.5): LOST — opus 23183 vs wallspoet 23824. winner=
+  pez__wallspoet! results_0.txt: enemy 1083 (54%) vs us 928 (46%). We WON survival
+  (300 vs 200, 6 firsts vs 4) but LOST bullet dmg badly (494 vs enemy 761) ->
+  lost the MATCH. Conservation made us fire LESS than the enemy (3150 vs 3349),
+  conceding the bullet-damage/bonus score that decides this slugfest.
+
+## KEY LESSON: survival-game count is NOT the match outcome
+R0 and R1 had ~IDENTICAL sim survival (R0 160/88, R1 161/86 wins/losses) yet R0
+WON the match and R1 LOST it. The difference was BULLET DAMAGE score. Against a
+FIRING wave surfer that shoots power-3, you must OUT-FIRE it (aggression), not
+conserve. Conservation only wins vs a NON-FIRING passive surfer (admiralrasmussen,
+handled by enemyPassive mode). wallspoet FIRES -> enemyPassive stays OFF
+(damageTaken>=5 after its first hit) -> normal aggressive gun applies. GOOD.
+
+## CHANGE THIS PASS: reverted to R0 config + small bullet-damage bump
+1. Restored the R0 winning config via `git show HEAD~1:...MyTank.java` (power
+   3.0/<400 2.0/<500 0.8/<580 0.3/else, W=1.0, fire out to 550px, orbit ~370px).
+2. Bumped the 400-500px power tier 2.0 -> 2.5 (line 261). 27%% of our ticks are in
+   this bucket (45%% at 300-400px, 27%% at 400-500px). +25%% dmg/hit (11->13.75)
+   for a small energy/cooldown cost -> widens our bullet-damage margin in the
+   slugfest R0 already wins, with minimal survival risk (we're already ahead on
+   the damage exchange 59.4 vs 55.0/game).
+Compiles Java 8 (major version 52). rc=0.
+
+## For next teammate — VERIFY
+- Want NEW /logs: winner=opus-4-8 (results.json), our bullet dmg > enemy's in
+  results_0.txt, score margin held/raised above R0's 26470 vs 19617.
+- If we LOSE again: (a) the 2.5 bump may have hurt survival -> revert line 261 to
+  2.0 (exact R0 config = proven MATCH WIN). (b) DO NOT lower power / conserve
+  (R1 proved that LOSES the match — we concede bullet damage to the firing enemy).
+  (c) If bullet dmg is still close, try MORE aggression: power 3.0 out to 500px
+  and remove the 550px fire gate entirely (fire everywhere) to maximize shots.
+- The ONLY robust way to BEAT (not just out-trade) a wave surfer is WAVE SURFING
+  our own movement (track enemy bullet waves, move to min-danger GF) — high-risk,
+  local harness broken, trust /logs only. That's the real untapped lever.
+- Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING.
+- Keep MyTank class name + Java-8 bytecode (only hard requirement).
