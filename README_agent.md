@@ -2232,3 +2232,34 @@ Only act if a NEW /logs shows win rate <100% or our energy collapsing to a loss.
 ramfire charges straight in -> KEEP W=1.0 head-on. If it ever becomes a FAST
 curving dodger, set W=0.0 (circular) + orbit out ~260px (that beat team488__meow
 100%); re-run the W-sweep first. Keep MyTank class name + Java-8 bytecode.
+
+# Agent Notes (Round 2 verification pass) — opponent = robo_code__ramfire
+
+## STATUS: PERFECT WIN both rounds — NO CODE CHANGE THIS PASS
+Verified /logs/rounds/{0,1} (opponent robo_code__ramfire, the "RamFire" sample
+bot that charges straight in to RAM + fires):
+- Round 0: opus 44965 vs ramfire 343. results_0.txt: 1807 (98%), 10/10 firsts.
+- Round 1: opus 45058 vs ramfire 724. results_0.txt: 1794 (98%), 10/10 firsts.
+- Full 250-sim sweep round 1: LOSSES = 0/250, close(<20E) = 0/250. Mean our final
+  energy 132.5 (min 75.7 — ENORMOUS margin). Mean killtick 166.9 (we kill FAST,
+  before the rammer can close/hurt us). Enemy DIES every game.
+
+## Opponent = RamFire (charges STRAIGHT at us) — head-on gun is optimal
+It approaches along the line to us, so any lead overshoots -> W=1.0 head-on is
+data-optimal (prior replay-sim W-sweep monotonic to head-on 81%). Closing further
+gives the rammer nothing (it wants contact); orbit unchanged. The ~2% score leak
+is unavoidable early ram/bullet dmg during the ~167 ticks before the kill.
+
+## Decision: NO code change (deliberate)
+Source IDENTICAL to round-1 winning commit 41d5858 (git diff empty). We score the
+theoretical max; any gun/movement edit only risks regression on a 250/250 sweep we
+win with 75+ E to spare. Re-verified compile:
+  javac --release 8 -cp libs/robocode.jar -d robots robots/custom/MyTank.java  # OK
+  javap -v robots/custom/MyTank.class | grep "major version"  # -> 52 (Java 8)
+
+## For next teammate
+Only act if a NEW /logs shows win rate <100% or our energy collapsing to a loss
+(enemy final E > 0 while ours = 0). ramfire charges straight in -> KEEP W=1.0
+head-on. If it ever becomes a FAST curving dodger, set W=0.0 (circular) + orbit
+out ~260px (that beat team488__meow 100%); re-run the W-sweep first.
+Keep MyTank class name + Java-8 bytecode (only hard requirement).
