@@ -830,3 +830,120 @@ robots/custom/MyTank.java` compiles clean, `.class` up to date.
    (see round 6's section for the most specific known blocker). Would be the
    single highest-leverage infra fix for future rounds if anyone wants to dig
    in with a larger step budget than a single round typically allows.
+
+## Round 9 update (this round) — new opponent confirmed, added turn-rate smoothing to gun prediction
+
+### Context
+Only `/logs/rounds/0/` exists in this environment for me. Per `trace.md` /
+`results.json`, this round's opponent is a **new** one, `trex22__deepthought`
+(different from `it_economics__ite_bomax` seen in rounds 7-8's notes above).
+Confirmed real combat via `python3 tools/analyze_sim_logs.py /logs/rounds/0`
+(2 robots, bullets, movement present in all 250 games). Result: **100% win
+rate (250/250)**, team score **43836 vs opponent's 210** (huge margin),
+42% accuracy, avg speed 6.4, avg min energy 86, opponent avg death turn 306
+(out of avg-457-turn games, so we typically finish it off well before the
+match would time out). `tools/analyze_freezes.py --threshold 100 | grep -i
+sonnet` -> **zero matches**, confirming the round-3 wall-standoff and round-4
+radar-freeze fixes are still holding with no regression.
+
+The opponent itself is much weaker than us (0% win rate, 2% accuracy, avg
+shots only 1.9/game) but noticeably more *mobile* than the last two rungs'
+opponents (`robo_code__sittingduck` / `it_economics__ite_bomax`, both nearly
+stationary): avg speed 2.8, and inspecting `sim_0.jsonl` by hand showed its
+heading (`bh`) changes by >0.05rad on 75 out of 502 ticks — i.e. it moves in
+straight bursts up to top speed, then makes fairly frequent sharp turns
+(looks like a segment-based/zigzag movement pattern, not smooth circular
+orbiting). This is plausibly why our accuracy (42%) is noticeably lower than
+the last two rungs (69-70% against nearly-stationary opponents) — it's just a
+harder target to hit, not necessarily a bug. Even so, 42% accuracy plus a
+100% win rate with a >200x score margin is still a very strong result; there
+is no losing pattern to fix this round, just a possible efficiency
+improvement.
+
+### Change made this round: smoothed enemy turn-rate estimate for gun prediction
+`onScannedRobot()`'s circular-motion gun prediction (added in round 5, see
+that section above) estimates the enemy's turn rate as a *raw, single-scan*
+`(heading_delta / scan_gap)` value and then simulates it forward
+tick-by-tick assuming that rate holds constant for the whole predicted
+bullet flight. Against a bot that makes occasional sharp single-tick
+corrections while otherwise going straight (which `trex22__deepthought`'s
+movement pattern, per the `bh` analysis above, looks like it might do), this
+raw estimate is exactly the wrong assumption: extrapolating a one-tick turn
+as if it were a sustained curve for the next 10-60 simulated ticks would aim
+well off to the side of where the target actually ends up (it stops turning
+almost immediately in reality).
+
+Fix (`robots/custom/MyTank.java`, in the turn-rate-estimation block inside
+`onScannedRobot()`):
+1. Clamp the raw per-tick heading-delta estimate to +/-0.15 rad/tick before
+   using it at all (a real robot's max turn rate tops out around 0.116
+   rad/tick at v=0 and less at higher speed, so anything further beyond that
+   from a single scan sample is almost certainly noise, e.g. from a
+   momentarily large scan gap, not real sustained rotation).
+2. Blend the clamped raw estimate with the *previous* smoothed estimate via
+   a simple 50/50 low-pass filter (`enemyHeadingRate = 0.5*old + 0.5*new`)
+   instead of overwriting it outright. This damps single-tick spikes (they
+   only get half-weighted in, and then decay by half again each subsequent
+   tick if not repeated) while a genuinely sustained turn (same-sign delta
+   for several consecutive scans, e.g. a bot doing real circular
+   orbiting) still converges to being tracked within just a few ticks.
+   Degrades gracefully to the old behavior (rate ~= 0) for straight-line
+   movers, so no expected regression against the previous two rungs'
+   nearly-stationary opponents.
+3. Verified `javac -cp libs/robocode.jar -d robots robots/custom/MyTank.java`
+   compiles clean, no errors/warnings, `.class` up to date. Old version
+   preserved at `archive/round1_backups/MyTank.java.before_round9_smoothing`
+   for a quick diff/revert if next round's numbers regress.
+
+### What I did NOT get to
+- **Not validated by a real match** (same long-standing limitation every
+  round hits — no working local headless battle runner in this sandbox; see
+  round 6's section above for the most detailed writeup of exactly where that
+  effort gets stuck). This is a real, previously-untested behavioral change
+  to the gun-prediction math, so treat it with the same caution as rounds
+  7-8's bullet-power tuning changes: check next round's accuracy stat closely
+  before assuming it's a strict improvement.
+- Did not touch bullet power bands or `PREFERRED_DISTANCE` this round —
+  those were tuned/validated specifically against the *previous* rung's very
+  passive opponent (`it_economics__ite_bomax`); since we're already winning
+  overwhelmingly against this round's new, more-mobile opponent too, I didn't
+  want to stack an unvalidated distance/power change on top of an unvalidated
+  prediction-smoothing change in the same round — easier to isolate which
+  change (if any) caused a regression if only one thing changed at a time.
+- Did not dig further into *why* accuracy is 42% specifically (e.g. by
+  checking whether misses cluster at specific distance bands, or specifically
+  right after the opponent's sharp turns) — the `bh`-change analysis above
+  was a quick manual check of one game (`sim_0.jsonl`), not a systematic
+  script. A good next step: extend `tools/analyze_sim_logs.py` (or write a
+  new script) to bucket hit/miss-implied bullet outcomes by opponent turn
+  rate at time of firing, to more rigorously confirm/refute the "sharp turns
+  cause misses" hypothesis this round's change is based on.
+
+### Suggestions for next teammate
+1. **First step, as always**: check the newest `/logs/rounds/<N>/trace.md`.
+   - If it's still `trex22__deepthought` and accuracy is >= ~42% (this
+     round's baseline) with 100% win rate still holding, the smoothing
+     change is at worst neutral, at best an improvement — keep it.
+   - If accuracy drops noticeably, revert via
+     `archive/round1_backups/MyTank.java.before_round9_smoothing` and
+     consider whether the smoothing constant (currently a flat 50/50 blend)
+     needs adjusting instead of full reversion (e.g. weight the new sample
+     less, like 0.3, if the opponent turns out to do a lot of *sustained*
+     curving that the smoothing is now under-reacting to).
+2. Run `python3 tools/analyze_freezes.py /logs/rounds/<N> --threshold 100 |
+   grep -i sonnet` as a standard regression check for the wall/radar freeze
+   bug classes — should print nothing.
+3. If the opponent changes rungs again to something genuinely aggressive
+   and *accurate* (every opponent seen across all rounds documented in this
+   file so far has had <10% accuracy against us), that would be the first
+   real stress test of the defensive/dodging side of the bot rather than
+   just offense — worth watching `avg min energy` and win rate very closely
+   in that case, since all our tuning so far has been offense-focused
+   (bullet power, targeting) precisely because no opponent has punished us
+   defensively yet.
+4. Local headless battle-runner: still unresolved after 8+ rounds of
+   attempts (see round 6's section for the most detailed known blocker,
+   `RepositoryManager.loadSelectedRobots` not seeing a freshly-reloaded
+   repository within the same call). Still the single highest-leverage infra
+   fix available if a future teammate has a larger step budget to spend on
+   it than usual.

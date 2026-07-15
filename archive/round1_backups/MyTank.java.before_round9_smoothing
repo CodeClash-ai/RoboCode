@@ -181,31 +181,10 @@ public class MyTank extends AdvancedRobot {
         // scan of them. Guard against huge/garbage deltas across a scan gap (e.g.
         // after briefly losing radar lock) by only trusting recent, single/short-gap
         // scans; otherwise assume 0 (straight-line fallback).
-        //
-        // Round 9 tuning: against a genuinely erratic/zigzag opponent
-        // (trex22__deepthought -- see README_agent.md round 9 notes), a *raw*,
-        // single-tick heading-delta estimate is noisy: a bot that mostly goes
-        // straight but occasionally makes a sharp one-tick correction would
-        // otherwise cause us to extrapolate that single-tick turn as if it were a
-        // sustained curve for many future ticks, aiming well off to the side of
-        // where the target actually ends up once it stops turning. Smooth the
-        // estimate with a simple low-pass filter (blend with the previous
-        // estimate) so transient single-tick turns get damped rather than fully
-        // trusted, while a genuinely sustained turn (many consecutive ticks with
-        // the same sign) still converges to being tracked within a few scans.
-        // Also clamp the raw per-tick estimate to a sane maximum magnitude
-        // (a real robot's max turn rate tops out around 0.116 rad/tick -- 10
-        // deg/tick at v=0, less at speed -- so anything wildly beyond that is
-        // almost certainly scan-gap noise, not real motion) before blending, so
-        // one noisy sample can't dominate the smoothed estimate.
         long scanGap = (prevEnemyScanTime >= 0) ? (getTime() - prevEnemyScanTime) : -1;
         if (scanGap > 0 && scanGap <= 3) {
-            double rawRate = robocode.util.Utils.normalRelativeAngle(
+            enemyHeadingRate = robocode.util.Utils.normalRelativeAngle(
                     enemyHeading - prevEnemyHeading) / scanGap;
-            double maxRate = 0.15;
-            if (rawRate > maxRate) rawRate = maxRate;
-            if (rawRate < -maxRate) rawRate = -maxRate;
-            enemyHeadingRate = 0.5 * enemyHeadingRate + 0.5 * rawRate;
         } else {
             enemyHeadingRate = 0;
         }
