@@ -4700,3 +4700,48 @@ proper iterative linear predictor should be far higher on the straight sections)
 - Walls is a PERFECT LINEAR mover -> KEEP W=0.0 full linear lead + CLOSE orbit.
 - Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING.
 - Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 2 verification pass, THIS pass) — opponent = robo_code__walls
+
+## STATUS: THE ROUND-1 CLOSE-ORBIT + LINEAR-LEAD REWRITE FLIPPED A MATCH LOSS INTO A DOMINANT WIN — NO CODE CHANGE
+Opponent = the "Walls" sample bot (PERFECT linear perimeter mover, v=8 along walls,
+90deg corner turns, movefrac 0.88). INDEX both rounds: i=0=opus, i=1=walls.
+Cross-round MATCH results (results.json winner = decisive):
+- Round 0 (old ~500px WIDE orbit + W=1.0 head-on leftover from maximbot/pikachu):
+  LOST — opus 3079 vs walls 24593. We engaged ~450px; slow bullets took 30+ ticks
+  to reach the v=8 target -> ~0.5% hit -> NEVER killed it, bled to 0 over ~1500t
+  while its straight path kept it at ~60E. results_0.txt: walls 995 (92%, 10 firsts,
+  500 survival) vs opus 83 (8%, 0 firsts, 0 survival). Full sweep: LOST 120/120.
+- Round 1 (prior teammate: gun W=0.0 FULL LINEAR LEAD, orbit CLOSE ~170px, faster
+  bullets 3.0/<160 2.4/<250 1.6/<400 1.0/<560 0.5): WON — opus 44217 vs walls 4468.
+  results_0.txt: opus_4_8.MyTank 1816 (89%), 10/10 firsts. Full 250-sim sweep:
+  LOSSES = 0/250, close(<20E) = 0/250. ourFE min/mean = 84.1/114.6. killtick mean
+  365.7. We kill the enemy in EVERY game. Complete flip from a 0/120 loss.
+
+## Distance distribution (round 1, 60 sims): we chase the fast wall-hugger
+Avg engagement ~307px (code TARGETS ~170px but Walls at v=8 keeps distance open as
+we orbit the perimeter). Tick distribution: 0-100px 4%, 100-200px 20%, 200-300px
+28%, 300-400px 23%, 400-500px 13%, 500px+ 11%. Despite not fully closing, the
+FULL LINEAR LEAD (exact on straight sections) + faster bullets land reliably ->
+we kill it every game with 84+ E to spare. The wide-orbit disaster is fixed.
+
+## Decision this pass: NO code change (deliberate)
+Source is IDENTICAL to the round-1 winning config (git diff on MyTank.java =
+empty). W=0.0 full linear lead (line 345), close-orbit rangeBias, fast-bullet power
+tiers. Considered pushing the orbit even closer (thresholds tighter) to raise hit
+rate further, but REJECTED: (a) we win ALL 250 sims / 10-10 every battle at 89%
+share — strong stable win; (b) the README documents movement changes REPEATEDLY
+backfiring (wallspoet conservation LOST, wallspoet/juggernaut dodge-up REGRESSED);
+(c) closing harder vs a fast wall-hugger risks corner-jamming/ramming that could
+cost survival. Any edit only risks re-losing a 250-game sweep we now dominate.
+Re-verified compile:
+  javac --release 8 -cp libs/robocode.jar -d robots robots/custom/MyTank.java  # OK
+  javap -v robots/custom/MyTank.class | grep "major version"  # -> 52 (Java 8)
+
+## For next teammate
+Only act if a NEW /logs shows the MATCH lost (winner=robo_code__walls) or win rate
+collapsing. Walls is a PERFECT LINEAR perimeter mover -> KEEP W=0.0 full linear
+lead + close orbit + fast bullets. Do NOT go back to a wide orbit / head-on (that
+LOST 0/120 in R0). Do NOT conserve energy (documented loss vs wallspoet). Always
+re-check `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING first.
+Keep MyTank class name + Java-8 bytecode (only hard requirement).
