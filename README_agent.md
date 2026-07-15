@@ -2293,3 +2293,134 @@ pre-round-19 baseline) already reflects this corrected form; just documenting
 the extra care taken here in case a future teammate is re-deriving similar
 angle-blending logic elsewhere and wants a concrete cautionary example of
 this relative-vs-absolute-angle pitfall.
+
+## Round 20 update (this round) — found & fixed the REAL reason ramming-disengage kept failing (event-priority override), round 19's "fix" was a regression
+
+### Context
+Only `/logs/rounds/0/` and `/logs/rounds/1/` exist in this environment for me.
+Opponent both rounds: `pez__droidpoet`. Round 0 (pre-round-19-fix baseline):
+**100% win (250/250)**, 0 ties, 0 losses, score 48741 vs 1465. Round 1
+(the REAL match result of round 19's "fix onHitRobot's setBack() direction
+bug" change): **92% win (229/250)**, **17 losses**, **4 ties** — a clear
+regression, not an improvement, despite round 19's diagnosis (setBack() moves
+opposite current heading, so turning away then calling setBack() drove us
+back toward the enemy) being 100% correct and the fix for it being correctly
+implemented in isolation.
+
+### Investigation: why did a *correct* bugfix make things worse?
+`python3 tools/analyze_freezes.py /logs/rounds/1 --threshold 100 | grep -i
+sonnet` -> **16 STUCK-RAMMING findings** (up from round 0's 5, only 1 of which
+was labeled STUCK-RAMMING). So the disengage-direction fix didn't reduce
+stuck-ramming freezes at all -- it *increased* them. Traced `sim_10.jsonl`
+tick-by-tick (dumping x/y/v/e/status for both robots, t=100-300): our position
+froze **byte-identical for 104 consecutive ticks** (t=172-276) with velocity
+pinned at **exactly 0.0** the entire time, while `HIT_ROBOT` status re-fired
+every tick and energy drained 0.6/tick (genuine collision damage). Crucially,
+this is happening *despite* onHitRobot()'s round-19 "fixed" disengage command
+(turn away + blend toward center + `setAhead(80)`) being reissued fresh every
+single tick -- the direction was correct now, but velocity never left 0.0 even
+once, which a genuinely-executing forward-move command should not produce for
+100+ consecutive ticks in a row.
+
+**Root cause**: decompiled the actual event priority constants via `jar xf
+libs/robocode.jar robocode/HitRobotEvent.class robocode/ScannedRobotEvent.class
+&& javap -p -c -constants ...`: `HitRobotEvent.DEFAULT_PRIORITY = 40`,
+`ScannedRobotEvent.DEFAULT_PRIORITY = 10`. Robocode dispatches same-turn events
+in *descending* priority order, so `onHitRobot()` (40) always runs **before**
+`onScannedRobot()` (10) within the same tick. Since the enemy is still in
+radar view while we're colliding with it, `onScannedRobot()` fires in the very
+same tick right after `onHitRobot()` -- and `onScannedRobot()`'s own movement
+logic (stuck-watchdog / ram-trigger / orbit strafing, whichever branch it hits)
+**unconditionally overwrites** whatever turn/move command `onHitRobot()` just
+set, with zero awareness that `onHitRobot()` had just decided something. This
+is why the round-19 fix (correct in isolation) still couldn't ever actually
+move us: the *direction* was right, but the command was being silently
+discarded and replaced every single tick before the game engine ever got a
+real chance to accelerate us away.
+
+### Fix applied (`robots/custom/MyTank.java`)
+Added a **shared "escape mode"** (`escapeUntil` tick deadline +
+`escapeHeadingRad` target heading, plus `beginEscape()` / `reissueEscape()`
+helper methods) that both `onHitRobot()` and `onScannedRobot()` check and
+respect:
+- Whichever handler first detects a stuck condition (onHitRobot's
+  position-based `hitRobotStationaryCount >= 2`, or onScannedRobot's
+  pre-existing velocity-based `stuckScanCount > 4`) calls `beginEscape(angle,
+  30)`, which records the target heading and a 30-tick deadline.
+- **At the very top of both handlers' movement-decision logic** (right after
+  the radar re-arm safety net in `onHitRobot()`; right after the fire logic in
+  `onScannedRobot()`, before the old stuck-watchdog/ram-trigger/orbit code), a
+  new check: `if (getTime() < escapeUntil) { reissueEscape(); return; }`. This
+  guarantees that for the next 30 ticks, **no matter which handler runs last**
+  in a given turn, both agree to reissue the exact same turn+move command
+  toward the same fixed target heading, instead of one silently overwriting
+  the other's decision. This should let velocity actually build up over
+  several real ticks instead of being reset from scratch (or replaced by
+  conflicting logic) every tick.
+- `onHitRobot()`'s ramming-disengage branch now calls
+  `beginEscape(combinedAngle, 30)` instead of directly issuing a one-shot
+  `setTurnRightRadians()+setAhead(80)+execute()`.
+- The pre-existing stuck-watchdog in `onScannedRobot()` (round 3, for
+  wall-standoffs) now also calls `beginEscape(angleToCenter, 30)` instead of a
+  one-shot command, for the same reason -- it was subject to the exact same
+  event-priority-override risk if a HitRobotEvent also happened to fire in the
+  same tick (plausible whenever the wall-standoff involves grazing another
+  robot too, as seen in the corner-trap scenario this round).
+- Verified `javac -Xlint:all -cp libs/robocode.jar -d robots
+  robots/custom/MyTank.java` compiles clean, `.class` up to date. Pre-round-20
+  version preserved at
+  `archive/round1_backups/MyTank.java.before_round20_escape_unify`.
+
+### What I did NOT get to
+- **Not validated by a real match** (same unresolved local-battle-runner
+  limitation as every previous round). This is a high-confidence fix (the
+  event-priority-override mechanism is verified directly from decompiled
+  bytecode constants, not speculation, and it cleanly explains BOTH why round
+  19's directionally-correct fix still failed in real logs AND why stuck-
+  ramming findings went UP not down after that fix) but still needs real-match
+  confirmation. **First thing to check next round**: does
+  `analyze_freezes.py`'s STUCK-RAMMING count on our own bot drop back toward
+  round 0's baseline (~1) or better, and does the loss/tie count return toward
+  round 0's 0/0 baseline (not round 1's 17/4)?
+- Did not have remaining steps this round to also trace *why* round 1 had 4
+  ties (separate from the 17 clear losses) -- plausible these are also
+  stuck-ramming-adjacent mutual-attrition games, worth checking with the same
+  per-tick-dump technique if ties persist after this fix.
+- Did not touch bullet power, movement/orbit tuning, or anything else this
+  round -- wanted to isolate this one (high-confidence, mechanism-verified)
+  concurrency/event-priority fix so it's cleanly attributable next round.
+
+### Suggestions for next teammate
+1. **First step**: check `/logs/rounds/<N>/trace.md`. If opponent is still
+   `pez__droidpoet`, compare directly against round 1's regression baseline
+   (92% win, 17 losses, 4 ties, score 50131 vs 3923) AND round 0's healthy
+   baseline (100% win, 0 losses, 0 ties, score 48741 vs 1465). This fix should
+   bring us back toward round 0's numbers or better.
+2. Run `python3 tools/analyze_freezes.py /logs/rounds/<N> --threshold 100 |
+   grep -i sonnet` -- should show few/no STUCK-RAMMING findings if the fix
+   worked. If findings persist, dump per-tick x/y/v/e/status (template: the
+   `sim_10.jsonl` trace method described above) and check whether velocity
+   *ever* leaves 0.0 during the freeze now -- if it still never does, the
+   escape command itself (not just the override problem) may need
+   strengthening (e.g. larger `setAhead()` distance, or check if collision
+   physics literally zeroes velocity regardless of command when still
+   touching -- would need to look at whether robots ever separate at all, or
+   only when one of them dies).
+3. **General lesson for future rounds**: when two event handlers
+   (onHitRobot/onScannedRobot/onHitWall/onHitByBullet) can plausibly fire in
+   the same tick and both want to control movement, remember Robocode
+   processes them in **descending priority order** (HitRobotEvent=40,
+   HitWallEvent=30, HitByBulletEvent default -- check if needed,
+   ScannedRobotEvent=10 -- lowest of these, so it always runs LAST and wins
+   any "last write wins" conflict over movement commands). Any future
+   movement-related bugfix in one handler should consider whether
+   onScannedRobot() (which fires almost every tick once an enemy is visible)
+   will immediately override it, and use the shared escape-mode pattern (or
+   similar shared-state coordination) rather than assuming a single handler's
+   command will "stick" for the tick.
+4. Local headless battle-runner: still unresolved after 19+ rounds of
+   attempts (see round 6's section for the most detailed known blocker,
+   `RepositoryManager.loadSelectedRobots` not seeing a freshly-reloaded
+   repository within the same call). Still the single highest-leverage infra
+   fix available if a future teammate has a larger step budget to spend on it
+   than usual.

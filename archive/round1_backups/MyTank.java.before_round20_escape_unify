@@ -109,39 +109,6 @@ public class MyTank extends AdvancedRobot {
     // we back off from it.
     private long rammingCooldownUntil = -1;
 
-    // Round 20 bugfix: unified "escape mode" to stop onScannedRobot() and
-    // onHitRobot() from fighting each other over movement commands.
-    //
-    // Root cause found this round (see README_agent.md round 20 notes): Robocode
-    // dispatches events within a turn in DESCENDING priority order
-    // (HitRobotEvent default priority 40, ScannedRobotEvent default priority 10 --
-    // verified via `javap -p -c -constants` on the compiled event classes), so
-    // whenever both fire in the same turn (extremely common while pinned against
-    // an enemy that's also still in radar view), onHitRobot() runs FIRST and sets
-    // a disengage turn+move command, then onScannedRobot() runs SECOND and
-    // unconditionally overwrites it with fresh orbit/ram-trigger/stuck-watchdog
-    // movement commands of its own -- silently discarding whatever onHitRobot()
-    // just decided, every single tick. Real match logs (round 1 vs
-    // pez__droidpoet, e.g. sim_10.jsonl t=172-276) showed our velocity pinned at
-    // *exactly* 0.0 for 100+ consecutive ticks despite onHitRobot()'s round-19
-    // "fixed" disengage command being reissued every tick -- it never got a
-    // chance to actually take effect because onScannedRobot() kept clobbering it
-    // moments later in the same turn.
-    //
-    // Fix: once ANY stuck-detector (either onHitRobot()'s position-based one, or
-    // onScannedRobot()'s pre-existing velocity-based stuckScanCount one) decides
-    // we need to escape, we enter a shared "escape mode" for a fixed number of
-    // ticks (escapeUntil). While in escape mode, BOTH event handlers reissue the
-    // *exact same* turn-and-ahead command (toward escapeHeadingRad, computed once
-    // when escape mode began) and skip all their other movement logic entirely --
-    // so no matter which handler happens to run last in a given turn, they agree
-    // on what to do, and the command has a real chance to actually execute for
-    // long enough to build up velocity and create real separation, instead of
-    // being reset from scratch (or overridden by conflicting logic) every tick.
-    private long escapeUntil = -1;
-    private double escapeHeadingRad = 0;
-
-
     // Round 16 addition: "dodge on fire" reactive evasion. Detect the enemy
     // just firing a bullet (their energy dropped by an amount consistent with
     // a bullet's power cost, Rules.html says firing costs exactly bulletPower
@@ -156,28 +123,6 @@ public class MyTank extends AdvancedRobot {
     // available, since it only adds an extra, occasional direction flip to
     // the existing orbit-strafing movement rather than replacing it.
     private double prevEnemyEnergy = -1;
-
-    // Round 20: shared escape-mode helper. See the field comments above for why
-    // this exists. Always turns toward the given absolute field heading and moves
-    // forward -- callers should compute headingRad as an escape direction that's
-    // already away from whatever we're stuck against (enemy and/or wall).
-    private void beginEscape(double headingRad, int durationTicks) {
-        escapeHeadingRad = headingRad;
-        escapeUntil = getTime() + durationTicks;
-        reissueEscape();
-    }
-
-    // Reissue the current escape command (same target heading, recomputed relative
-    // turn since our own heading may have changed slightly since escape mode
-    // began). Called every tick from both onScannedRobot() and onHitRobot() while
-    // escapeUntil hasn't passed yet, so both handlers always agree.
-    private void reissueEscape() {
-        double turn = robocode.util.Utils.normalRelativeAngle(
-                escapeHeadingRad - getHeadingRadians());
-        setTurnRightRadians(turn);
-        setAhead(100);
-        execute();
-    }
 
     public void run() {
         setAdjustGunForRobotTurn(true);
@@ -454,17 +399,6 @@ public class MyTank extends AdvancedRobot {
             setFire(bulletPower);
         }
 
-        // Round 20: if we're already in escape mode (started here or from
-        // onHitRobot()), just keep reissuing the SAME escape command and skip all
-        // other movement decisions below (ram-trigger, orbit) -- see the field
-        // comments near escapeUntil/escapeHeadingRad for why this matters (event
-        // priority ordering means onScannedRobot() and onHitRobot() would otherwise
-        // silently overwrite each other's movement commands every tick).
-        if (getTime() < escapeUntil) {
-            reissueEscape();
-            return;
-        }
-
         // --- Stuck watchdog: if our velocity has been ~0 for several consecutive
         // scans (and we're not brand new / just started), we're probably wedged
         // against a wall or another robot. Force a strong escape burn toward the
@@ -480,11 +414,15 @@ public class MyTank extends AdvancedRobot {
             double cx = getBattleFieldWidth() / 2.0;
             double cy = getBattleFieldHeight() / 2.0;
             double angleToCenter = Math.atan2(cx - myX, cy - myY);
+            double turnToCenter = robocode.util.Utils.normalRelativeAngle(
+                    angleToCenter - getHeadingRadians());
+            setTurnRightRadians(turnToCenter);
+            setAhead(150);
             // Also flip strafe direction so once we break free we don't immediately
             // re-drive into the same wall.
             moveDirection = -moveDirection;
             strafeTimer = 0;
-            beginEscape(angleToCenter, 30);
+            execute();
             return;
         }
 
@@ -678,20 +616,6 @@ public class MyTank extends AdvancedRobot {
             setTurnRadarRight(Double.POSITIVE_INFINITY);
         }
 
-        // Round 20: if we're already in escape mode, just keep reissuing the same
-        // escape command and skip the press-forward/disengage decision below
-        // entirely -- see the escapeUntil/escapeHeadingRad field comments for why
-        // (this handler and onScannedRobot() must never independently decide
-        // different movement commands in the same tick, or whichever one runs
-        // last -- always onScannedRobot(), since HitRobotEvent's default priority
-        // 40 is processed before ScannedRobotEvent's default priority 10 -- will
-        // silently discard the other's decision, which is exactly the bug this
-        // round's fix targets).
-        if (getTime() < escapeUntil) {
-            reissueEscape();
-            return;
-        }
-
         // Round 14 bugfix: detect a "stuck ramming" mutual-collision lock before
         // deciding whether to press forward. Real match logs (see README_agent.md
         // round 14 notes) showed games where round 12's "always press forward
@@ -782,18 +706,13 @@ public class MyTank extends AdvancedRobot {
         double combinedAngle = (Math.hypot(vx, vy) < 0.05)
                 ? angleToCenter
                 : Math.atan2(vx, vy);
+        setTurnRightRadians(robocode.util.Utils.normalRelativeAngle(
+                combinedAngle - getHeadingRadians()));
+        setAhead(80);
         moveDirection = -moveDirection;
         strafeTimer = 0;
         hitRobotStationaryCount = 0;
-        rammingCooldownUntil = getTime() + 30;
-        // Round 20: use the shared escape-mode helper (beginEscape) instead of a
-        // one-shot setTurnRightRadians()+setAhead(), so onScannedRobot() (which
-        // runs right after this handler within the same tick, per event priority
-        // ordering -- see field comments) reissues this *same* command instead of
-        // silently overwriting it with fresh orbit/ram-trigger logic. This was the
-        // actual root cause of round 19's "fix" still getting stuck 100+ ticks at
-        // a time in real matches (see README_agent.md round 20 notes) despite
-        // fixing the original setBack()-drives-toward-enemy direction bug.
-        beginEscape(combinedAngle, 30);
+        rammingCooldownUntil = getTime() + 20;
+        execute();
     }
 }
