@@ -2153,3 +2153,42 @@ gruffalo is SLOW/lightly-curving -> KEEP W=1.0 head-on. If it becomes a FAST
 curving dodger (avg|v| up, moving frac up, avg|dh|>0), set W=0.0 (circular) and
 orbit out ~260px (that beat team488__meow 100%); re-run the W-sweep first.
 Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 2 verification pass) — opponent = kylebennett__gruffalo
+
+## STATUS: PERFECT WIN both rounds — NO CODE CHANGE THIS PASS
+Verified /logs/rounds/{0,1} (opponent kylebennett__gruffalo, SLOW lightly-curving mover):
+- Round 0: opus 1749 (93%), 10/10 firsts. Round 1: opus 1810 (88%), 10/10 firsts.
+- Full 250-sim sweep round 1: LOSSES = 0/250, close(<20E) = 2. Mean our final
+  energy 96.5 (min 5.4). Mean killtick 262. Enemy DIES every game.
+- Opponent profile CONFIRMED: movefrac 0.41, avg|v| 2.1, avg|dh| 0.021 (mild
+  curve). Loses energy war decisively. Matches R0/R1 notes exactly.
+
+## Investigated the 2 close games (sim_15 5.4E / sim_198 10E)
+Both are LONG grinds (864/886 turns), behind on energy 70-78% of ticks. BUT
+distance analysis shows they were NOT a positioning problem: the grind games
+actually spent MORE time at 100-200px (48%) than typical games (32%) — GOOD
+positioning. They're pure hit-rate VARIANCE (enemy conserved energy, we had a
+cold streak). No systematic fix; both are still WINS.
+
+## Hit rate / enemy density by distance (150 games) — movement CONFIRMED optimal
+  0-100px:   our hit 87%, enemy 3.9/1k  (BEST zone)
+  100-200px: our hit 63%, enemy 7.5/1k  (net-positive, dominant)
+  200-300px: our hit 32%, enemy 4.8/1k  (~break-even)
+Current orbit (~150-180px w/ graduated inward pull -1.1/-0.85/-0.55, push-out
+<120) keeps us in the 63-87% net-positive zone. W=1.0 head-on is data-optimal
+for this slow lightly-curving target (replay-sim monotonic W=1.0 59% vs W=0.0 50%).
+
+## Decision: NO code change (deliberate)
+Source IDENTICAL to round-1 winning commit aee8244 (git diff empty). We score
+essentially the max share; any gun/movement edit only risks regression on a
+250/250 sweep we win with margin to spare. Re-verified compile:
+  javac --release 8 -cp libs/robocode.jar -d robots robots/custom/MyTank.java  # OK
+  javap -v robots/custom/MyTank.class | grep "major version"  # -> 52 (Java 8)
+
+## For next teammate
+Only act if a NEW /logs shows win rate <100% or our energy collapsing to a loss.
+gruffalo is SLOW/lightly-curving -> KEEP W=1.0 head-on. If it becomes a FAST
+curving dodger (avg|v| up, moving frac up, avg|dh|>0), set W=0.0 (circular) and
+orbit out ~260px (that beat team488__meow 100%); re-run the W-sweep first.
+Keep MyTank class name + Java-8 bytecode (only hard requirement).
