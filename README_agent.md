@@ -4462,3 +4462,54 @@ enemyPassive stays OFF (gntest deals real damage). Compiles Java 8 (major 52).
   is counterproductive per dominatorx note). The remaining lever is WAVE SURFING
   (high-risk, harness broken). Always re-check `head -1 /logs/rounds/0/sim_0.jsonl`
   for opponent + INDEX MAPPING first. Keep MyTank class name + Java-8 bytecode.
+
+# Agent Notes (Round 1 / current pass) — opponent = kcanida__pikachu (WE ARE LOSING THE MATCH)
+
+## CRITICAL: we LOST round 0 — opus 18621 vs pikachu 20472 (winner=pikachu)
+Per results_0.txt: we WIN bullet damage 2.6x (664 vs 254) but LOSE survival badly
+(100 vs 400 survival, 2 firsts vs 8). We out-DAMAGE but DIE FIRST. Across the 25
+battles we won only ~9/25. Full 120-sim analysis: we LOSE 103/120, ourFE mean 3.8
+vs enemyFE 36.3. This is a SURVIVAL problem, not a damage problem.
+
+## Opponent profile = FAST HEAVY SPINNER with a HEAD-ON gun (deadly)
+- movefrac 0.75, avgV 3.49, avg|dh| 0.149 (HEAVY spin — circles hard).
+- Gun: median offset 0.081 rad off head-on when firing = HEAD-ON gun (aims at our
+  CURRENT position). NOTE: measure offset as atan2(us.x-en.x, us.y-en.y) vs en.gh
+  (x,y order matters — my first attempt with wrong order gave a bogus 1.59 rad).
+- Enemy hit density ON US by distance (hits/1k): 100-500px ~100-115/1k (FLAT,
+  brutal), 500-600px 63/1k, 600-700px 18/1k. Accuracy only collapses beyond 500px.
+- We spent most ticks at 100-400px (its kill zone) and WALL-HUGGED 30% of ticks
+  (near-stationary = trivial for a head-on gun). Only 4.7% of ticks reached 500px+.
+
+## CHANGES THIS PASS (all attack SURVIVAL; gun aim hedged)
+1. MOVEMENT rangeBias RETUNED (line ~602): old config rigidly pushed to ~560px but
+   NEVER reached it (enemy closes) and jammed us into corners. New: GENTLE bias
+   toward a moderate ~450px (>550 -0.5, >470 -0.2, >400 0.0, >300 +0.35, else +0.7)
+   so we keep SMOOTH FULL-SPEED lateral motion instead of corner-jamming. A head-on
+   gun is beaten by fast steady tangential motion, not by distance (density is flat).
+2. WALL SMOOTHING stick 140 -> 160 (line ~684): turn away from walls EARLIER to cut
+   the 30% wall-hug that was killing our lateral speed.
+3. DODGE reduced for a HEAD-ON gun (reversing is counterproductive — kills lateral
+   speed + brings us into the bullet path, per the dominatorx lesson):
+   dodge-on-fire 0.15 -> 0.10 (gate 8->10), random reversal 0.06 -> 0.05 (gate
+   12->14), onHitByBullet reversal 0.5 -> 0.25.
+4. GUN W 0.0 -> 0.5 (line 340): replay (biased) shows head-on 0.153 ~ circular 0.139
+   ~ linear 0.136 — all close (~14-15%, hard target). W=0.5 hedges circular lead +
+   current pos. Power tiers UNCHANGED (we already dominate bullet damage 2.6x; don't
+   reduce offense). enemyPassive stays OFF (pikachu deals real damage).
+Compiles Java 8 (major version 52). Backup: /tmp/MyTank.bak.java (= round-0 losing config).
+
+## For next teammate — VERIFY (this is a LOSING matchup we're trying to flip)
+- Want NEW /logs: winner=opus-4-8, our SURVIVAL score UP from ~100, wall-hug frac
+  DOWN from 30%, ourFE mean UP from 3.8, firsts UP from ~9/25. Bullet damage should
+  stay dominant (don't need to change offense).
+- IF STILL LOSING: (a) if wall-hug is still high, raise wall stick to 180 or add a
+  center-seeking bias; (b) if enemy still out-survives, the ONLY robust anti-good-gun
+  lever is WAVE SURFING (track enemy bullet waves, move to min-danger GF) — high-risk,
+  local harness broken, trust /logs. (c) full revert = /tmp/MyTank.bak.java (but that
+  LOST). Consider trying orbit even wider (~500px, thresholds 600/520/460/380) to
+  reach the 63/1k zone if the moderate orbit doesn't help survival enough.
+- pikachu is a FAST HEAVY spinner with a HEAD-ON gun -> steady full-speed tangential
+  orbit, LOW reversals, avoid walls. Re-check `head -1 /logs/rounds/0/sim_0.jsonl`
+  for opponent + INDEX MAPPING (round 0: i=0=opus, i=1=pikachu). Keep MyTank +
+  Java-8 bytecode (only hard requirement).

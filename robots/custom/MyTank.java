@@ -263,11 +263,13 @@ public class MyTank extends AdvancedRobot {
         // At our new ~530px orbit, high-power misses just bleed energy at 5pct hit. But point-blank
         // shots (enemy closing in) are ~80pct hit. Use strong power up close, moderate at our orbit
         // range (keep our bullet-dmg lead) tapering only far out where a miss should cost little.
+        // vs pikachu we ALREADY dominate bullet damage 2.6x -> keep power meaningful
+        // at our ~500px orbit to hold that lead (survival is the fix, not offense).
         if (dist < 200)       power = 3.0;   // point-blank / enemy charge: high hit, big damage
-        else if (dist < 480)  power = 2.0;   // mid: moderate power keeps bullet-dmg lead without heavy bleed
-        else if (dist < 610)  power = 1.5;   // our orbit zone (~560px): lower drain per miss, still meaningful hits
-        else if (dist < 690)  power = 0.8;
-        else                  power = 0.4;   // long range -> smallest drain if a miss
+        else if (dist < 400)  power = 2.5;   // mid: strong power keeps our bullet-dmg lead
+        else if (dist < 560)  power = 1.8;   // our ~500px orbit zone: still meaningful hits
+        else if (dist < 660)  power = 1.0;
+        else                  power = 0.5;   // long range -> small drain if a miss
 
         // Energy safety clamps so a bad streak can't self-destruct us.
         if (getEnergy() < 30) power = Math.min(power, 2.0);
@@ -337,7 +339,7 @@ public class MyTank extends AdvancedRobot {
         // (distance-based, kept net-positive) still guard the crazy-bot regression.
         // Chose W=0.85: strongly toward head-on (physics: slow target -> head-on best),
         // hedged just short of pure 1.0 since replay is biased by the reactive enemy path.
-        double W = 0.0;  // vs josephjeon__gntest (FAST curving mover avgV 6.39, 74pct fullspeed, avg dh 0.083, aggressive HEAD-ON gun fires ~29/game, engages ~335px). W-sweep replay: W=0.0 full linear lead 7.6pct vs W=1.0 5.0pct -- full lead clearly best for this fast constant-velocity mover. Enemy hits us ~60/1k across 100-500px but only 27/1k beyond 500px, so we orbit wider (see rangeBias); full lead needed at that range against a fast mover.
+        double W = 0.5;  // vs kcanida__pikachu: FAST HEAVY spinner (W=0.5 blends circular lead + current pos; replay head-on 0.153 ~ circular 0.139 close, 0.5 hedges). Was 0.0 for (avg|dh| 0.149) -> W=0.0 uses the CIRCULAR predictor (steps enemy forward by enemyTurnRate), correct for a heavily-curving mover. [prev] vs josephjeon__gntest (FAST curving mover avgV 6.39, 74pct fullspeed, avg dh 0.083, aggressive HEAD-ON gun fires ~29/game, engages ~335px). W-sweep replay: W=0.0 full linear lead 7.6pct vs W=1.0 5.0pct -- full lead clearly best for this fast constant-velocity mover. Enemy hits us ~60/1k across 100-500px but only 27/1k beyond 500px, so we orbit wider (see rangeBias); full lead needed at that range against a fast mover.
         // [prev] double W = 1.0; // vs iagomonteiro13579__npcsniper
         // [old] double W = 1.0; // HEAD-ON best vs alpian__ianstank (stop-and-reverse oscillator, ~50% stationary). Replay-sim 80 games: W=1.0 hits 40.3% vs W=0.0 21.4%.
         double predX = W * enemyX + (1 - W) * leadX;
@@ -589,10 +591,25 @@ public class MyTank extends AdvancedRobot {
         // own (lag-corrected) hit rate stays high (~90%) out to 600-700px. So push the
         // orbit a bit WIDER (~560px target) to reach the 600px+ low-enemy-hit zone with
         // minimal offensive cost. Same direction that cut enemy score in half in round 1.
-        if (enemyDistance > 650)      rangeBias = -0.9;  // very far: firm inward pull
-        else if (enemyDistance > 580) rangeBias = -0.35; // approaching target ~560px
-        else if (enemyDistance > 540) rangeBias = 0.0;   // in the low-enemy-hit zone, orbit clean
-        else if (enemyDistance < 520) rangeBias = 0.6;   // too close: push out toward 560px
+        // vs kcanida__pikachu (FAST HEAVY spinner avgV 3.49, avg|dh| 0.149) with a
+        // HEAD-ON gun (fires at median 0.081 rad off head-on = aims at our current
+        // pos). It hits us ~100/1k at ALL ranges 100-500px (deadly, near-flat), only
+        // dropping beyond 500px. We WIN bullet damage 2.6x (664 vs 254) but LOSE on
+        // survival (100 vs 400) -> we die first. The lever is SURVIVAL: keep FULL
+        // lateral speed (a head-on gun is beaten by fast steady tangential motion,
+        // NOT by reversing) and AVOID WALLS/CORNERS (we wall-hug 30% of ticks =
+        // near-stationary = easy head-on target). The old rigid push-to-560px never
+        // reached it (enemy closes) and jammed us into corners. Target a moderate
+        // ~450px with a GENTLE bias so we keep smooth full-speed lateral motion.
+        // Enemy hit density drops from ~100/1k (100-500px) to 63/1k (500-600px),
+        // so aim for ~500px (achievable: distance is a mutual orbit, not the enemy
+        // charging — 44.5% of ticks the distance is already opening). Gentle bias +
+        // earlier wall smoothing keeps us out of corners while pushing wider.
+        if (enemyDistance > 560)      rangeBias = -0.35; // far: pull in gently
+        else if (enemyDistance > 500) rangeBias = -0.1;  // approaching ~500px target
+        else if (enemyDistance > 440) rangeBias = 0.1;   // slight push out
+        else if (enemyDistance > 320) rangeBias = 0.45;  // close: push out toward 500
+        else                          rangeBias = 0.75;  // too close: push out firmly
         double desiredDir = absBearing + (Math.PI / 2 + rangeBias) * moveDirection;
 
         // Wall smoothing: steer away from walls
@@ -652,11 +669,15 @@ public class MyTank extends AdvancedRobot {
         // uncorrelated random reversal 0.06 -> 0.11 to break any residual period
         // (a wave surfer profiles our movement). Kept below strict alternation so
         // it isn't itself learnable at the fire cadence.
+        // vs kcanida__pikachu: HEAD-ON gun (offset 0.081 rad) -> reversing on its
+        // fire is COUNTERPRODUCTIVE (kills lateral speed, brings us into the bullet
+        // path). Keep dodge-on-fire LOW (0.10) and favor steady full-speed tangential
+        // orbit. Rare uncorrelated reversal only to avoid a fully fixed period.
         long now = getTime();
-        if (enemyFired && now - lastReverseTime >= 8 && Math.random() < 0.15) {
+        if (enemyFired && now - lastReverseTime >= 10 && Math.random() < 0.10) {
             moveDirection = -moveDirection;
             lastReverseTime = now;
-        } else if (now - lastReverseTime >= 12 && Math.random() < 0.06) {
+        } else if (now - lastReverseTime >= 14 && Math.random() < 0.05) {
             moveDirection = -moveDirection;
             lastReverseTime = now;
         }
@@ -666,7 +687,7 @@ public class MyTank extends AdvancedRobot {
      * Wall smoothing: adjust desired absolute heading so we don't crash into walls.
      */
     private double wallSmoothing(double x, double y, double desiredDir, int dir) {
-        double stick = 140;
+        double stick = 160;  // earlier wall avoidance (pikachu: 30% wall-hug was killing our lateral speed vs its head-on gun)
         double w = getBattleFieldWidth();
         double h = getBattleFieldHeight();
         double angle = desiredDir;
@@ -693,7 +714,8 @@ public class MyTank extends AdvancedRobot {
         // (vs dankraemer__juggernaut, a lead-aiming gun that hits 45% in our losses).
         // vs pez__wallspoet (LEAD gun): a hit means our path was profiled -> disrupt
         // harder. Raised 0.5 -> 0.65.
-        if (Math.random() < 0.5) {
+        // vs head-on gun (pikachu): reversing on hit is counterproductive; keep low.
+        if (Math.random() < 0.25) {
             moveDirection = -moveDirection;
         }
     }
