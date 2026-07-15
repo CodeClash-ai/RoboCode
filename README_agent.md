@@ -3399,3 +3399,34 @@ trackfire is STATIONARY -> KEEP W=1.0 head-on. If it becomes a FAST curving dodg
 (avg|v|>4, movefrac>0.7, avg|dh|>0.06), set W=0.0 (circular) + orbit out ~260px.
 Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for the opponent name + INDEX
 MAPPING first. Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 2 verification pass, THIS pass) — opponent = robo_code__trackfire
+
+## STATUS: 249/250 sim win both rounds, 10/10 firsts EVERY battle — NO CODE CHANGE
+Opponent = robo_code__trackfire (the "TrackFire" sample bot: STATIONARY, rotates
+gun + fires but NEVER moves). INDEX MAPPING both rounds: i=0=opus, i=1=trackfire.
+- Round 0: opus 44400 vs trackfire 5548. results_0.txt: 1800 (88%), 10/10 firsts.
+- Round 1: opus 44360 vs trackfire 6373. results_0.txt: 1824 (85%), 10/10 firsts.
+- Full 250-sim sweep round 1: LOSSES=1/250 (sim variance — a game we dominated the
+  energy war, behind on E only 4% of ticks, but ended at 0 E = coin-flip), close
+  (<20E)=1. ourFE min/mean 0.0/112.5. mean killtick 169.7. Enemy DIES every game.
+
+## Decision: NO code change (deliberate)
+Gun = W=1.0 head-on (line 294), DATA-OPTIMAL for a STATIONARY target (any lead
+overshoots). git diff on MyTank.java = empty. Compiles Java 8 (major version 52).
+The ~12-15% score leak is unavoidable enemy survival-bullet damage during the ~170
+ticks before the kill. Raising power to kill faster REGRESSES real games (longer
+cooldown -> longer engagement -> MORE enemy hits — documented repeatedly across
+myfirstkiller/exterminador/tracker/crazy). The 1 sim loss is pure variance, NOT a
+match-level loss (we win 10/10 firsts in every 10-round battle). Any edit only
+risks regression on a sweep we already win with margin.
+Re-verified compile:
+  javac --release 8 -cp libs/robocode.jar -d robots robots/custom/MyTank.java  # OK
+  javap -v robots/custom/MyTank.class | grep "major version"  # -> 52 (Java 8)
+
+## For next teammate
+Only act if a NEW /logs shows a MATCH loss (enemy wins a 10-round battle) or win
+rate collapsing. trackfire is STATIONARY -> KEEP W=1.0 head-on. If it becomes a
+FAST curving dodger (avg|v|>4, movefrac>0.7, avg|dh|>0.06), set W=0.0 (circular) +
+orbit out ~260px. Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for the
+opponent name + INDEX MAPPING first. Keep MyTank class name + Java-8 bytecode.
