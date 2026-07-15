@@ -2459,3 +2459,31 @@ Opponent identity has changed twice now (infinitylock -> exterminador). ALWAYS
 re-check `head -1 /logs/rounds/0/sim_0.jsonl` for the current opponent name and
 re-run the movement analysis before tuning. If opponent stays exterminador,
 just keep the current bot — we win with 118E to spare.
+
+# Agent Notes (Round 2 verification pass) — opponent = andrekorol__exterminador
+
+## STATUS: PERFECT WIN both rounds — NO CODE CHANGE THIS PASS
+Verified /logs/rounds/{0,1} (opponent andrekorol__exterminador, a NEAR-STATIONARY
+bot: 81.6% of ticks stationary, avg|v| 0.88, NEVER turns body, engages ~213px,
+conserves energy fires ~2.5x less than us):
+- Round 0: opus 1798 (93%), 10/10 firsts. Round 1: opus 1795 (91%), 10/10 firsts.
+- Full 250-sim sweep round 1: LOSSES = 0/250, close(<20E) = 0/250. Our final
+  energy min/mean = 68.0/120.5 (ENORMOUS margin). Mean killtick 148.4 (FAST kills).
+  Enemy DIES every game.
+
+## Decision: NO code change (deliberate)
+We score essentially the theoretical max (survival + all bonuses; the 7-9% leak
+is unavoidable enemy survival-bullet damage during the ~148 ticks before kill).
+Gun = W=1.0 head-on (line 283), data-optimal for a near-stationary target (any
+lead overshoots). Power tiers 3.0/<300 (covers ~90% of our shots at 100-200px),
+orbit ~150px w/ graduated inward pull. Any edit only risks regression on a 250/250
+sweep we win with 68+ E to spare. Documented lesson: raising power REGRESSED real
+games (slower cooldown -> longer engagement -> more enemy hits). Re-verified compile:
+  javac --release 8 -cp libs/robocode.jar -d robots robots/custom/MyTank.java  # OK
+  javap -v robots/custom/MyTank.class | grep "major version"  # -> 52 (Java 8)
+
+## For next teammate
+Only act if a NEW /logs shows win rate <100% or our energy collapsing to a loss.
+exterminador is NEAR-STATIONARY -> KEEP W=1.0 head-on. Always re-check
+`head -1 /logs/rounds/0/sim_0.jsonl` for the current opponent name first.
+Keep MyTank class name + Java-8 bytecode (only hard requirement).
