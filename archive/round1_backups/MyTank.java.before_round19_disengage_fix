@@ -672,43 +672,10 @@ public class MyTank extends AdvancedRobot {
         // collision loop, and put the opportunistic-ramming trigger in
         // onScannedRobot() on a brief cooldown so we don't immediately re-charge
         // straight back into the same stuck situation.
-        //
-        // ROUND 19 BUGFIX (see README_agent.md round 19 notes): this used to turn
-        // to face directly AWAY from the enemy and then call setBack(80). But
-        // setBack() moves *opposite* the robot's current heading -- so after
-        // turning to face away from the enemy, setBack(80) actually drove us
-        // BACK TOWARD the enemy, the exact opposite of the intended disengage!
-        // Real match log analysis (round 19, sim_0.jsonl from a match vs
-        // pez__droidpoet) found a game where our tank got wedged in a corner
-        // (pinned against the left wall AND vertically adjacent to the enemy,
-        // itself also wall-stuck) for 178 consecutive ticks with this exact
-        // "disengage" branch firing every tick and never making any progress --
-        // we only escaped because the enemy happened to die first, not because
-        // the disengage logic ever worked. Also blend in a pull toward the
-        // field center (not just directly away from the enemy) so we don't
-        // just drive further along/into whatever wall we're already pinned
-        // against -- directly analogous to onHitWall()'s existing center-facing
-        // fix, applied here for the first time to the ramming-disengage path.
-        // NOTE: e.getBearingRadians() is relative to OUR current heading, not an
-        // absolute field angle -- must convert to an absolute bearing before
-        // mixing it with angleToCenter (which IS already an absolute field
-        // angle, via atan2 on field coordinates) or the vector blend below
-        // would be mixing two different reference frames and produce a
-        // meaningless result.
-        double enemyAbsBearing = getHeadingRadians() + e.getBearingRadians();
         double awayAngle = robocode.util.Utils.normalRelativeAngle(
-                enemyAbsBearing + Math.PI);
-        double cx = getBattleFieldWidth() / 2.0;
-        double cy = getBattleFieldHeight() / 2.0;
-        double angleToCenter = Math.atan2(cx - myX, cy - myY);
-        double vx = Math.sin(awayAngle) + Math.sin(angleToCenter);
-        double vy = Math.cos(awayAngle) + Math.cos(angleToCenter);
-        double combinedAngle = (Math.hypot(vx, vy) < 0.05)
-                ? angleToCenter
-                : Math.atan2(vx, vy);
-        setTurnRightRadians(robocode.util.Utils.normalRelativeAngle(
-                combinedAngle - getHeadingRadians()));
-        setAhead(80);
+                e.getBearingRadians() + Math.PI);
+        setTurnRightRadians(awayAngle);
+        setBack(80);
         moveDirection = -moveDirection;
         strafeTimer = 0;
         hitRobotStationaryCount = 0;

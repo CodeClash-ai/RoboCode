@@ -2135,3 +2135,161 @@ for a quick diff/revert if next round's numbers look worse.
    repository within the same call). Still the single highest-leverage infra
    fix available if a future teammate has a larger step budget to spend on it
    than usual.
+
+## Round 19 update (this round) — found and fixed a real "disengage drives INTO enemy" bug
+
+### Context
+Only `/logs/rounds/0/` exists in this environment for me. Per `trace.md` /
+`results.json`, this round's opponent is `pez__droidpoet` (new opponent, not
+seen in any previous round documented in this file). Result: **100% win rate
+(250/250)**, team score **48741 vs opponent's 1465**, 46% accuracy, avg speed
+6.5, avg walls/game 4.9, avg rams/game 3.7, avg min energy 80. Zero losses,
+zero ties.
+
+### Investigation: `analyze_freezes.py` found 5 real freezes on our OWN bot
+Ran `python3 tools/analyze_freezes.py /logs/rounds/0 --threshold 100 | grep -i
+sonnet` -> **5 findings**, all on `sonnet_5` (not the opponent) — the first
+time in a while this file's notes have such a signal (round 14 found a
+similar-looking issue). One was explicitly labeled `STUCK-RAMMING` (round
+15's labeling addition working as intended), the other 4 were generic
+"position frozen" for 108-178 ticks each. We still won all 5 of those games
+(the freezes happened to resolve in our favor because the opponent died
+first, or had less energy going into the freeze), but this is exactly the
+kind of unforced-error risk pattern previous rounds have repeatedly hunted
+down (rounds 3/4/14/18) — a real bug that just hasn't cost us a game *yet*
+against weak opponents, but could flip a close game against a tougher one
+(e.g. `pez__gf1`, the toughest opponent in this file's history, rounds
+11-12/14).
+
+Manually traced `sim_0.jsonl` and `sim_136.jsonl` tick-by-tick (dumping x/y/e/
+status for both robots). Both show the **exact same pattern**: our tank gets
+pinned in a corner (against a wall AND vertically/horizontally adjacent to
+the enemy robot, which is itself also wall-stuck), alternating `HIT_WALL`/
+`HIT_ROBOT` status every few ticks, position frozen for 100+ consecutive
+ticks, both robots draining energy every tick (~0.6, i.e. genuine repeated
+collision damage per `Rules.html`'s `ROBOT_HIT_DAMAGE`, not the slower
+inactivity-decay mechanic) until whichever robot has less energy dies first.
+In BOTH traced games, we only escaped the freeze at the exact moment the
+enemy died (status flips to `DEAD`) — never because our own "disengage"
+logic actually worked.
+
+### Root cause found: `onHitRobot()`'s stuck-ramming disengage branch (added
+round 14) had a real, previously-undetected logic bug
+The disengage code was:
+```java
+double awayAngle = normalRelativeAngle(e.getBearingRadians() + Math.PI);
+setTurnRightRadians(awayAngle);   // turn to face AWAY from the enemy
+setBack(80);                      // moves OPPOSITE current heading...
+```
+`setBack()` moves the robot *backward relative to its current heading* — so
+after turning to face away from the enemy, calling `setBack()` actually
+drives the robot **back toward the enemy**, the exact opposite of the
+intended "disengage and back off". This is why the round-14 fix's own stuck-
+detection (`hitRobotStationaryCount >= 2`) could correctly *detect* the stuck
+state every single tick, but the "fix" it triggered never actually moved us
+away — it kept re-driving us into the same collision, tick after tick, for as
+long as the enemy also couldn't escape. This is a plain directional-sign bug
+that's been sitting in the code since round 14 (5 rounds ago), only now
+caught because I happened to check `analyze_freezes.py`'s output on our own
+bot specifically instead of assuming "we won 100%, no need to dig further"
+(the trap several previous rounds' notes explicitly warned about, e.g. round
+14's own opening: "found a real, if rare... regression signal worth chasing
+down rather than ignoring").
+
+### Fix applied (`robots/custom/MyTank.java`, in `onHitRobot()`'s disengage branch)
+1. Fixed the directional bug: instead of turning to face away and then
+   calling `setBack()` (wrong), now turn toward a **blended** angle (unit
+   vector sum of "away from enemy" + "toward field center") and call
+   `setAhead()` — moving *forward* along a heading that's already computed to
+   point away from both the enemy AND (to help avoid the classic "escape
+   move drives into a different wall" failure) the field boundary.
+2. This also folds in a version of `onHitWall()`'s existing "steer toward
+   center" fix (rounds 3/7) into the ramming-disengage path for the first
+   time — previously the disengage direction was purely a function of the
+   enemy's bearing, with zero wall-awareness, which could in principle have
+   its own failure mode (successfully moving away from the enemy but straight
+   into/along a wall) even once the sign bug above is fixed.
+3. Verified `javac -Xlint:all -cp libs/robocode.jar -d robots
+   robots/custom/MyTank.java` compiles clean (no errors/warnings), `.class`
+   up to date. Old (pre-this-round) version preserved at
+   `archive/round1_backups/MyTank.java.before_round19_disengage_fix` for a
+   quick diff/revert if next round's numbers look worse (unlikely for a pure
+   directional-sign bugfix, but flagging per this file's usual convention).
+
+### What I did NOT get to
+- **Not validated by a real match** (same long-standing limitation as every
+  previous round — no working local headless battle runner in this sandbox;
+  see round 6's section for the most detailed writeup of exactly where that
+  effort gets stuck). Unlike most previous rounds' *tuning* changes, though,
+  this is a very high-confidence bugfix: the "away angle + setBack = drives
+  toward enemy" logic error is unambiguous from the Robocode API semantics
+  alone (`setBack()` is always relative to current heading, documented in
+  `javadoc/robocode/AdvancedRobot.html`), and the observed real-match log
+  pattern (freeze always resolves only when the enemy dies, never via our own
+  action) is exactly what this bug predicts. Still, double-check next round's
+  `analyze_freezes.py` output on our own bot as the cleanest validation.
+- Did not check whether `onScannedRobot()`'s "opportunistic ramming" trigger
+  (charging forward when `enemyDistance < 60`) has any similar issue — traced
+  through it again this round and it looks correct (turns toward the enemy,
+  then `setAhead()`, consistent directions, no sign bug), so I don't believe
+  it needs a similar fix, but flagging in case a future teammate wants to
+  double-check independently.
+- Did not touch bullet power, `PREFERRED_DISTANCE`, fire-angle threshold, or
+  any of the targeting/movement math this round — wanted to isolate this one
+  clean, high-confidence bugfix so it's easy to attribute cleanly in next
+  round's logs, consistent with this file's usual one-change-per-round practice.
+
+### Suggestions for next teammate
+1. **First step, as always**: run `python3 tools/analyze_freezes.py
+   /logs/rounds/<N> --threshold 100 | grep -i sonnet` on this round's fresh
+   logs.
+   - If it now prints **nothing** (down from this round's 5 findings/5
+     games), the disengage-direction fix worked — the corner-double-pin
+     freeze pattern should no longer recur (or at minimum, should now
+     actually resolve itself via our own movement instead of only via the
+     enemy dying first).
+   - If findings still appear, dump per-tick x/y/e/status for the flagged
+     robot/range (same technique as this round — see `sim_0.jsonl`/
+     `sim_136.jsonl` traces above as a template) and check whether the
+     `combinedAngle` blend (away-from-enemy + toward-center) is still somehow
+     landing on a bad heading in some geometric edge case (e.g. enemy is
+     positioned exactly toward the field center from us, making the two
+     component vectors partially cancel — the `hypot < 0.05` fallback should
+     catch full cancellation, but a partial near-cancellation with a bad
+     residual angle might still be possible; consider weighting the
+     center-ward pull less if this shows up).
+2. Check `trace.md`'s win rate / tie rate / avg-min-energy as usual — should
+   be at least as good as this round's baseline (100% win, 0% ties, avg min
+   energy 80), ideally with fewer/no rams-related energy grinds if the fix
+   is working as intended.
+3. If `pez__gf1` (the toughest opponent in this file's history, rounds 11-12,
+   ~14% tie rate) reappears, this fix is most likely to show a measurable
+   benefit there specifically — long grindy contact-heavy fights are exactly
+   where a broken disengage would have mattered most before, per round 14's
+   original analysis.
+4. Local headless battle-runner: still unresolved after 18+ rounds of
+   attempts (see round 6's section for the most detailed known blocker,
+   `RepositoryManager.loadSelectedRobots` not seeing a freshly-reloaded
+   repository within the same call). Still the single highest-leverage infra
+   fix available if a future teammate has a larger step budget to spend on
+   it than usual.
+
+### Addendum to round 19 (same round, caught before finishing): reference-frame bug in my own first fix attempt
+While double-checking my own round-19 fix above before finalizing, I caught a
+second, subtler bug in the *fix itself*: `e.getBearingRadians()` is a bearing
+**relative to our current heading**, not an absolute field angle, but my
+first version of the blended-disengage code computed `awayAngle` from it
+directly and then mixed `sin(awayAngle)`/`cos(awayAngle)` with
+`sin(angleToCenter)`/`cos(angleToCenter)` where `angleToCenter` (via
+`atan2` on absolute field coordinates) IS an absolute angle — mixing a
+relative and an absolute angle in the same vector sum is meaningless. Fixed
+by computing `enemyAbsBearing = getHeadingRadians() + e.getBearingRadians()`
+first and building `awayAngle` from that instead, so both components being
+blended are now genuinely in the same (absolute field) reference frame.
+Recompiled clean after this correction — the version described in the main
+round-19 section above (and preserved in
+`archive/round1_backups/MyTank.java.before_round19_disengage_fix` as the
+pre-round-19 baseline) already reflects this corrected form; just documenting
+the extra care taken here in case a future teammate is re-deriving similar
+angle-blending logic elsewhere and wants a concrete cautionary example of
+this relative-vs-absolute-angle pitfall.
