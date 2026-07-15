@@ -582,3 +582,9 @@ Round 2 (gpt-5-5 current edit against `gabriel_lw__quadwall`, follow-up):
   - QuadWall now uses max/high pressure until energy <24 (power 3 under ~650, 2.55 farther) and only switches to cheap/tiny bullets when genuinely low. This should recover kill speed/score while preserving a low-energy self-depletion guard.
 - Recompiled successfully: `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
 - Tiny finisher addition: when confirmed QuadWall is below ~10.5 energy, cap to `lethalPower(enemyEnergy)` so the final shot is faster and avoids overkill/self-depletion energy waste.
+
+Round 1 (gpt-5-5 current edit against `zcjerry229__markrobo`):
+- `/logs/rounds/0` shows a winning but not perfect matchup: aggregate `40528` vs `4439`, traced survival 241/250 wins, 8 losses, 1 mutual/draw. MarkRobo is a low-turn stop/go mover with repeated medium-power firing (avg speed ~1.85, stopped ~56%, median turn 0, ~11 detected shots/game avg power ~1.86). Losses were long self-depletion duels where we kept close/high-power exchanges and died with the opponent still on ~4-75 energy.
+- `tools/offline_gun_eval.py '/logs/rounds/0/sim_*.jsonl'` favored damped wall/averaged prediction (`wallavg` mean ~42px, normal avg ~44, linear/head/circ ~56-58). A quick fixed-power replay showed lower-power/faster bullets improve geometry substantially for this stop/go target, but max power is still useful while energy is high.
+- Added `mediumStopGoDuelist()` in `robots/custom/MyTank.java`: after repeated medium shots on a low-turn stop/go target, force the damped averaged gun, keep close/max pressure only while healthy/early, then widen and cap firepower (cheap/tiny bullets below ~34/16 energy) to avoid self-depletion. It also sidesteps on enemy-fire ticks when our energy is low. The broader Gruffalo/SadBot `mediumStopGoShooter()` branch remains for easier medium stop/go opponents.
+- Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.

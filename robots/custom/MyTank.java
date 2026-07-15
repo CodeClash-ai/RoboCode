@@ -260,6 +260,13 @@ public class MyTank extends AdvancedRobot {
                 drivePerpendicularEscape(absBearing, 230.0);
                 return;
             }
+            if (mediumStopGoDuelist() && getEnergy() < 34.0) {
+                // MarkRobo-style medium stop/go duelists can win only after long
+                // exchanges.  When our reserve is getting low, sidestep on their
+                // fire tick rather than just reversing in the same orbit.
+                drivePerpendicularEscape(absBearing, 240.0);
+                return;
+            }
             if (npcSniperEnemy() && getEnergy() < 24.0) {
                 // The remaining NPCSniper loss came from a late low-energy exchange:
                 // after a few medium bullets our bot kept orbiting predictably near
@@ -471,6 +478,12 @@ public class MyTank extends AdvancedRobot {
             // safe to keep the short-flight damped stop/go exchange instead of
             // falling into the old RegullarMonk conservation orbit.
             preferredDistance = 275.0;
+        } else if (mediumStopGoDuelist()) {
+            // MarkRobo-style medium-power stop/go duelists are harmless in short
+            // rounds but can steal wins when we keep a close max-power exchange
+            // after our energy falls.  Farm close while healthy, widen before the
+            // late low-energy self-depletion pattern starts.
+            preferredDistance = getEnergy() < 34.0 ? 430.0 : (getEnergy() < 50.0 ? 360.0 : 285.0);
         } else if (mediumStopGoShooter()) {
             // Gruffalo/SadBot-style opponents: many stops / low-turn bursts and
             // repeated medium-power shots.  SadBot still leaves us with a large
@@ -821,6 +834,20 @@ public class MyTank extends AdvancedRobot {
             } else {
                 power = Math.min(power, 0.45);
             }
+        } else if (mediumStopGoDuelist()) {
+            // Current MarkRobo logs: stop/go low-turn movement with many medium
+            // bullets.  Max-power is fine early, but the only losses are long
+            // self-depletion duels after 10+ enemy shots.  Downshift before that
+            // cliff; faster bullets also reduce wallavg lead error on this target.
+            if (getEnergy() > 58 && enemyFireCount <= 10 && distance < 680) {
+                power = Math.max(power, distance < 520 ? 3.0 : 2.35);
+            } else if (getEnergy() > 34) {
+                power = Math.min(Math.max(power, distance < 430 ? 1.85 : 1.45), 2.05);
+            } else if (getEnergy() > 16) {
+                power = Math.min(power, distance < 360 ? 0.85 : 0.60);
+            } else {
+                power = Math.min(power, getEnergy() < 8 ? 0.15 : 0.35);
+            }
         } else if (mediumStopGoShooter()) {
             // Current SadBot/Gruffalo traces use frequent medium-power fire, but our
             // orbit dodges it well and the main lost score is long rounds.  Engage
@@ -994,6 +1021,8 @@ public class MyTank extends AdvancedRobot {
             // zero, and better for slow rolls), then return to the damped averaged
             // gun for fast bursts.
             gun = Math.abs(e.getVelocity()) <= 3.25 ? GUN_LINEAR : GUN_AVERAGED;
+        } else if (mediumStopGoDuelist()) {
+            gun = GUN_AVERAGED;
         } else if (mediumStopGoShooter()) {
             // Medium-power stop/go shooters usually prefer the damped averaged gun
             // while moving, but SadBot pauses for long endpoint shots; at currently
@@ -1444,6 +1473,30 @@ public class MyTank extends AdvancedRobot {
                 && (virtualSamples < 18 || virtualGunError[GUN_AVERAGED] < 62.0 || bestGunError() < 58.0);
     }
 
+    private boolean mediumStopGoDuelist() {
+        // zcjerry229__markrobo profile in /logs/rounds/0: a low-turn stop/go
+        // mover with repeated medium-power fire.  It is close to the broad
+        // Gruffalo/SadBot mediumStopGoShooter class, but the current traces have
+        // several long self-depletion losses when we keep firing max-power after
+        // many enemy shots.  Use this narrower branch for late-duel conservation
+        // and the older, more-damped wallavg predictor.
+        return stopGoEnemyScans > 8
+                && enemyFireCount > 5
+                && enemyFirePowerSamples > 2
+                && enemyFirePowerAvg > 1.40
+                && enemyFirePowerAvg <= 2.35
+                && enemySpeedAvg > 1.1
+                && enemySpeedAvg < 3.2
+                && crazyEnemyScans <= 4
+                && Math.abs(enemyVelocityAvg) < 3.4
+                && Math.abs(enemyTurnRateAvg) < 0.055
+                && !fixedHeadingMediumShooter()
+                && !fixedHeadingStopGoEnemy()
+                && !fixedHeadingLineEnemy()
+                && !heavyStopGoShooter()
+                && !fastWallCruiser();
+    }
+
     private boolean mediumStopGoShooter() {
         // kylebennett__gruffalo in the current logs is stop-heavy and low-turn like
         // RegullarMonk, but it fires mostly medium (~power-2) bullets and trace
@@ -1681,6 +1734,8 @@ public class MyTank extends AdvancedRobot {
                 // NPCSniper traces prefer a little more velocity carry than old
                 // wallavg, but far less than full averaged/linear prediction.
                 velocity = limit(-2.6, 0.30 * velocity + 0.45 * enemyVelocityAvg, 2.6);
+            } else if (mediumStopGoDuelist()) {
+                velocity = limit(-2.2, 0.25 * velocity + 0.35 * enemyVelocityAvg, 2.2);
             } else if (mediumStopGoShooter()) {
                 // Gruffalo's medium-power stop/go pattern usually continues a little
                 // farther than CTBot/Terminator-style wall stutters.  Round-1 replay
