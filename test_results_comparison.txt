@@ -1,4 +1,4 @@
 Results for 30 rounds
 Robot Name	    Total Score    	Survival	Surv Bonus	Bullet Dmg	Bullet Bonus	Ram Dmg * 2	Ram Bonus	 1sts 	 2nds 	 3rds 	
-1st: custom.MyTank*	4651 (89%)	1500	300	2376	475	0	0	30	0	0	
-2nd: custom_old.MyTank*	578 (11%)	0	0	578	0	0	0	0	30	0	
+1st: custom.MyTank*	4620 (91%)	1500	300	2350	470	0	0	30	0	0	
+2nd: custom_old.MyTank*	439 (9%)	0	0	439	0	0	0	0	30	0	
