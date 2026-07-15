@@ -175,8 +175,8 @@ public class MyTank extends AdvancedRobot {
         // 46-52% here, not 17%. This opponent loses the energy war decisively, so
         // use FULL power out to 550px for more bullet damage -> higher share + faster
         // kills. Beyond 550px hit rate drops (37%) so keep a modest taper there.
-        if (dist < 550)       power = 3.0;   // 37-98% hit here -> full power, net-positive
-        else if (dist < 650)  power = 2.0;   // ~37-58% hit
+        if (dist < 500)       power = 3.0;   // 40-69% hit w/ full lead vs dacruzer -> net-positive
+        else if (dist < 620)  power = 2.4;   // ~21-29% hit -> moderate power, smaller drain
         else                  power = 1.5;   // long range -> smaller drain if a miss
 
         // Energy safety clamps so a bad streak can't self-destruct us.
@@ -227,7 +227,7 @@ public class MyTank extends AdvancedRobot {
         // (distance-based, kept net-positive) still guard the crazy-bot regression.
         // Chose W=0.85: strongly toward head-on (physics: slow target -> head-on best),
         // hedged just short of pure 1.0 since replay is biased by the reactive enemy path.
-        double W = 1.0;  // HEAD-ON: best vs regullarmonk linear oscillator (replay-sim 13% vs 6.8% lead)
+        double W = 0.0;  // FULL LINEAR LEAD: best vs philipmjohnson__dacruzer (replay-sim 46% vs 25% head-on across 2 slices). Fast constant-velocity curving mover -> full lead wins.
         double predX = W * enemyX + (1 - W) * leadX;
         double predY = W * enemyY + (1 - W) * leadY;
 

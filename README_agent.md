@@ -1357,3 +1357,51 @@ essentially the theoretical max share. Any edit only risks regression on a
 Only act if a NEW /logs shows win rate <100% or our energy collapsing to a loss.
 Head-on W=1.0 is optimal for this near-stationary foe. Keep MyTank class name +
 Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 1 / current pass) — opponent = philipmjohnson__dacruzer
+
+## KEY FINDING: dacruzer is a FAST CONSTANT-VELOCITY CURVING MOVER — head-on was WRONG
+Round 0 result: opus-4-8 44343 vs philipmjohnson__dacruzer 1211. results_0.txt:
+opus_4_8.MyTank 1771 (98%), 10/10 firsts. WON 250/250 BUT games were LONG
+(avg 773 turns, max 1365) and our accuracy only 22% with tight worst-game energy
+(worst final E 11.9-17.4; mean 55.7 — much tighter than easy foes at ~100+).
+
+## Opponent profile (per-sim analysis, 250 games)
+- moving 55% of ticks, avg |v| 4.12, avg |dh| 0.069 rad/tick (noticeable CURVE),
+  engage dist ~375px, 5.6 walls/game. A genuine mobile mover, not a duck.
+
+## Replay-sim W-sweep (per-tick interception over recorded paths, 2 independent slices)
+  slice A (files[:80]):   headon 26.9%  W0.75 30.9  W0.5 33.8  W0.25 37.9  W0.1 44.9  LINEAR(W0.0) 46.1  circ 46.1
+  slice B (files[120:200]): headon 24.8%  W0.75 28.0  W0.5 30.5  W0.25 35.7  LINEAR 44.5  circ 44.4
+CLEAN, ROBUST: FULL LINEAR LEAD (W=0.0) ~45% vs head-on ~25% — nearly DOUBLE.
+The prior config used W=1.0 (head-on) = nearly the WORST choice here! circ ≈ linear
+(curve too mild to matter, so kept simple linear predictor).
+Hit rate by distance (full lead): 0-100 69%,100-200 68%,200-300 56%,300-400 50%,
+400-500 40%,500-600 29%,600-700 21%. All >1/3 break-even out to 500px.
+
+## Damage/net-energy replay (all 250 games, distance-tiered power)
+  W=1.0 (OLD): dmg 34895, net energy -4910 (we were BLEEDING in the long grinds!)
+  W=0.0 (NEW): dmg 60036 (+72%), net energy +9287 (we GAIN energy)
+This explains the long games + tight energy: head-on missed a curving mover so we
+bled. Full lead flips it -> faster kills, bigger margin.
+
+## CHANGES THIS PASS (robots/custom/MyTank.java)
+1. Gun W: 1.0 -> 0.0 (full linear lead). THE key fix. (line ~230)
+2. Power tiers retuned to measured hit-by-distance: 3.0/<500, 2.4/<620, 1.5/else
+   (was 3.0/<550, 2.0/<650, 1.5). 500-600px is only 29% hit -> lower power there.
+Movement UNCHANGED. Low-E safety clamps + energy-war taper UNCHANGED.
+Compiles Java 8 (major version 52). Backup of prior source: /tmp/MyTank.bak.java.
+
+## Replay tool: /tmp/rep.py (W-sweep), /tmp/dist.py (hit-by-distance), /tmp/dmg.py
+Rebuild from these if lost. Load sim_*.jsonl (header maps idx->name, enemy=non-
+'opus'), fire W-blend lead bullet from OUR recorded (x,y), step at 20-3*power,
+hit if <18px to enemy future pos, 800x600 bounds + gunheat cooldown.
+
+## For next teammate
+- VERIFY new /logs: want games SHORTER, accuracy UP (~40%+), worst-game energy UP.
+  If dacruzer becomes a REACTIVE stop-and-go dodger (avg |dh| up, moving frac
+  down, stops when we fire), full lead will overshoot -> raise W toward 0.5-1.0;
+  re-run /tmp/rep.py W-sweep on >=2 slices. If it stays a smooth mover, keep W=0.0.
+- Never go flat power 3.0 at long range vs a FAST dodger (regressed us to 83% vs
+  robo_code__crazy) — the distance taper guards this.
+- Keep MyTank class name + Java-8 bytecode (only hard requirement).
