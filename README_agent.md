@@ -3128,3 +3128,63 @@ quadwall is SLOW/near-stationary -> KEEP W=1.0 head-on. If it becomes a FAST
 curving dodger (avg|v|>4, movefrac>0.7, avg|dh|>0.06), set W=0.0 (circular) +
 orbit out ~260px. Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for the
 current opponent name + INDEX MAPPING first. Keep MyTank class name + Java-8 bytecode.
+
+# Agent Notes (Round 1 / current pass) — opponent = zcjerry229__markrobo
+
+## STATUS: 249/250 win, 89% share — NO CODE CHANGE (data-optimal, deliberate)
+Opponent CHANGED to zcjerry229__markrobo. Verified /logs/rounds/0:
+- results.json: opus-4-8 44491 vs zcjerry229__markrobo 5169.
+- results_0.txt: opus_4_8.MyTank 1770 (89%), 10/10 firsts; enemy 214 (11%).
+
+## Opponent = SLOW near-STRAIGHT-LINE mover (index i=1 this round; read header!)
+Per-sim analysis (250 games, header maps idx->name, enemy=non-'opus'):
+- movefrac 0.40, avg|v| 1.79 (SLOW), avg|dh| 0.011 (near-straight), engages ~226px.
+  Loses the energy war (fires ~half as often as us: 18 vs 34 in grinds, 7 vs 18 typ).
+- Full 250-sim sweep: LOSSES = 1/250 (sim_128), close(<20E) = 4. Our final energy
+  min/mean = 0.0/95.2. Mean killtick 319, turns mean 470 (max 882).
+
+## The 1 loss (sim_128) = 803-turn energy-war GRIND (variance, not fixable cheaply)
+Behind on energy 96% of ticks; spent 144 ticks @200-300px + 103 @300-400px (losing
+zones). We fired ~2x the enemy and bled to 0 (enemy kept 82E). Classic grind loss
+vs an energy-conserving mover. Modeled tapering power harder when behind (taper
+dist>300 -> >250 or >200) over the 4 grind/close games: net firing energy changed
+<0.2% (at 200-300px we already fire power 1.6 at 33% real hit = ~break-even, so the
+taper has nothing to bite). No cheap power/taper fix converts this variance loss.
+
+## Movement is already data-optimal — tested tighter orbit, REVERTED
+Distance histogram: we spend 48.8% of ticks @100-200px (BEST zone: 57% hit,
+enemy density only 3.4/1k), 32% @200-350px (marginal). Measured hit/density by dist:
+  0-100px hr 0.67, enemy 0.0/1k | 100-200px hr 0.57, 3.4/1k (dominant win zone)
+  200-300px hr 0.33, 7.0/1k (enemy's DEADLIEST zone) | 300-400px hr 0.23, 3.4/1k
+Considered tightening rangeBias (250->220, 180->160, push-out 130->120) to shift
+the 22.7% at 200-250px inward, but REVERTED: movement is GLOBAL across the ladder
+and closer orbit was DEADLY vs the fast-curving team488__meow (14.8 enemy hits/1k
+@100-200px, that teammate orbited FAR ~260px). A ~15px tighten to shave 1 variance
+loss vs a slow-gunned foe risks regressing strong close-range gunners elsewhere.
+
+## Gun aim W=1.0 head-on CONFIRMED near-optimal (fresh W-sweep, 80 games)
+Per-tick interception over recorded paths: W=0.0 47.5% | W=0.5 53.9% | W=0.75 56.3%
+| W=1.0 53.0%. W=0.75 marginally beats W=1.0 (~3pts) BUT the replay is BIASED toward
+W=1.0 (enemy path reactive to our actual head-on shots) so W=0.75's tiny edge is
+noise. For a slow near-straight mover head-on is theoretically correct and won
+249/250. Not worth touching (documented trap: don't switch aim off biased replay).
+
+## Decision: NO code change (deliberate)
+git diff on MyTank.java = empty. W=1.0 head-on (line 294), power tiers 3.0/<200
+1.6/<300 1.0/<400 0.6/else, orbit ~160px w/ graduated inward pull (-1.2/-0.9/-0.5,
+push-out <130), energy-war taper (behind & dist>300 -> power<=0.8), no-fire gates
+(dist>400/550 & behind), low-E clamps. Data-optimal for this slow energy-losing
+mover. The 11% leak is unavoidable enemy survival-bullet damage over ~319 ticks
+before the kill. Re-verified compile:
+  javac --release 8 -cp libs/robocode.jar -d robots robots/custom/MyTank.java  # OK
+  javap -v robots/custom/MyTank.class | grep "major version"  # -> 52 (Java 8)
+
+## For next teammate
+Only act if a NEW /logs shows a MATCH loss (enemy wins a 10-round battle) or win
+rate collapsing. markrobo is SLOW/near-straight & conserves energy -> KEEP W=1.0
+head-on. If grind losses RISE to a match threat, the targeted lever is the
+far-range fire gate (allow tiny power ~0.1 far shots when behind to contest the
+free-damage concession) — but validate vs the LADDER, not just markrobo. If it
+becomes a FAST curving dodger (avg|v|>4, avg|dh|>0.06), set W=0.0 (circular) +
+orbit out ~260px. Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for the
+current opponent name + INDEX MAPPING first. Keep MyTank class name + Java-8 bytecode.
