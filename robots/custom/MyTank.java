@@ -263,6 +263,16 @@ public class MyTank extends AdvancedRobot {
                     ? enemyDrop
                     : 0.82 * enemyFirePowerAvg + 0.18 * enemyDrop;
             enemyFirePowerSamples++;
+            if (stationaryScans > 5 && enemyDrop > 2.20) {
+                // sample.TrackFire-style opponents sit still but fire repeated power-3
+                // bullets at our current bearing.  The generic response reversed orbit
+                // direction on every shot; in round-0 loss traces that left us almost
+                // stationary around 235px and eating every bullet.  Do not flip-flop the
+                // orbit here: commit to a clean perpendicular dodge and let the wider
+                // stationary-heavy orbit below reopen the range.
+                drivePerpendicularEscape(absBearing, getEnergy() < 40.0 ? 360.0 : 310.0);
+                return;
+            }
             reverseDirection();
             if ((fixedHeadingMediumShooter() || activeHighPowerShooter()) && getEnergy() < 42.0) {
                 // Chilibot/Ultron-style shooters become dangerous once our reserve is
@@ -298,6 +308,16 @@ public class MyTank extends AdvancedRobot {
                 drivePerpendicularEscape(absBearing, 275.0);
                 return;
             }
+        }
+
+        if (stationaryHeavyShooter() && e.getDistance() < 385.0) {
+            // Once a stationary power-3 gun is confirmed, do not use the generic
+            // direct-away close escape: near the east/west edges that can settle into a
+            // nearly fixed point at ~230px, exactly where TrackFire hit every shot in
+            // round-0 losses.  Keep crossing its firing line until the wider orbit band
+            // can take over.
+            drivePerpendicularEscape(absBearing, getEnergy() < 35.0 ? 340.0 : 290.0);
+            return;
         }
 
         // SittingDuck-style opponents in many logs never fire.  Once we are
@@ -441,12 +461,15 @@ public class MyTank extends AdvancedRobot {
             // range: logs show our hits are reliable here, and opening too far can
             // reduce damage before the opponent's parked power-3 trades arrive.
             preferredDistance = 300.0;
+        } else if (stationaryHeavyShooter()) {
+            // TrackFire is stationary like NagiSphere, but its repeated power-3 head-on
+            // bullets punished the old close 330px farming band when orbit reversals
+            // stalled us around 230-250px.  Keep max-power exact shots, but orbit wider
+            // and combine with fire-tick perpendicular dodges above.
+            preferredDistance = getEnergy() < 35.0 ? 505.0 : 455.0;
         } else if (stationaryShooter()) {
-            // Nagisphere is stationary but active.  Round-1's very wide 455px orbit
-            // reduced incoming damage, but gave it more time to spend energy and left
-            // our own bullet-damage/bonus score lower.  Return to the faster ~330px
-            // farming band, relying on the improved close-corner sidestep above for
-            // the rare spawn positions where point-blank stationary fire is dangerous.
+            // Medium/weak stationary shooters are best farmed faster from a closer band.
+            // Heavy stationary shooters are handled by the previous wider branch.
             preferredDistance = 330.0;
         } else if (weakFixedAxisOscillator()) {
             // Current Tarektank-style target is a one-dimensional 100px
@@ -628,6 +651,12 @@ public class MyTank extends AdvancedRobot {
         // kill reduces exposure.  Moving opponents keep the conservative ladder.
         if (stationaryScans > 5 && getEnergy() > 12) {
             power = 3.0;
+            if (stationaryHeavyShooter() && getEnergy() < 34.0 && e.getEnergy() < 18.0) {
+                // When low against a power-3 stationary shooter, avoid spending excess
+                // energy on overkill; a minimum lethal bullet is faster and preserves the
+                // small margin that decided several TrackFire loss/draw traces.
+                power = Math.min(power, lethalPower(e.getEnergy()));
+            }
         } else if (wallEnemyScans > 4 && !dangerousWallEnemy() && getEnergy() > 14 && distance < 820) {
             // Wall-huggers have very limited escape room; use max-power
             // head-on/near-head-on shots to finish them before they can spend
@@ -1297,6 +1326,12 @@ public class MyTank extends AdvancedRobot {
                 && !lowFireRammer()
                 && !fixedHeadingStopGoEnemy()
                 && !fixedHeadingLineEnemy();
+    }
+
+    private boolean stationaryHeavyShooter() {
+        return stationaryScans > 5
+                && enemyFirePowerSamples > 0
+                && enemyFirePowerAvg > 2.20;
     }
 
     private boolean stationaryShooter() {
