@@ -1459,3 +1459,166 @@ validation/documentation:
    freshly-reloaded repository within the same call). Still the single
    highest-leverage infra fix available if a future teammate has a larger
    step budget to spend on it than usual.
+
+## Round 14 update (this round) — found and fixed a "stuck ramming" energy-drain bug
+
+### Context
+Only `/logs/rounds/0/` and `/logs/rounds/1/` exist in this environment for me.
+Both real combat (confirmed via `tools/analyze_freezes.py`, `trace.md`) against
+`linuxuser0__genetic` — same weak opponent round 13's notes describe. Results:
+**100% win rate both rounds** (250/250 each), 48%/50% accuracy, avg min energy
+80, zero ties, zero losses. Team score ~46-47k vs opponent's <1k both rounds.
+On the surface this looks like a totally healthy, dominant baseline (consistent
+with round 13's conclusion) — but I dug deeper into `analyze_freezes.py`'s
+findings this time instead of treating "few findings, opponent is weak anyway"
+as good enough, since round 1's logs showed 8 findings (4 games) on our OWN
+bot (`sonnet_5`), not just the opponent, which round 13 didn't have (round 0
+showed 0 findings on us). That's a real, if rare (4/250 = 1.6% of games)
+regression signal worth chasing down rather than ignoring.
+
+### Root cause found: onHitRobot()'s round-12 "press forward" ramming logic can get permanently stuck
+Manually traced `sim_139.jsonl` tick-by-tick (see the freeze finding: our
+position + radar heading frozen for 144 consecutive ticks, t=55..199, out of a
+349-tick game). Found:
+- At t=56, we collide with the enemy (`HIT_ROBOT`). From t=56 to t=199 (144
+  ticks straight), our x/y AND radar heading (`rh`) AND gun heading (`gh`) stay
+  **byte-identical**, velocity pinned at 0.0, while our energy drains by
+  **exactly 0.6 every single tick** (90.1 -> 12.7, ~77 energy lost) — this is
+  genuine repeated `ROBOT_HIT_DAMAGE` collision damage (confirmed against
+  `Rules.html`'s documented constant), NOT the inactivity-decay mechanic
+  (which is only 0.1/turn and doesn't kick in until 450 turns of literal
+  inaction, per `javadoc/robocode/BattleRules.html` -- much slower and a much
+  longer fuse than what we're seeing here).
+- Meanwhile the enemy robot (`linuxuser0__genetic`) is *also* stuck the same
+  window, showing `HIT_WALL` status and losing 0.6/tick too — it's wedged in a
+  wall corner (an existing bug on their side, not ours to fix).
+- **The bug**: round 12 added an `onHitRobot()` rule that always charges
+  forward into the enemy ("press the advantage") whenever `getEnergy() > 8`,
+  with zero awareness of whether that charge is actually making progress. If
+  the enemy is itself pinned against a wall and can't fully separate from us
+  (classic Robocode's rotated 36x36 bounding-box collision can still overlap
+  at 38-45px center-distance depending on relative heading, i.e. more than the
+  naive 36px circle-sum), `HitRobotEvent` keeps re-firing every tick, and each
+  time we just re-issue "turn toward enemy + `setAhead(40)`" again --
+  perpetuating the exact same stuck collision forever instead of breaking off.
+  Unlike `onScannedRobot()`'s movement logic (which has had a stuck-watchdog
+  since round 3 for the analogous wall-standoff bug), `onHitRobot()` had *no*
+  "have I actually moved since last time this fired" check at all before this
+  round.
+- We still won that specific game (the opponent is even weaker, gets zapped
+  by the same collision math while ALSO being wall-stuck, dies first) but this
+  is clearly a real bug that could flip a close/competitive match (e.g. against
+  `pez__gf1`, the toughest opponent in this file's history per rounds 11-12's
+  notes, which already has a ~14% tie rate from mutual energy attrition) into
+  an unnecessary loss if it fires against a healthier opponent that isn't
+  ALSO accidentally wall-stuck.
+
+### Fix applied (`robots/custom/MyTank.java`)
+1. **`onHitRobot()` now tracks position across consecutive calls**
+   (`lastHitRobotX/Y`, `hitRobotStationaryCount`). If our position hasn't
+   moved more than ~3px since the last `HitRobotEvent` for 2+ consecutive
+   collisions, we're "stuck ramming" -- skip the charge-forward branch
+   entirely (even if `getEnergy() > 8`) and instead **disengage**: turn to
+   face directly away from the enemy (`bearing + PI`) and `setBack(80)`,
+   flip `moveDirection`, and put `onScannedRobot()`'s opportunistic-ramming
+   trigger (added round 12, `enemyDistance < 60`) on a 20-tick cooldown
+   (`rammingCooldownUntil`) so we don't immediately re-charge straight back
+   into the same stuck spot the instant we back off.
+2. **Radar safety net added inside `onHitRobot()` too**: `if
+   (getRadarTurnRemaining() == 0) setTurnRadarRight(POSITIVE_INFINITY);` --
+   mirrors the existing fix in `run()`'s main loop (round 4), as cheap
+   insurance in case the stuck-ramming lock was also somehow preventing that
+   loop from getting a chance to run (I didn't fully pin down *why* radar/gun
+   heading froze too during the stuck window -- plausibly related to nested
+   `execute()` calls inside event handlers interacting with the game's turn/
+   event-dispatch model in a way I didn't fully untangle with remaining time
+   this round -- but this safety net costs nothing and directly addresses the
+   *symptom* regardless of the exact mechanism).
+3. The original round-12 "press forward when healthy" behavior is otherwise
+   **unchanged** for the normal (non-stuck) case -- first hit or two still
+   charges forward as before; this fix only kicks in once the position-based
+   stuck detector trips.
+4. Verified `javac -cp libs/robocode.jar -d robots robots/custom/MyTank.java`
+   compiles clean (no errors/warnings, checked with `-Xlint:all` too),
+   `.class` up to date. Old (pre-this-round) version preserved at
+   `archive/round1_backups/MyTank.java.before_round14_ram_stuck_fix` for a
+   quick diff/revert if next round's numbers look worse.
+
+### What I did NOT get to
+- **Not validated by a real match** (same long-standing limitation as every
+  previous round — no working local headless battle runner in this sandbox;
+  see round 6's section above for the most detailed writeup of exactly where
+  that effort gets stuck). This is a real, previously-untested behavioral fix,
+  so treat with normal caution, though it's narrowly scoped (only changes
+  behavior once the specific "stuck for 2+ consecutive collisions" condition
+  is detected, which by definition wasn't happening usefully before anyway).
+- Did **not** fully root-cause *why* the radar/gun heading froze during the
+  stuck window (only added a safety net that should prevent the *symptom*
+  regardless of mechanism). A more thorough investigation would look at
+  whether calling `execute()` manually inside `onHitRobot()`/`onScannedRobot()`
+  (both do this, in addition to the outer `run()` loop's own `execute()` at
+  the bottom of its `while(true)`) causes any turn-skipping or nested-event-
+  dispatch weirdness in classic Robocode's engine -- if a future teammate
+  wants to dig deeper, `javadoc/robocode/AdvancedRobot.html`'s `execute()`
+  docs and any `net.sf.robocode.peer` source (check if decompiling
+  `libs/robocode.jar` classes reveals the event-dispatch loop) would be the
+  place to look.
+- Did not re-check whether this same stuck-ramming pattern could also occur
+  via the *other* charge-forward path (`onScannedRobot()`'s own
+  `enemyDistance < 60` ramming trigger, not just `onHitRobot()`) independent
+  of ever taking a `HitRobotEvent` — e.g. if we approach to <60px but never
+  quite touch, `onScannedRobot()` would keep reissuing the charge command
+  every scan with no stuck-detection of its own (only `onHitRobot()` got the
+  fix this round). In practice this seems less likely to loop forever (no
+  event re-firing to keep resetting the command each tick — normal orbit
+  logic would resume once `enemyDistance >= 60` again — and the existing
+  `stuckScanCount`/wall watchdog already covers pure "our own velocity is 0"
+  cases generally), but worth a second look if a similar freeze pattern shows
+  up again in a future round's logs that *doesn't* show `HIT_ROBOT` status.
+- Only found/fixed this by manually tracing one flagged game in detail --
+  didn't have steps left to generalize this into an automated check (e.g.
+  extending `tools/analyze_freezes.py` to specifically flag
+  "position frozen AND status == HIT_ROBOT for N+ ticks" as its own labeled
+  category, distinct from the generic position/radar freeze it already
+  checks). Would be a nice addition for a future teammate to make this class
+  of bug easier to spot automatically instead of requiring a manual
+  `grep -i sonnet` + per-tick dump each time it recurs.
+
+### Suggestions for next teammate
+1. **First step, as always**: check `/logs/rounds/<N>/trace.md` for this
+   round's real result, AND specifically run
+   `python3 tools/analyze_freezes.py /logs/rounds/<N> --threshold 100 | grep
+   -i sonnet` (substitute your bot's actual name if different).
+   - If it now prints **nothing** (down from round 1's 8 findings / 4 games
+     this round), the stuck-ramming fix worked — the round-12 ramming logic's
+     upside (see rounds 12-13's notes) is preserved for normal cases while the
+     specific failure mode is closed off.
+   - If findings still appear on our own bot, dump per-tick `x`/`y`/`rh`/`gh`/
+     `s`/`e` for the flagged robot/tick-range (same technique used this round
+     — see the `sim_139.jsonl` trace above as a template) and check: is the
+     status still `HIT_ROBOT` the whole time? If so, the 2-consecutive-hit
+     threshold or the 80-unit backoff distance may need tuning (e.g. lower the
+     threshold to 1, or increase backoff distance, or add wall-awareness to
+     the disengage direction too — currently it just turns opposite the enemy
+     bearing with no wall-clamping, which could theoretically back us INTO a
+     wall in an unlucky corner case, mirroring the original round-3 wall bug
+     but for the backoff direction specifically).
+2. If `pez__gf1` (the toughest opponent in this file's history, rounds 11-12,
+   14% tie rate) reappears as this round's or a future round's opponent, that
+   would be the most valuable test of whether this fix actually helps convert
+   ties into wins (the mutual-energy-grinding tie pattern documented in round
+   11's notes is exactly the kind of long, contact-heavy fight where this bug
+   would be most likely to matter) — check tie rate specifically, not just
+   win rate.
+3. Consider extending `tools/analyze_freezes.py` with a dedicated
+   "stuck-ramming" check (frozen position + `HIT_ROBOT` status for N+ ticks,
+   as opposed to the existing generic position/radar freeze categories) so
+   this specific pattern is automatically flagged by name in future rounds'
+   analysis instead of requiring a manual trace to identify it, as I had to
+   do this round.
+4. Local headless battle-runner: still unresolved after 13+ rounds of
+   attempts (see round 6's section for the most detailed known blocker,
+   `RepositoryManager.loadSelectedRobots` not seeing a freshly-reloaded
+   repository within the same call). Still the single highest-leverage infra
+   fix available if a future teammate has a larger step budget to spend on
+   it than usual.

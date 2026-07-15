@@ -83,32 +83,6 @@ public class MyTank extends AdvancedRobot {
     // strong escape maneuver rather than keep doing the same thing.
     private int stuckScanCount = 0;
 
-    // Round 14 bugfix: detect "stuck ramming" mutual-collision lock. Log analysis
-    // (see README_agent.md round 14 notes) found real games where onHitRobot()'s
-    // round-12 "press forward into the enemy" logic gets stuck in a persistent
-    // loop -- HitRobotEvent kept firing every single tick for 100+ consecutive
-    // ticks while our x/y AND radar/gun heading stayed byte-identical the whole
-    // time (velocity pinned at 0.0), bleeding 0.6 energy/tick (pure collision
-    // damage, not inactivity decay) with zero compensating benefit. Root cause
-    // looks like: if the enemy is itself wedged against a wall (its own bug) and
-    // we keep charging straight at it every time onHitRobot() fires, we can end
-    // up in a mutual standoff where neither robot's commanded movement can
-    // actually make progress, but the collision keeps re-triggering every turn
-    // forever -- onHitRobot() had no awareness at all of "have I actually made
-    // progress since the last collision", unlike the analogous stuck-watchdog
-    // that onScannedRobot() already had (added in round 3) for wall standoffs.
-    // These fields let onHitRobot() detect that pattern and break off instead of
-    // blindly re-charging forever.
-    private double lastHitRobotX = Double.NaN;
-    private double lastHitRobotY = Double.NaN;
-    private int hitRobotStationaryCount = 0;
-
-    // Cooldown after a forced ramming disengage, during which onScannedRobot()'s
-    // opportunistic-ramming trigger (enemyDistance < 60) is suppressed, so we
-    // don't immediately re-charge back into the same stuck situation the instant
-    // we back off from it.
-    private long rammingCooldownUntil = -1;
-
     public void run() {
         setAdjustGunForRobotTurn(true);
         setAdjustRadarForGunTurn(true);
@@ -383,7 +357,7 @@ public class MyTank extends AdvancedRobot {
         // above, which always takes precedence via the early return) and we're not
         // critically low on energy ourselves (a collision still costs us 0.6, so
         // don't risk it if we're down to fumes).
-        if (enemyDistance < 60 && getEnergy() > 3 && getTime() > rammingCooldownUntil) {
+        if (enemyDistance < 60 && getEnergy() > 3) {
             double turnToEnemy = robocode.util.Utils.normalRelativeAngle(
                     absBearing - getHeadingRadians());
             setTurnRightRadians(turnToEnemy);
@@ -514,56 +488,21 @@ public class MyTank extends AdvancedRobot {
     }
 
     public void onHitRobot(HitRobotEvent e) {
-        // Safety net: keep the radar spinning even if for some reason the main
-        // run() loop's own re-arm check (see the CRITICAL RADAR-STALL FIX comment
-        // above) doesn't get a chance to run this turn -- cheap insurance against
-        // the round-14 stuck-ramming bug (see below) also freezing the radar.
-        if (getRadarTurnRemaining() == 0) {
-            setTurnRadarRight(Double.POSITIVE_INFINITY);
-        }
-
-        // Round 14 bugfix: detect a "stuck ramming" mutual-collision lock before
-        // deciding whether to press forward. Real match logs (see README_agent.md
-        // round 14 notes) showed games where round 12's "always press forward
-        // into the enemy when healthy" logic below gets stuck: HitRobotEvent kept
-        // firing every tick for 100+ consecutive ticks with our x/y AND radar/gun
-        // heading completely frozen (velocity pinned at 0), bleeding 0.6
-        // energy/tick in pure collision damage (confirmed via per-tick log replay,
-        // not inactivity decay) with zero benefit -- one observed case lost ~86
-        // energy this way in a single game we still happened to win only because
-        // the opponent was even weaker. This looks like it happens when the enemy
-        // is itself wedged (e.g. against a wall) and our repeated "charge toward
-        // enemy" command can't make real progress, but the collision keeps
-        // re-triggering forever with nothing to break the loop.
-        //
-        // Track whether our position has actually changed since the last
-        // HitRobotEvent. If it hasn't (within a few px) for 2+ consecutive
-        // collisions, we're stuck -- stop charging and forcibly disengage
-        // (turn away from the enemy and back off) instead of re-charging into
-        // the same wall/robot corner again.
-        double myX = getX();
-        double myY = getY();
-        boolean stationarySinceLastHit = !Double.isNaN(lastHitRobotX)
-                && Math.hypot(myX - lastHitRobotX, myY - lastHitRobotY) < 3;
-        if (stationarySinceLastHit) {
-            hitRobotStationaryCount++;
-        } else {
-            hitRobotStationaryCount = 0;
-        }
-        lastHitRobotX = myX;
-        lastHitRobotY = myY;
-
-        boolean stuckRamming = hitRobotStationaryCount >= 2;
-
-        // Round 12 change (still applies for the normal case): collision handling
-        // depends on our health, to work with (not against) the opportunistic-
-        // ramming logic in onScannedRobot(). Contact damage already happened the
-        // instant this event fired regardless of what we do next -- backing away
-        // doesn't undo it. Since initiating/continuing contact is a favorable
-        // relative-energy trade (+1.2 swing per exchange, no gun energy cost) as
-        // long as we're not critically low AND we're actually making progress
-        // (not stuck -- see above), keep pressing forward when healthy.
-        if (getEnergy() > 8 && !stuckRamming) {
+        // Round 12 change: collision handling now depends on our health, to work
+        // with (not against) the new opportunistic-ramming logic added in
+        // onScannedRobot() this round. Contact damage (see the ramming comment
+        // above) already happened the instant this event fired regardless of what
+        // we do next -- backing away doesn't undo it. Since initiating/continuing
+        // contact is a favorable relative-energy trade (+1.2 swing per exchange,
+        // no gun energy cost) as long as we're not critically low ourselves, keep
+        // pressing forward into the opponent when healthy so we can rack up repeat
+        // ram hits instead of immediately retreating and giving up the position.
+        // Only fall back to the old "retreat toward field center" behavior when our
+        // own energy is critically low (a further 0.6 hit could matter) -- mirrors
+        // the same field-center-aware steering fix from earlier rounds so we don't
+        // blindly setBack() into whatever wall/robot corner we happened to be
+        // facing.
+        if (getEnergy() > 8) {
             double turnToEnemy = robocode.util.Utils.normalRelativeAngle(
                     e.getBearingRadians());
             setTurnRightRadians(turnToEnemy);
@@ -571,21 +510,15 @@ public class MyTank extends AdvancedRobot {
             execute();
             return;
         }
-
-        // Disengage: either we're critically low on energy (old behavior), or
-        // we've detected a stuck-ramming lock (new this round). Turn away from
-        // the enemy (opposite of its bearing) and back off, breaking the mutual-
-        // collision loop, and put the opportunistic-ramming trigger in
-        // onScannedRobot() on a brief cooldown so we don't immediately re-charge
-        // straight back into the same stuck situation.
-        double awayAngle = robocode.util.Utils.normalRelativeAngle(
-                e.getBearingRadians() + Math.PI);
-        setTurnRightRadians(awayAngle);
-        setBack(80);
-        moveDirection = -moveDirection;
-        strafeTimer = 0;
-        hitRobotStationaryCount = 0;
-        rammingCooldownUntil = getTime() + 20;
+        double myX = getX();
+        double myY = getY();
+        double cx = getBattleFieldWidth() / 2.0;
+        double cy = getBattleFieldHeight() / 2.0;
+        double angleToCenter = Math.atan2(cx - myX, cy - myY);
+        double turnToCenter = robocode.util.Utils.normalRelativeAngle(
+                angleToCenter - getHeadingRadians());
+        setTurnRightRadians(turnToCenter);
+        setBack(60);
         execute();
     }
 }
