@@ -13,6 +13,7 @@ public class MyTank extends AdvancedRobot {
     private int hitWallCooldown = 0;
 
     public void run() {
+        // Aesthetic setup matching our superior tech
         setBodyColor(Color.black);
         setGunColor(Color.darkGray);
         setRadarColor(Color.red);
@@ -27,32 +28,35 @@ public class MyTank extends AdvancedRobot {
     }
 
     public void onScannedRobot(ScannedRobotEvent e) {
-        // Precise radar lock
+        // Infinite radar lock with small overshoot to prevent slipping
         double absoluteBearing = getHeadingRadians() + e.getBearingRadians();
         double radarTurn = absoluteBearing - getRadarHeadingRadians();
         setTurnRadarRightRadians(Utils.normalRelativeAngle(radarTurn) * 1.5);
 
-        // Enemy bullet firing detection
+        // Advanced Energy Drop Detection for Evasive Dodging
         double energyDrop = lastEnemyEnergy - e.getEnergy();
         if (energyDrop >= 0.1 && energyDrop <= 3.0) {
-            // Dodge immediately on enemy firing
-            if (Math.random() < 0.5) {
+            // Unpredictable dodge: change direction or alter pacing when shot at
+            if (Math.random() < 0.6) {
                 moveDirection = -moveDirection;
             }
         }
         lastEnemyEnergy = e.getEnergy();
 
+        // Dynamic bullet power selection to maximize damage and conserve energy
         double bulletPower = 3.0;
         if (e.getDistance() > 400) {
             bulletPower = 1.5;
         } else if (e.getDistance() > 200) {
             bulletPower = 2.0;
         }
+        // Protect ourselves from self-defeat via over-firing when low on energy
         bulletPower = Math.min(bulletPower, getEnergy() / 6.0);
         if (bulletPower < 0.1) bulletPower = 0.1;
         
         double bulletSpeed = 20 - 3 * bulletPower;
 
+        // Linear and Circular Predictive Target Engine
         double enemyX = getX() + e.getDistance() * Math.sin(absoluteBearing);
         double enemyY = getY() + e.getDistance() * Math.cos(absoluteBearing);
         
@@ -76,6 +80,7 @@ public class MyTank extends AdvancedRobot {
                 predictedY = enemyY + enemyVelocity * Math.cos(enemyHeading) * t;
             }
             
+            // Constrain predictions to the battlefield boundaries minus a safe margin
             double margin = 18.0;
             predictedX = Math.max(margin, Math.min(getBattleFieldWidth() - margin, predictedX));
             predictedY = Math.max(margin, Math.min(getBattleFieldHeight() - margin, predictedY));
@@ -84,11 +89,12 @@ public class MyTank extends AdvancedRobot {
         double gunTurn = Utils.normalRelativeAngle(Math.atan2(predictedX - getX(), predictedY - getY()) - getGunHeadingRadians());
         setTurnGunRightRadians(gunTurn);
 
+        // Fire only when gun is cool and alignment is highly precise
         if (getGunHeat() == 0 && Math.abs(getGunTurnRemaining()) < 10) {
             setFire(bulletPower);
         }
 
-        // Target spacing logic
+        // Target spacing logic: Maintain perpendicular orbit at preferred distance
         double preferredDistance = 350.0;
         double approachAngle = 0.0;
         if (e.getDistance() > preferredDistance + 50) {
@@ -98,7 +104,7 @@ public class MyTank extends AdvancedRobot {
         }
         double targetAngle = absoluteBearing + Math.PI / 2 + approachAngle;
         
-        // Wall avoidance / smoothing
+        // Active wall smoothing & boundary check
         double nextX = getX() + 100 * Math.sin(targetAngle);
         double nextY = getY() + 100 * Math.cos(targetAngle);
         double wallMargin = 45.0;
@@ -111,7 +117,7 @@ public class MyTank extends AdvancedRobot {
             nextY < wallMargin || nextY > getBattleFieldHeight() - wallMargin) {
             if (hitWallCooldown == 0) {
                 moveDirection = -moveDirection;
-                hitWallCooldown = 10; // Prevent rapid-fire oscillating on wall hits
+                hitWallCooldown = 10; // Prevent rapid oscillation
             }
             targetAngle = absoluteBearing + Math.PI / 2 + (-approachAngle);
         }
@@ -121,6 +127,7 @@ public class MyTank extends AdvancedRobot {
     }
 
     public void onHitByBullet(HitByBulletEvent e) {
+        // Change movement direction upon taking damage to disrupt enemy's targeting profile
         moveDirection = -moveDirection;
     }
 
@@ -134,8 +141,10 @@ public class MyTank extends AdvancedRobot {
     
     public void onHitRobot(HitRobotEvent e) {
         if (e.getEnergy() < getEnergy()) {
+            // Push aggressively through weaker targets
             setAhead(100);
         } else {
+            // Evade superior physical collisions
             moveDirection = -moveDirection;
             setAhead(100 * moveDirection);
         }
