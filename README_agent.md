@@ -2263,3 +2263,44 @@ Only act if a NEW /logs shows win rate <100% or our energy collapsing to a loss
 head-on. If it ever becomes a FAST curving dodger, set W=0.0 (circular) + orbit
 out ~260px (that beat team488__meow 100%); re-run the W-sweep first.
 Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 1 / current pass) — opponent = rafaeljdesa__ultron
+
+## STATUS: PERFECT WIN (250/250), 93% share — NO CODE CHANGE (data-optimal)
+Verified /logs/rounds/0:
+- results.json: opus-4-8 43350 vs rafaeljdesa__ultron 5662.
+- results_0.txt: opus_4_8.MyTank 1677 (93%), 10/10 firsts; enemy 132 (7%).
+- trace.md: our win 100% (250/250), accuracy 47%, avg speed 5.6, avg min E 76.
+  Enemy: 0% win, 6.5 shots/game, 25% acc, avg speed 3.4, dies avg turn 249.
+
+## Opponent = MODERATE mover, lightly curving
+Per-sim analysis (120 games, header maps idx->name, enemy=non-'opus'):
+- movefrac 0.64, avg |v| 3.48, avg |dh| 0.027 rad/tick (mild curve),
+  engage ~228px. More mobile than the slow florian2/gruffalo foes but still
+  loses the energy war decisively.
+- Full 250-sim sweep: LOSSES = 0/250, close(<20E) = 0/250. Worst our final
+  E = 22.0, mean 91.3. Enemy DIES every game. Mean kill tick ~245.
+
+## Gun aim: W=1.0 head-on CONFIRMED data-optimal (replay-sim W-sweep, 80 games)
+Per-tick interception over recorded paths, power 3.0, MONOTONIC toward head-on:
+  W=0.0 26.3% | W=0.25 28.0% | W=0.5 31.2% | W=0.75 37.0% | W=1.0 45.0%.
+Matches our real 47% accuracy. Even at avg|v| 3.48 this bot's mild curve +
+reactivity means head-on beats any lead. KEEP W=1.0.
+
+## Decision: NO code change (deliberate)
+Current gun (W=1.0 head-on, power tiers 3.0/<300 2.4/<400 1.6/<550 1.0/else,
+energy-war taper, low-E clamps, orbit ~150px w/ graduated inward pull) is
+data-optimal. The 7% leak is enemy survival-bullet damage during the ~245 ticks
+before the kill; NOT fixable by raising power (that regressed real games:
+killtick up, enemy dmg up, per myfirstkiller/oppswantmedead notes). Any edit only
+risks regression on a 250/250 sweep we win with 22+ E to spare.
+Re-verified compile: javac --release 8 ... -> major version 52 (Java 8). rc=0.
+git diff on MyTank.java = empty (unchanged winning config).
+
+## For next teammate
+Only act if a NEW /logs shows win rate <100% or our energy collapsing to a loss
+(enemy final E > 0 while ours = 0). ultron is a MODERATE mover -> KEEP W=1.0
+head-on (replay W-sweep monotonic to head-on). If it becomes a FAST curving
+dodger (avg|v| up >5, movefrac up >0.9, avg|dh| up), set W=0.0 (circular) + orbit
+out ~260px (that beat team488__meow 100%); re-run the W-sweep first.
+Keep MyTank class name + Java-8 bytecode (only hard requirement).
