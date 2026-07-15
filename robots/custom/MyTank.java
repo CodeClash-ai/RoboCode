@@ -447,6 +447,13 @@ public class MyTank extends AdvancedRobot {
             // reducing the chance of one more enemy power-3 hit ending the round.
             preferredDistance = Math.max(preferredDistance, 430.0);
         }
+        if (velociRobotEnemy() && getEnergy() < 22.0) {
+            // VelociRobot losses happen late after our bullet energy has been spent;
+            // at that point one more weak bullet can finish us.  Back out of the close
+            // 345px farming band while using tiny fast shots, instead of continuing the
+            // same exchange range that is fine when our energy reserve is high.
+            preferredDistance = Math.max(preferredDistance, 440.0);
+        }
         double distanceOffset = limit(-0.62, (e.getDistance() - preferredDistance) / 430.0, 0.55);
         double desired = absBearing + moveDirection * (Math.PI / 2.0 - distanceOffset);
         if (e.getDistance() < 118
@@ -544,17 +551,20 @@ public class MyTank extends AdvancedRobot {
             power = Math.max(power, distance < 640 ? 3.0 : 2.55);
         }
         if (velociRobotEnemy()) {
-            // VelociRobot moves just fast enough that max-power lead shots over-lead
-            // its reversals/turns.  Use moderate, faster bullets while healthy;
-            // the enemy mostly fires weak power-1 rounds, so this preserves survival
-            // while the damped averaged gun improves geometric hit rate over the old
-            // circular/power-3 mode.
-            if (getEnergy() > 36) {
-                power = Math.min(Math.max(power, distance < 380 ? 2.25 : 1.85), 2.30);
-            } else if (getEnergy() > 18) {
-                power = Math.min(power, distance < 360 ? 1.15 : 0.95);
+            // VelociRobot fires many weak bullets but is not dangerous enough to justify
+            // the very low-power conservation tried in round 1; that prolonged rounds
+            // and produced several self-depletion deaths with the enemy still alive.
+            // Keep the damped/averaged aim, but apply enough pressure while healthy to
+            // finish before long weak-fire exchanges, then switch to tiny survival shots
+            // only after our energy is actually low.
+            if (getEnergy() > 34) {
+                power = Math.min(Math.max(power, distance < 360 ? 2.70 : (distance < 560 ? 2.45 : 2.10)), 2.75);
+            } else if (getEnergy() > 22) {
+                power = Math.min(Math.max(power, distance < 360 ? 1.75 : 1.35), 1.90);
+            } else if (getEnergy() > 12) {
+                power = Math.min(power, distance < 340 ? 0.85 : 0.60);
             } else {
-                power = Math.min(power, getEnergy() < 8 ? 0.15 : 0.45);
+                power = Math.min(power, getEnergy() < 7 ? 0.15 : 0.35);
             }
         }
         if (crazyEnemyScans > 3 && !velociRobotEnemy()) {
@@ -764,7 +774,13 @@ public class MyTank extends AdvancedRobot {
         if (stationaryScans > 5) {
             gun = GUN_HEAD_ON;
         } else if (velociRobotEnemy()) {
-            gun = GUN_AVERAGED;
+            // For this medium-speed weak shooter, damped averaged prediction is usually
+            // best, but trace replay shows pure head-on is competitive and sometimes
+            // wins during these shallow reversals, especially with faster bullets.  Let head-on
+            // take over when virtual errors are comparable; otherwise keep damping
+            // its shallow straight reversals.
+            gun = (virtualSamples > 18 && virtualGunError[GUN_HEAD_ON] <= virtualGunError[GUN_AVERAGED] + 3.0)
+                    ? GUN_HEAD_ON : GUN_AVERAGED;
         } else if (crazyEnemyScans > 3) {
             gun = GUN_CIRCULAR;
         } else if (fixedHeadingHighPowerShooter()) {

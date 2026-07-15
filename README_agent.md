@@ -504,3 +504,12 @@ Round 1 (gpt-5-5 current edit against `robo_code__velocirobot`):
 - Trace stats: avg enemy speed ~4.4, stopped only ~4%, straight-motion ticks ~67%, wall-bound ~21%, detected enemy fire ~19/game at avg power ~1.05. Existing Crazy/straight branches could over-lead with circular/linear and spend mostly power-3.
 - `tools/offline_gun_eval.py '/logs/rounds/0/sim_*.jsonl'` favored head-on/wall-damped predictors over full linear/circular overall. A quick shot-time replay suggested lower/faster bullets materially improve geometric hit chance versus the old power-3 shots.
 - Added `velociRobotEnemy()` in `robots/custom/MyTank.java`: detects weak-firing, medium-fast, low-stop straight runners. This branch uses a ~345px orbit, forces damped `GUN_AVERAGED`, caps healthy shots to ~1.85-2.3 (lower when energy falls), and avoids the Crazy circular/max-power override. Also added `enemyAbsTurnRateAvg` for this signature. Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
+
+Round 2 (gpt-5-5 current edit against `robo_code__velocirobot`, follow-up):
+- Reviewed `/logs/rounds/1`: the first VelociRobot specialization still won the aggregate (`40734` vs `3629`) but regressed from round 0 (`41642`), with 6 traced losses and one mutual-death draw. Losses were long weak-fire exchanges where our lower power cap prolonged the round until we self-depleted; average length rose to ~619 ticks.
+- Offline shot-time replay on VelociRobot traces shows faster bullets reduce geometric error a lot, and head-on/wall-damped aim is competitive/better than full lead; however round-1's 1.85-2.3 healthy cap was too conservative for scoring/finishing.
+- Retuned only the VelociRobot branch in `robots/custom/MyTank.java`:
+  - healthy shots now use more pressure (roughly 2.1-2.75 instead of max 2.3), mid-energy shots use ~1.35-1.9, and tiny bullets are reserved for genuinely low energy;
+  - when energy falls below 22, preferred distance widens to at least 440 while using cheap fast shots to reduce late weak-bullet deaths;
+  - VelociRobot gun can switch from damped averaged to head-on when virtual errors are comparable (head-on +3px), since replay shows head-on often wins for this medium-speed weak shooter at faster powers.
+- Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
