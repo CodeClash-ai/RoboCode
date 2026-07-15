@@ -109,21 +109,6 @@ public class MyTank extends AdvancedRobot {
     // we back off from it.
     private long rammingCooldownUntil = -1;
 
-    // Round 16 addition: "dodge on fire" reactive evasion. Detect the enemy
-    // just firing a bullet (their energy dropped by an amount consistent with
-    // a bullet's power cost, Rules.html says firing costs exactly bulletPower
-    // energy up front regardless of hit/miss) and react immediately by
-    // flipping/randomizing our strafe direction and resetting the strafe
-    // timer, so whatever aim the enemy used (linear/circular prediction based
-    // on our position and heading *at the moment they fired*) is more likely
-    // to be wrong by the time their bullet arrives. This is a well-known
-    // simple defensive tactic distinct from full wave-surfing (which would
-    // require tracking bullet origin/velocity precisely to compute a safe
-    // lateral offset) -- much lower risk to add without local battle-testing
-    // available, since it only adds an extra, occasional direction flip to
-    // the existing orbit-strafing movement rather than replacing it.
-    private double prevEnemyEnergy = -1;
-
     public void run() {
         setAdjustGunForRobotTurn(true);
         setAdjustRadarForGunTurn(true);
@@ -197,25 +182,6 @@ public class MyTank extends AdvancedRobot {
         lastScanTime = getTime();
         double absBearing = getHeadingRadians() + e.getBearingRadians();
         enemyDistance = e.getDistance();
-
-        // --- Round 16: reactive "dodge on fire" evasion ---
-        // A bullet-firing energy cost is always in (0, 3] (Rules.MIN/MAX bullet
-        // power); a ram-collision cost is a fixed 0.6. Both look similar, but
-        // either way an extra, well-timed direction flip right when the enemy's
-        // energy visibly drops is a harmless reactive juke (worst case: one more
-        // flip than strictly necessary), so we don't bother distinguishing the
-        // two causes precisely -- just treat any plausible drop as "maybe they
-        // just fired, juke now just in case".
-        if (prevEnemyEnergy >= 0) {
-            double energyDrop = prevEnemyEnergy - e.getEnergy();
-            if (energyDrop >= 0.09 && energyDrop <= 3.05) {
-                if (Math.random() < 0.7) {
-                    moveDirection = -moveDirection;
-                }
-                strafeTimer = 0;
-            }
-        }
-        prevEnemyEnergy = e.getEnergy();
 
         // --- Radar lock: point radar straight at enemy plus a little extra sweep so we
         // don't lose lock if it moves fast. ---

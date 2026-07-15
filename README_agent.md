@@ -1711,3 +1711,139 @@ Instead I made one small, low-risk **tooling** improvement:
    freshly-reloaded repository within the same call). Still the single
    highest-leverage infra fix available if a future teammate has a larger
    step budget to spend on it than usual.
+
+## Round 16 update (this round) — added reactive "dodge on fire" evasion
+
+### Context
+Only `/logs/rounds/0/` and `/logs/rounds/1/` exist in this environment for me.
+Both real combat (confirmed via `tools/analyze_sim_logs.py` and
+`tools/analyze_freezes.py`) against `kinnla__antiwalls` — same opponent round
+15's notes describe (this appears to be "Rung 8/115" per `git log`, i.e. a
+ladder of opponents, elo #108). Results: **100% win rate both rounds**
+(250/250 each), 78%/80% accuracy, avg min energy 92 both rounds, zero ties,
+zero losses in either round. `python3 tools/analyze_freezes.py
+/logs/rounds/1 --threshold 100 | grep -i sonnet` -> zero matches, confirming
+the round-3 wall-standoff, round-4 radar-freeze, and round-14 stuck-ramming
+fixes are all still holding many rounds later, no regressions. Round 15's
+tooling-only change (labeling `STUCK-RAMMING` in `analyze_freezes.py`) is
+confirmed safe (round 1 shows the exact same healthy numbers as round 0's
+pre-that-change baseline).
+
+Given this opponent is weak (0% win rate, 7% accuracy, avg speed ~1.0) and
+the bot has been extremely stable/dominant for many rounds now (see rounds
+13/15's notes: no urgent bugs found on code review), I judged this a good,
+low-risk opportunity to finally attempt a genuine **defensive** improvement —
+every previous round's tuning (5, 7-12, 14) focused on offense (targeting,
+bullet power, ramming) or pure bugfixes, and the still-unimplemented "reduce
+damage taken via smarter dodging" idea has been suggested since round 1 and
+repeated in rounds 12/13/15's notes, specifically because the toughest
+opponent seen so far (`pez__gf1`, rounds 11-12, ~14% tie rate) demonstrated
+real accuracy against us (13%) that our current fixed-orbit strafing doesn't
+specifically react to.
+
+### Change made this round: reactive "dodge on fire" evasion (NOT full wave-surfing)
+A full wave-surfing implementation (tracking each bullet's exact origin/
+velocity/fire-time to compute a precise safe lateral offset by the time it
+would arrive) is a substantial rewrite with real risk of subtle bugs, and —
+per every previous round's limitation — **cannot be validated locally** in
+this sandbox (no working headless battle runner after 15+ rounds of
+attempts; see round 6's section for the most detailed known blocker). Given
+that risk profile, I implemented a much smaller, well-understood, lower-risk
+defensive tactic instead: **react immediately when the enemy's energy visibly
+drops** (a reliable proxy for "they just fired a bullet", since
+`Rules.html` documents that firing costs exactly `bulletPower` energy
+up-front regardless of hit/miss, and bullet power is always in `(0, 3]`) by
+flipping/randomizing our strafe direction and resetting the strafe timer
+right at that instant.
+
+Rationale: any bot doing predictive targeting (linear or circular, ours
+included) computes its aim based on our position/heading/velocity **at the
+moment it fires**. If we then make an extra, unpredictable direction change
+immediately after that moment (rather than continuing predictably along
+whatever orbit direction we were already committed to), the enemy's
+already-computed aim point is more likely to be wrong by the time its
+bullet arrives — a much simpler, well-known juke tactic, distinct from true
+wave-surfing but capturing a meaningful chunk of the same benefit (breaking
+predictability at the moments that matter most) with far less implementation
+risk.
+
+Implementation (`robots/custom/MyTank.java`, in `onScannedRobot()`):
+- New field `prevEnemyEnergy` (initialized to `-1`, i.e. "no data yet").
+- At the very top of `onScannedRobot()` (before any other logic, so it's not
+  gated behind any of the early-return paths like the stuck-watchdog or
+  ramming triggers — this is deliberately unconditional so it works no
+  matter which movement branch ends up executing that tick): if
+  `prevEnemyEnergy - e.getEnergy()` falls in `[0.09, 3.05]` (covers the full
+  legal bullet-power range with a small margin, and also happens to catch
+  the fixed `0.6` ram-collision cost — didn't bother distinguishing the two
+  causes precisely, since an extra harmless juke on a ram-triggered
+  false-positive costs nothing), flip `moveDirection` with 70% probability
+  and unconditionally reset `strafeTimer` to 0. Not a full reversal every
+  time (30% chance of no flip) to avoid becoming predictable *in our own
+  reaction pattern* (e.g. an opponent that tracks "did they juke last time I
+  fired" could otherwise learn to counter-predict a 100%-reliable flip).
+- This only ever changes `moveDirection`/`strafeTimer`, which are read by the
+  existing orbit-strafing movement code further down (unchanged) — so all
+  the wall-clamping, stuck-watchdog, and ramming logic that already consumes
+  those same fields continues to work exactly as before; this is a pure
+  input-signal addition, not a rewrite of any movement/targeting math.
+- Verified `javac -Xlint:all -cp libs/robocode.jar -d robots
+  robots/custom/MyTank.java` compiles clean (no errors/warnings), `.class`
+  file up to date. Old (pre-this-round) version preserved at
+  `archive/round1_backups/MyTank.java.before_round16_dodge_on_fire` for a
+  quick diff/revert if next round's numbers look worse.
+
+### What I did NOT get to
+- **Not validated by a real match** (same long-standing limitation as every
+  previous round — no working local headless battle runner in this sandbox).
+  This is a genuinely new behavioral change (not a pure bugfix), so treat
+  with normal caution: check next round's **avg min energy** and **win/tie
+  rate** closely, especially if we happen to face a tougher, more accurate
+  opponent like `pez__gf1` again — that's the scenario this change is
+  specifically trying to help with, and the current weak opponent
+  (`kinnla__antiwalls`, 7% accuracy) can't meaningfully stress-test whether
+  it helps (there's very little incoming fire to dodge in the first place).
+  If avg min energy or tie rate get *worse* against a real accurate
+  opponent, revert via the archive file above and reconsider.
+- **Did not implement full wave-surfing** (see rationale above — real
+  implementation risk without local validation available). If a future
+  teammate has more step budget and/or the local headless-battle-runner
+  issue finally gets fixed (see round 6's section, still unresolved after
+  15+ rounds), that remains the natural next step up from this round's
+  simpler reactive juke.
+- Did not touch bullet power bands, `PREFERRED_DISTANCE`, fire-angle
+  threshold, or the ramming logic at all this round — wanted to isolate this
+  one new defensive change so it's easy to attribute any accuracy/energy
+  delta cleanly in next round's logs, consistent with previous rounds'
+  practice of changing one thing at a time.
+
+### Suggestions for next teammate
+1. **First step, as always**: check `/logs/rounds/<N>/trace.md` for this
+   round's actual opponent and result.
+   - If it's `pez__gf1` again (the toughest opponent in this file's history,
+     rounds 11-12, ~14% tie rate, 13% opponent accuracy against us), that's
+     the highest-value comparison point for this round's change specifically:
+     check whether **avg min energy** improved (less damage taken) and/or
+     the **tie rate dropped** vs the ~14% baseline from rounds 11-12. This is
+     the first round-over-round comparison that could actually validate or
+     refute the dodge-on-fire idea.
+   - Otherwise (a new/different weak-to-moderate opponent, as has been the
+     recent pattern), a similar 100%-win/high-accuracy/zero-tie result is a
+     healthy baseline confirmation (no regression) but doesn't strongly
+     validate the new defensive change specifically, same caveat as several
+     previous rounds' notes when facing weak opponents.
+2. Run `python3 tools/analyze_freezes.py /logs/rounds/<N> --threshold 100 |
+   grep -i sonnet` as the standard regression check — should print nothing if
+   healthy.
+3. If this change proves beneficial, consider extending it toward a fuller
+   wave-surf (e.g. actually recording the enemy's position/bearing at the
+   moment of the detected energy-drop, plus bullet travel time based on a
+   reasonable power guess, to bias movement toward a computed "safe" lateral
+   zone rather than just a directional coin-flip) — but only after confirming
+   the simple version here doesn't already regress anything.
+4. Local headless battle-runner: still unresolved after 15+ rounds of
+   attempts (see round 6's section above for the most detailed known
+   blocker, `RepositoryManager.loadSelectedRobots` not seeing a
+   freshly-reloaded repository within the same call). Still the single
+   highest-leverage infra fix available if a future teammate has a larger
+   step budget to spend on it than usual.
