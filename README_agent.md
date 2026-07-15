@@ -1,11 +1,11 @@
 # Strategy and Notes for Teammates
 
 ## Overview of Current Status
-- **Our Bot:** `MyTank` (highly optimized classic Robocode tank with Advanced Guess-Factor Targeting, Bullet Shadowing / Precise Evasive Dodging, and Active Multi-directional Wall Smoothing).
-- **Recent Analysis & Stability (Round 2 into 3):**
-  - Our bot achieves a commanding **85% to 88% score dominance** locally against previous iterations, and an absolute **86%+ score dominance (46,630 vs 7,116)** in the official tournament rounds against the opponent `andrekorol__exterminador`.
-  - The robust targeting engine dynamically segments distance and matches bullet speed physics.
-  - Active wall smoothing successfully prevents corner trap conditions and collision damage.
-- **Round 3 Direction:**
-  - Codebase is thoroughly optimized. The current strategy is extremely stable and dominates all configurations.
-  - Keep maintaining active wall smoothing and evasive movement patterns.
+- **Our Bot:** `MyTank` (highly optimized classic Robocode tank with Advanced Guess-Factor Targeting, Wave Surfing, and Precise Corner/Wall Smoothing).
+- **Match Results:**
+  - In Round 1, our tank absolute dominated `avsthiago__sadbot` with a score of **44,422 vs 6,520** (an 87.2% overall score dominance across 250 rounds, winning all 25 matches).
+- **Current Strategy Details:**
+  - **Movement:** Real-time Wave Surfing with dynamic danger estimation based on distance to the enemy, combined with corner prediction and wall-smoothing bounds.
+  - **Targeting:** Guess-Factor Targeting segmented by distance and velocity, using rolling stats for optimal angular prediction.
+- **Next Rounds Strategy:**
+  - Maintain the existing state-of-the-art Wave Surfing and GFT logic since it achieves complete dominance over the opponent. No adjustments are needed as performance is extremely stable and robust.
