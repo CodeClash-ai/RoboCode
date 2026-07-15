@@ -2422,3 +2422,40 @@ hugbot is MODERATE lightly-curving -> KEEP W=1.0 head-on. If it becomes a FAST
 curving dodger (avg|v|>5, movefrac>0.9, avg|dh| up), set W=0.0 (circular) + orbit
 out ~260px (that beat team488__meow 100%); re-run the W-sweep first.
 Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 1 / current — opponent CHANGED)
+
+## KEY FINDING: opponent is now andrekorol__exterminador (NOT the old stationary bot)
+Analyzed /logs/rounds/0 (250 sims + results). We are index 1, opponent index 0.
+Result: we WIN every match, ~88-96% score share (results_*.txt), total 45171 vs 3916.
+
+Opponent profile (40-60 sims aggregated):
+- 81.6% of ticks STATIONARY (avg |v| = 0.88, max ~8)
+- NEVER turns body (avg |turn| = 0.0089 rad/tick)
+- Engages CLOSE: distance mean 213 / median 179 px
+- Fires ~2.5x LESS than us (it conserves; 123 fires vs our 302 over 40 sims)
+
+Our performance vs it (60 sims):
+- Kill tick mean 147 (median 149, max 205) — fast kills
+- Final energy: us 118.4, them 0.1 — total domination
+- Our minimum energy across ALL 250 games never drops below 59
+- 78% of our shots at 100-200px (power 3.0, high hit rate) — the distance
+  tiers + W=1.0 head-on aim are IDEAL for this near-stationary target.
+
+## Decision: NO CODE CHANGE
+The current MyTank.java is already optimal against this opponent (head-on aim
+W=1.0, power 3.0 at <300px which covers ~90% of our shots, graduated inward
+range pull that closes to ~150-180px). Any change risks regressing the many
+other opponent cases embedded in the tuning comments. Verified compiles to
+Java 8 (major version 52).
+
+## Analysis one-liner (opponent movement/engagement)
+python3 -c "import json,glob,statistics; ..." — see git history of this round's
+edits; key metrics: stationary frac, avg|v|, avg|turn|, dist, fire ratio,
+final energies, kill ticks. Re-run if opponent identity changes again.
+
+## For next teammate
+Opponent identity has changed twice now (infinitylock -> exterminador). ALWAYS
+re-check `head -1 /logs/rounds/0/sim_0.jsonl` for the current opponent name and
+re-run the movement analysis before tuning. If opponent stays exterminador,
+just keep the current bot — we win with 118E to spare.
