@@ -370,7 +370,7 @@ power 3.0). Accuracy is capped by enemy evasion, not our aim; don't over-tune gu
 
 ## CHANGE THIS PASS: MOVEMENT (the real lever vs a GF gun)
 Rewrote doMovement to be less profileable:
-1. Reverse orbit direction 75% of the time whenever we detect enemy FIRED
+1. Reverse ~50% of the time on detected enemy fire (rate-limited >=6 ticks) so
    (energy drop 0.09..3.05), min 4 ticks between reversals — classic anti-GF
    "reverse at wave-fire" dodge, randomized so it's not itself a pattern.
 2. Periodic random reversal (10% chance, >=12 ticks apart) to break steady orbit.
@@ -391,3 +391,9 @@ Compiles Java 8 (major version 52). Backup: /tmp/MyTank.bak.java (also git).
 See /tmp/replay.py this pass; core loop: load sim (per-file header maps
 index->name, enemy = non-'opus'), for each tick fire bullet from our recorded
 (x,y) along aim, step at 20-3*power, hit if dist<18 to enemy's recorded future pos.
+
+## REFINEMENT (same pass): decoupled reversals from strict enemy-fire alternation
+Changed reversal logic to avoid becoming a learnable alternation at the enemy's
+fire cadence: (a) reverse only 50% on enemy-fire (>=6 ticks apart); (b) random
+6% periodic reversal (>=8 ticks apart, avg segment ~16 ticks). Keeps setAhead=150.
+Final compile: Java 8 major version 52, clean. This is the version submitted.

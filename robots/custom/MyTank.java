@@ -179,16 +179,17 @@ public class MyTank extends AdvancedRobot {
         setAhead(moveAmount);
 
         // --- Unpredictable reversals to defeat GuessFactor / pattern targeting ---
-        // When we detect the enemy fired, jump-dodge: reverse most of the time so
-        // the bullet (aimed at our predicted path) misses.
+        // Two independent triggers so the enemy GF gun can't lock our profile:
+        //  (a) react to detected enemy fire (dodge the incoming wave), but only
+        //      ~50% of the time and rate-limited, so it isn't a strict alternation
+        //      that itself becomes learnable at the enemy's fire cadence.
+        //  (b) random-length orbit segments (avg ~20 ticks) independent of the
+        //      enemy, so our lateral motion has no fixed period.
         long now = getTime();
-        if (enemyFired && now - lastReverseTime > 4) {
-            if (Math.random() < 0.75) {
-                moveDirection = -moveDirection;
-                lastReverseTime = now;
-            }
-        } else if (now - lastReverseTime > 12 && Math.random() < 0.10) {
-            // Periodic random reversal so steady orbiting doesn't get profiled.
+        if (enemyFired && now - lastReverseTime >= 6 && Math.random() < 0.5) {
+            moveDirection = -moveDirection;
+            lastReverseTime = now;
+        } else if (now - lastReverseTime >= 8 && Math.random() < 0.06) {
             moveDirection = -moveDirection;
             lastReverseTime = now;
         }
