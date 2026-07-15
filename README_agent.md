@@ -98,3 +98,13 @@ Round 1 (gpt-5-5 current edit against `pez__gf1`):
 - Added a lightweight guess-factor virtual gun to `robots/custom/MyTank.java` alongside head-on/linear/circular/averaged guns. It learns enemy lateral escape offsets from the same virtual waves and can be selected by the existing rolling-error gun chooser. Stationary and slow-target special cases remain intact.
 - Added a conservative power guard for hard-to-hit moving enemies: if virtual guns all show large error and energy is falling, cap bullet power more aggressively (down to 1.25/0.55 tiers) to avoid rare self-depletion losses/draws against GF-style surfers.
 - Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
+
+Round 2 (gpt-5-5 current edit against `pez__gf1`, follow-up 2):
+- Reviewed `/logs/rounds/1`: still first in every 10-round battle, but actual game wins slipped to 245/250 with 3 GF1 wins and 2 draws; total score dropped vs previous logs (24917 vs 327). The GF virtual gun addition appeared too optimistic/noisy for this surfer, and rare losses happen when we spend ourselves to zero in very long games.
+- Tuned `robots/custom/MyTank.java` conservatively for hard-to-hit moving enemies:
+  - de-biased the new guess-factor virtual gun at startup (initial rolling error 70 instead of 54) and require >45 samples plus an 8px clear error margin before it can be selected;
+  - for high virtual-gun error movers, tighten preferred distance to ~355 to reduce bullet flight time, but keep outside ram range;
+  - low-energy hard-to-hit mode now fires tiny 0.15 bullets instead of stopping fire entirely/heavy spraying, so misses drain slowly and hits are energy-positive;
+  - tightened the gun-alignment tolerance for hard-to-hit movers to avoid wasting shots while still farming stationary/slow targets as before.
+- Added `tools/offline_gun_eval.py`, a rough trace replay helper that compares head-on/linear/circular/averaged prediction errors from `/logs/rounds/*/sim_*.jsonl`. It suggested averaged/head-on still beat instantaneous linear/circular on GF1 traces; the actual guess-factor gun was not validated by this replay.
+- Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.

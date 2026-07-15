@@ -43,7 +43,7 @@ public class MyTank extends AdvancedRobot {
     private static final int GUN_GUESS_FACTOR = 4;
     private static final int GUN_COUNT = 5;
     private static final int VIRTUAL_WAVES = 96;
-    private final double[] virtualGunError = {55.0, 60.0, 60.0, 58.0, 54.0};
+    private final double[] virtualGunError = {55.0, 60.0, 60.0, 58.0, 70.0};
     private final boolean[] virtualActive = new boolean[VIRTUAL_WAVES];
     private final long[] virtualTime = new long[VIRTUAL_WAVES];
     private final double[] virtualSourceX = new double[VIRTUAL_WAVES];
@@ -165,6 +165,13 @@ public class MyTank extends AdvancedRobot {
         // inward; too close we open out.  wallSmooth then bends the path away
         // from the battlefield edges before we commit to it.
         double preferredDistance = headOnGunIsBest() ? 330.0 : (slowEnemyScans > 12 ? 285.0 : PREFERRED_DISTANCE);
+        // Against the current GF-style opponent our gun struggles mostly due
+        // to long bullet flight, while its own gun almost never connects.  Once
+        // virtual guns report a hard-to-hit mover, tighten the orbit a bit to
+        // shorten flight time and improve hit/kill speed without going to ram range.
+        if (virtualSamples > 28 && bestGunError() > 72.0 && stationaryScans <= 5 && slowEnemyScans <= 12) {
+            preferredDistance = 355.0;
+        }
         double distanceOffset = limit(-0.62, (e.getDistance() - preferredDistance) / 430.0, 0.55);
         double desired = absBearing + moveDirection * (Math.PI / 2.0 - distanceOffset);
         desired = wallSmooth(desired, moveDirection);
@@ -219,20 +226,23 @@ public class MyTank extends AdvancedRobot {
             // larger bullet bonus.  Fast/unknown movers keep the safer ladder.
             power = 3.0;
         }
+        boolean hardToHitMover = virtualSamples > 28 && bestGunError() > 72.0 && stationaryScans <= 5 && slowEnemyScans <= 12;
         // If all virtual guns are missing badly (as with wave-surfing GF-style
         // enemies), do not gamble the whole energy stack on repeated heavy
-        // bullets.  Survival is already very strong; conserving energy avoids
-        // the rare loss/draw where we empty ourselves before a kill.
-        if (virtualSamples > 28 && bestGunError() > 72.0 && stationaryScans <= 5 && slowEnemyScans <= 12) {
-            if (getEnergy() < 35 || distance > 360) {
-                power = Math.min(power, getEnergy() > 18 ? 1.15 : 0.55);
+        // bullets.  Use tiny bullets at low energy: a hit gives more energy back
+        // than it costs, while misses cannot self-kill us quickly.
+        if (hardToHitMover) {
+            if (getEnergy() < 12) {
+                power = Math.min(power, 0.15);
+            } else if (getEnergy() < 22 && bestGunError() > 82.0) {
+                power = Math.min(power, 0.75);
             }
         }
         if (getEnergy() < 22 && distance > 260 && stationaryScans <= 5 && slowEnemyScans <= 12) {
             power = Math.min(power, 1.25);
         }
         if (getEnergy() < 9) {
-            power = Math.min(power, 0.55);
+            power = Math.min(power, hardToHitMover ? 0.15 : 0.55);
         }
         power = Math.min(power, Math.max(0.1, getEnergy() - 0.15));
 
@@ -262,7 +272,13 @@ public class MyTank extends AdvancedRobot {
         // Fire when the gun is essentially on target.  The tolerance scales with
         // target width, so we still shoot promptly at close range.
         double tolerance = Math.atan2(28.0, distance);
-        if (getGunHeat() == 0 && Math.abs(getGunTurnRemainingRadians()) < tolerance && getEnergy() > 0.25) {
+        if (hardToHitMover) {
+            // Do not spray wide-angle shots at surfers/random movers.  Waiting
+            // a tick for a cleaner gun angle saves energy and raises hit rate.
+            tolerance = Math.min(tolerance, Math.atan2(17.0, distance));
+        }
+        if (getGunHeat() == 0
+                && Math.abs(getGunTurnRemainingRadians()) < tolerance && getEnergy() > 0.25) {
             setFire(power);
         }
     }
@@ -276,6 +292,13 @@ public class MyTank extends AdvancedRobot {
             return best;
         }
         for (int i = 0; i < GUN_COUNT; i++) {
+            // The guess-factor gun is useful as a last resort, but it is noisy
+            // early and hurt the recorded GF1 match when selected on a small
+            // sample.  Require a longer history and a clear margin before it can
+            // displace the simpler head-on/averaged guns.
+            if (i == GUN_GUESS_FACTOR && (virtualSamples < 45 || virtualGunError[i] > virtualGunError[best] - 8.0)) {
+                continue;
+            }
             if (virtualGunError[i] < virtualGunError[best]) {
                 best = i;
             }
