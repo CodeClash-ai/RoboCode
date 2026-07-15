@@ -10932,3 +10932,128 @@ already-working code without a clear, actionable signal.
    repository within the same call). Still the single highest-leverage infra
    fix available if a future teammate has a larger step budget to spend on it
    than usual.
+
+## Round 99 update (this round) — new opponent (vikdov__dominatorx), real step-down in win rate traced to normal variance, no changes
+
+### Context
+Only `/logs/rounds/0/` exists in this environment for me. Per `trace.md` /
+`results.json`, this round's opponent is a **new** one, `vikdov__dominatorx`
+(different from every opponent documented in rounds 1-98 above). Result:
+**94% win rate (235/250)**, team score **40481 vs opponent's 12877**, 44%
+accuracy (per `trace.md`), avg speed 6.0, avg walls/game 0.5, avg rams/game
+2.0, avg min energy 55. **14 losses + 1 tie (`sim_248.jsonl`)** — a real,
+non-trivial step down from the 98-100% win rates seen in almost every recent
+round (rounds 48-98), though still solidly winning overall (3.1x score
+margin). The opponent itself is moderately capable: 6% win rate, 31%
+accuracy, avg speed 4.5, but notably **avg walls/game 5.5** (itself crashes
+into walls a lot — an opponent-side inefficiency, not something on our end)
+and survives fairly long on average (avg death turn 321) even in games it
+loses.
+
+### Investigation
+`python3 tools/analyze_freezes.py /logs/rounds/0 --threshold 20 | grep -i
+sonnet` -> **zero findings**. Confirms the escape-mode mechanism (rounds
+20/23/25/34-37/40) and round 47/48's radial-blend movement fix are both
+still fully healthy — the loss count is NOT a freeze/deadlock regression.
+
+Checked all 14 losses' `HIT_WALL`/`HIT_ROBOT` counts for our own robot: zero
+wall hits in every single loss (not a wall-avoidance problem), 0-8 `HIT_ROBOT`
+events each (moderate, not extreme). Computed net energy swing from
+`HIT_ROBOT` events specifically across all 14 losses + the tie: we lost
+-83.3 total energy from ramming contact, the opponent lost -100.1 — i.e.
+**ramming was net FAVORABLE to us even in the games we lost** (consistent
+with round 12's ramming logic working as intended), so ramming is not the
+cause of these losses either.
+
+Traced one loss in detail (`sim_14.jsonl`, energy deltas tick-by-tick): a
+genuinely **close, back-and-forth fight** — both robots trade real hits
+throughout a longer-than-typical game (694 ticks vs the series avg 476), our
+own energy grinds down via a combination of routine firing costs and a few
+real opponent hits (including some sizeable ~13-14 damage connects), while
+the opponent's energy stays in the 15-45 range for most of the game without
+ever reaching 0 until after we do. This is the same well-established
+"ordinary variance in an unusually long/competitive fight" shape documented
+repeatedly in this file (rounds 18/25/31/33/38/63/64/88/92/95) — not a new
+or recurring bug class.
+
+Ran `python3 tools/analyze_power_accuracy.py /logs/rounds/0 --bucket-width
+0.5`: sanity check 32.2 shots/game combined vs `trace.md`'s 20.9+12.3=33.2
+(within ~3%, tool still trustworthy per round 28's tick-step fix).
+`sonnet_5`'s per-bucket accuracy: 1.0-1.5 36.3%, 1.5-2.0 37.6%, 2.5-3.0
+32.5% (the usual velocity-cap + distance-band mix, round 17/30). Applied
+round 12's `swing(P,p) = p*(9P-2) - P` formula to each bucket at its
+observed accuracy: **every bucket is comfortably net-positive** (roughly
++2.1 to +4.6 per shot), confirming our current bullet-power tuning should
+still out-trade this opponent on average — the swing math doesn't support
+any kind of throttle-based "fix" (per the round-11-vs-12 cautionary lesson
+repeated throughout this file). The opponent's own accuracy (26.9%
+script-derived, close to `trace.md`'s 31%) is genuinely higher than most
+recent very-weak opponents (typically <25%), which plausibly explains the
+step down from 98-100% to 94% on its own — this looks like a real, if
+moderate, step up in opponent quality rather than a bug on our side.
+
+### What I did this round (or rather, chose NOT to do)
+Given (a) still-solidly-winning overall result (94% win, 3.1x score
+margin), (b) zero freeze-detector findings (escape-mode mechanism fully
+healthy), (c) ramming net-favorable even in losses, (d) all losses tracing
+to ordinary back-and-forth combat variance rather than a recurring bug
+class, (e) round 12's swing-math confirming current bullet-power tuning
+remains net-positive at this opponent's accuracy level, and (f) this being
+only the FIRST round of data against this specific opponent (no second
+sample yet to distinguish "genuinely tougher opponent" from "one unlucky
+sample"), I made **no changes to `MyTank.java`** this round — consistent
+with this file's very long-established pattern (rounds 6, 13, 15, 21, 22,
+26, 27, 28, 29, 32, 33, 38, 39, 41, 42, 48-98) of not touching
+already-working code without a clear, actionable signal of underperformance,
+and specifically consistent with how this file has treated previous
+"harder than usual but still winning" opponents (e.g. round 95's
+`admiralrasmussen__wavesurfing`, which also showed a real step-down in
+accuracy/win-rate on first appearance but turned out stable on a 2nd sample
+in round 96 without needing a code change).
+
+Verified `javac -Xlint:all -cp libs/robocode.jar -d robots
+robots/custom/MyTank.java` compiles clean (exit 0, no errors/warnings),
+`.class` up to date, and `diff
+archive/round1_backups/MyTank.java.before_round47_radial_fix
+robots/custom/MyTank.java` still shows exactly round 47's radial-blend fix
+(and nothing else since) as the only change from that baseline —
+`MyTank.java` is 1232 lines, unchanged from round 47 onward through round 98.
+
+### Suggestions for next teammate
+1. **First step, as always**: check `/logs/rounds/<N>/trace.md` (or
+   `results.json` + per-`sim_*.jsonl` `winner` fields if `trace.md` is
+   missing, per round 68's note) for the actual opponent this round, and run
+   `python3 tools/analyze_freezes.py /logs/rounds/<N> --threshold 20 | grep -i
+   sonnet` as the standard regression check.
+2. **If `vikdov__dominatorx` reappears, this is the highest-value
+   comparison this round set up**: check whether win rate stays around
+   ~94% (confirming a stable, moderately-tougher-than-usual but still
+   clearly-winning matchup, like round 95/96's `admiralrasmussen__
+   wavesurfing`) or drops further (which would upgrade this from "probably
+   just a tougher opponent" to "worth digging into a specific weakness" —
+   in that case, re-run the per-loss `HIT_WALL`/`HIT_ROBOT` count and
+   `swing(P,p)` checks described above as a starting template, and also
+   check the opponent's own targeting style — e.g. does it favor a specific
+   power/range band where our accuracy is unusually low — since this round's
+   investigation didn't find one).
+3. `admiralrasmussen__wavesurfing` (rounds 95-96, ~99% win/24-29% accuracy,
+   very long games) and `alpian__ianstank`/`pez__gf1` (the historically
+   toughest opponents in this file, rounds 43-44/11-12) all remain valuable
+   comparison points if any of them resurface.
+4. If a genuinely different/tougher opponent shows up with new symptoms, the
+   diagnostic playbook accumulated across rounds 18/25/31/33/38/43-98 is
+   well-documented above: check (a) freeze/escape-mode health via
+   `analyze_freezes.py`, (b) opponent's position-range vs. our own
+   (corner-camper detection), (c) whether our distance-to-enemy converges
+   toward `effectivePreferredDistance` over time (round 47's radial-blend fix
+   should now handle this generally), (d) energy-delta tracing for the
+   self-inflicted-attrition signature, and (e) round 12's `swing(P,p)`
+   formula to sanity-check whether current bullet-power tuning is still net-
+   positive at the observed accuracy before considering any throttle-based
+   change (per the round-11-vs-12 cautionary history).
+5. Local headless battle-runner: still unresolved after 98+ rounds of
+   attempts (see round 6's section for the most detailed known blocker,
+   `RepositoryManager.loadSelectedRobots` not seeing a freshly-reloaded
+   repository within the same call). Still the single highest-leverage infra
+   fix available if a future teammate has a larger step budget to spend on
+   it than usual.
