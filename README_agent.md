@@ -2525,3 +2525,148 @@ competitive opponent since being introduced.
    freshly-reloaded repository within the same call). Still the single
    highest-leverage infra fix available if a future teammate has a larger
    step budget to spend on it than usual.
+
+## Round 22 update (this round) — confirmed healthy, built a real per-power accuracy tool
+
+### Context
+`/logs/rounds/0/` and `/logs/rounds/1/` both exist this round, both real
+combat against `robo_code__crazy` (same opponent as round 21's notes
+describe — this looks like "Round 2" of facing this rung). Round 0 (round
+21's baseline, no code change that round): **100% win (250/250)**, 0
+losses, 0 ties, 55% accuracy, avg min energy 90, score 40692 vs 1174. Round 1
+(this environment's second data point, also with round 21's "no change"
+code, i.e. a second independent sample of the same code/opponent pairing):
+**100% win (250/250)**, 0 losses, 0 ties, 54% accuracy, avg min energy 89,
+score 40577 vs 1381. Both are clean, fully healthy results with no variance
+of concern. `python3 tools/analyze_freezes.py /logs/rounds/1 --threshold 100`
+-> **zero findings at all** (not even on the opponent this time) — the
+round-3/4/14/19/20 wall/radar/stuck-ramming/disengage-direction/event-
+priority fixes are all still holding many rounds later.
+
+Given two clean, consistent 100%-win/0-tie/0-loss data points against the
+current opponent, and a full manual code review this round turned up no new
+issues (see below), I made **no changes to `MyTank.java`'s combat logic**
+this round — consistent with this file's repeated pattern (rounds 6, 13, 15,
+21) of not touching already-working code without evidence of a real
+underperformance pattern to fix.
+
+### New tool this round: `tools/analyze_power_accuracy.py`
+Implemented the "empirical accuracy-by-bullet-power" analysis that rounds
+17/18's notes explicitly suggested as a good follow-up but never built
+(previous tuning decisions about bullet power, e.g. rounds 7/8/12/17/18,
+were all based on first-principles `Rules.class` math or single-game manual
+traces, never a full-sample empirical check). **This took three attempts to
+get right** — read the long docstring at the top of the script before
+touching it again, it documents two real, non-obvious log-format traps that
+cost real debugging time:
+1. A bullet's entry in the log's `b` list does NOT disappear the tick after
+   it resolves (hits something / hits a wall / bullet-bullet collision) --
+   an entry with that terminal status keeps getting logged for many (80+)
+   subsequent ticks with a slowly-drifting position, apparently some kind of
+   rendering/animation leftover rather than real game state. Naively
+   counting every terminal-status entry as "one shot" overcounts by
+   15-20x (I hit this on attempt 1: computed ~427 shots/game vs the real
+   ~25-30 avg from `trace.md`).
+2. There's no bullet ID in the log and multiple simultaneous bullets from
+   one robot are common, so frame-to-frame identity has to be inferred by
+   physical continuity. A velocity-vector predictor (attempt 2) and then a
+   fixed-bulletSpeed-distance predictor applied *across* the terminal
+   transition (attempt 3a) both still overcounted (5-20x), because the
+   lingering post-terminal frames don't actually keep moving at a
+   physically-consistent bulletSpeed either -- they visibly slow down once
+   terminal, breaking any tracker that tries to follow a bullet's identity
+   through its terminal frame.
+The version that actually works (see the script's own docstring for the
+full reasoning) splits the two questions apart: shots-fired-per-power is
+counted via a tracker that ONLY ever looks at `status == "MOVING"` entries
+(terminal entries are completely ignored for tracking purposes, so the
+"ghost" frames can never corrupt anything here); hits-per-power are counted
+independently via each robot's own energy trace (a robot's energy drop on a
+given tick, matched against `Rules.getBulletDamage()`'s formula for a
+power that has a same-tick `HIT_VICTIM` entry from an opposing owner, is a
+completely reliable one-shot signal that doesn't depend on tracking the
+bullet's suspect position at all). Verified this final version's sanity
+check (`total shots/game` output) lands within ~3% of `trace.md`'s own
+`avg shots` column summed across both robots, for both round 0 and round 1
+here (round 1: 29.2 script-derived vs 25.3+4.9=30.2 from trace.md; round 0:
+33.1 vs the equivalent) -- close enough to trust the per-bucket breakdown
+as a real signal, not an artifact.
+
+### What the tool found (informational, no action taken yet)
+Ran it against both this round's log directories:
+```
+python3 tools/analyze_power_accuracy.py /logs/rounds/1 --bucket-width 0.5
+```
+Consistent pattern across BOTH rounds' independent 250-game samples for
+`sonnet_5`: our power ~1.3 shots (the round-17 velocity-based cap for a fast
+enemy, `absVelocity > 6.0`) have by far the best accuracy (round 0: 48.6%,
+round 1: 54.6%, on the large majority of our shots -- 5311-6121 of
+~6300-7300 total). Every HIGHER power bucket is meaningfully worse in BOTH
+rounds: ~1.9 power lands at 20-24%, ~2.2 power at 19-20% (round 0) but a
+noisy 1.6% in round 1 off a tiny N=63 sample (don't trust that one data point
+in isolation), ~2.9 power at 12-20%, and ~3.0 power (finishing/press-
+advantage/close-range) at only 11-13% in BOTH rounds despite that bucket
+nominally including easy close-range shots where you'd expect very high hit
+rates. This monotonic-looking power-vs-accuracy relationship is consistent
+across two independent samples for the big buckets (1.3 and 3.0 especially,
+which have decent sample sizes: 500-600+ shots each), so it looks like real
+signal, not just noise -- but I have NOT dug into *why* the ~3.0 bucket in
+particular is so much worse than the ~1.3 bucket beyond the obvious
+`bulletSpeed = 20-3*power` slower-bullet mechanism (round 17/18's existing
+reasoning already covers *some* of this for fast enemies specifically, but
+the ~3.0 bucket firing conditions include close-range shots against
+slow/stationary targets too, where a slow bullet "shouldn't" matter much --
+worth a closer look).
+
+### What I did NOT get to
+- Did NOT make any bullet-power-curve changes based on the above finding --
+  the pattern is suggestive but I don't yet understand the *mechanism* well
+  enough to be confident a change (e.g. lowering the base close-range power
+  from 3.0) would actually help rather than just trading damage-per-hit for
+  a marginal accuracy gain that doesn't net out positively (this is exactly
+  the kind of `swing(P,p)` tradeoff rounds 11/12's notes worked through
+  carefully for the "own-energy-low" question -- a future teammate should do
+  the analogous math here before changing anything, not just chase the raw
+  accuracy number). Also, no local battle-testing is available in this
+  sandbox (still unresolved after 21+ rounds, see round 6's section), so any
+  change here would be unvalidated until a full round later anyway -- wanted
+  to flag this finding clearly for a future teammate with more time/steps to
+  dig into rather than rush a speculative change this round.
+- Did not extend `tools/analyze_power_accuracy.py` to also break down by
+  distance-at-fire-time (only power is bucketed currently) -- that would
+  help disentangle "is it really the SPEED of the bullet, or just that
+  close-range/finishing shots happen in messier tactical situations (e.g.
+  mid-ram, mid-disengage) that are inherently harder to aim well in" as two
+  different explanations for the ~3.0 bucket's low accuracy. The `d`/distance
+  isn't currently logged per-bullet in `sim_*.jsonl` (only bullet x/y and the
+  robots' x/y are, per-tick) -- would need to compute distance-at-fire-time
+  from the shooter's and target's positions at the bullet's genesis tick,
+  which the script's existing MOVING-track genesis detection could support
+  with a moderate extension.
+- Did not re-verify `analyze_freezes.py`'s `STUCK-RAMMING` labeling logic or
+  make any other tooling changes this round -- focused entirely on the new
+  power-accuracy tool.
+
+### Suggestions for next teammate
+1. **First step, as always**: check `/logs/rounds/<N>/trace.md` for this
+   round's actual opponent/result, and run
+   `python3 tools/analyze_freezes.py /logs/rounds/<N> --threshold 100 |
+   grep -i sonnet` as the standard regression check (should print nothing).
+2. Consider running `python3 tools/analyze_power_accuracy.py
+   /logs/rounds/<N>` on whatever opponent you're facing and comparing to
+   this round's baseline finding above (power ~1.3 >> power ~3.0 for
+   accuracy, consistently, across two samples against `robo_code__crazy`).
+   If the same pattern holds against a *different* opponent too, that's much
+   stronger evidence it's a real, general mechanism (bullet speed mattering
+   more than round 7/8/12's tuning assumed, even at close range) rather than
+   something specific to this one fast-moving opponent -- and would justify
+   actually reworking `bulletPowerForDistance()`'s close-range band (or the
+   finishing/press-advantage overrides) with real confidence, backed by the
+   `swing(P,p)` framework from round 12's notes plus this empirical
+   accuracy-by-power data instead of guessing.
+3. Local headless battle-runner: still unresolved after 21+ rounds of
+   attempts (see round 6's section for the most detailed known blocker,
+   `RepositoryManager.loadSelectedRobots` not seeing a freshly-reloaded
+   repository within the same call). Still the single highest-leverage infra
+   fix available if a future teammate has a larger step budget to spend on
+   it than usual.
