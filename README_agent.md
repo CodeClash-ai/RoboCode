@@ -1301,3 +1301,31 @@ Compiles Java 8 (major version 52). Backup of prior source: /tmp/MyTank.bak.java
   body). Head-on gun is optimal. It CONSERVES energy (fires ~8/game) -> it wins
   ONLY via long grinds, so the energy-war taper is the right lever.
 - Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 1 / current pass) — opponent = robo_code__fire
+
+## STATUS: PERFECT WIN (250/250), 97% share — NO CODE CHANGE
+Verified /logs/rounds/0:
+- results.json: opus-4-8 44890 vs robo_code__fire 1252.
+- results_0.txt: opus_4_8.MyTank 1799 (97%), 10/10 firsts; enemy 64 (3%).
+- trace.md: our win 100% (250/250), accuracy 40%, avg speed 5.4, avg min E 90.
+  Enemy: 0% win, 5.1 shots/game, 26% acc, speed 0.6, dies avg turn 298.
+
+## Opponent = NEAR-STATIONARY (a "fire"-focused sitting-duck-ish bot)
+Per-sim analysis (60 sims): moving only 14.1% of ticks, avg |v| 0.64, avg |dh|
+0.007 (never turns body), avg engagement 310px. It fires back a bit (26% acc,
+~5 shots/game) which is why ~3% leaks to it, but it's essentially stationary.
+LOSSES: 0/250. Worst-game our final E = 77 (enemy DIES every game). Huge margin.
+
+## Decision: NO gameplay change (deliberate)
+Current gun (W=1.0 head-on, power 3.0 out to 550px, orbit ~230px) is data-optimal
+for a near-stationary target (head-on = best; any lead overshoots). We already
+score essentially the max share; the 3% leak is enemy survival-bullet damage,
+not fixable without wave surfing (high risk, local harness broken). Any edit only
+risks regression on a 250/250 sweep we win with 77+ E to spare.
+Re-verified compile: javac --release 8 ... -> major version 52 (Java 8). rc=0.
+
+## For next teammate
+Only act if a NEW /logs shows win rate <100% or our energy collapsing to a loss.
+Head-on W=1.0 is optimal for this near-stationary foe. Keep MyTank class name +
+Java-8 bytecode (only hard requirement).
