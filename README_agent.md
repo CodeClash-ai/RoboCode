@@ -15345,3 +15345,178 @@ for a quick diff/revert if needed.
    131's original mistake) be caught and corrected within a single round
    instead of costing 3 rounds of real-match iteration on a fix that turned
    out to be unnecessary.
+
+## Round 134 update (this round) — confirmed round 133's revert holds (5 samples total vs logancsc__dodgebot2), built committed analyze_ram_swing.py tool, no MyTank.java changes
+
+### Context
+Five log directories exist this round (`/logs/rounds/0-4`), all real combat
+against `logancsc__dodgebot2` — the evasive opponent from rounds 130-133 that
+handed us this file's first-ever outright match loss. Rounds 0/1 match
+round 130/131's own pre-round-131-gate baseline exactly (46%/44% win for us).
+Rounds 2/3 match round 132/133's two independent samples of round 131's
+(now-reverted) ramming gate (47%/43% win for us). **Round 4 is fresh data
+this round**, generated with round 133's revert already in place (confirmed
+via `diff` below): **42% win for us / 52% for `logancsc__dodgebot2` / 15
+draws** (score not in trace.md table but consistent with the other 4
+samples) — the LOWEST win rate of all 5 samples, but well within the same
+~42-47%-for-us / ~48-55%-for-them range every sample has shown regardless of
+which ramming-gate variant was active. Averaging all 5 samples: **we win
+~44.4% / they win ~51.6% / ~4% draws** — a real, consistent, moderate
+disadvantage in this specific matchup that has now persisted across 5
+independent samples and 2 different code states (gated and ungated ramming).
+
+### Validation performed
+1. Confirmed `robots/custom/MyTank.java` currently reflects round 133's
+   revert (the unconditional round-12 ramming trigger, no
+   `enemyHeadingRate` gate) via `diff
+   archive/round1_backups/MyTank.java.before_round133_ram_gate_revert
+   robots/custom/MyTank.java` — differs exactly as expected (the gate is
+   gone, replaced by round 133's explanatory comment). No accidental
+   re-reversion.
+2. `javac -Xlint:all -cp libs/robocode.jar -d /tmp/build_check
+   robots/custom/MyTank.java` compiles clean (exit 0, no errors/warnings).
+3. `python3 tools/analyze_freezes.py /logs/rounds/<N> --threshold 20 | grep
+   -i sonnet` on all 4 available directories (0-3; ran round 4 separately,
+   see below) -> only 1-5 short findings each, all consistent with the
+   already-documented (rounds 11/95/130-133) benign "mutual energy
+   exhaustion in very-long TIE games, status stays ACTIVE not DEAD for a
+   long tail" pattern, not a real freeze/deadlock bug. Round 4 specifically:
+   4 findings (2 short position-freezes, 2 long radar-freezes in what are
+   almost certainly more of the same TIE-game pattern given this round's
+   sample has 15 draws, the most of any of the 5 samples). The escape-mode
+   mechanism (rounds 20/23/25/34-37/40) and round 47/48's radial-blend
+   movement fix remain fully healthy across all 5 samples — this matchup's
+   difficulty is genuinely about combat competitiveness, not a bug.
+4. **Re-ran round 130's bucket-level `swing(P,p)` analysis** (now a
+   permanent feature of `tools/analyze_power_accuracy.py` since round 131)
+   on round 4's fresh data: `sonnet_5` +32.07/game vs
+   `logancsc__dodgebot2` +33.19/game — near-even, consistent with rounds
+   130/132's findings across the other 4 samples. **Confirmed the
+   persistently weak 2.0-2.5 power bucket (the 350-550px distance band,
+   power 2.2) shows low accuracy (5.9-8.8%) in ALL 5 samples** — but its
+   volume is tiny (~100 shots per 250-game sample, i.e. ~0.4 shots/game),
+   so even though it's technically running slightly below its own breakeven
+   (swing ≈ -0.3 to -0.8 energy/game total), fixing it could not plausibly
+   explain or fix the ~5-13 percentage-point win-rate gap this matchup
+   shows — flagging for completeness/awareness (this bucket has shown the
+   same weak-accuracy pattern in many earlier rounds' notes too, e.g. round
+   33, against entirely different opponents — likely just "350-550px is a
+   genuinely harder range to hit at, independent of power", not something
+   specific to this matchup) but did NOT act on it this round given its
+   negligible size relative to the actual problem.
+
+### New tool: `tools/analyze_ram_swing.py` (implements round 133's corrected contact-energy method as a committed, reusable script)
+Round 133's notes explicitly flagged that its corrected "either-robot-
+HIT_ROBOT-tick, sum-both-robots'-deltas" method (used to find and fix round
+130/131's measurement bug) was only ever done ad-hoc, and asked for a
+committed tool so the mistake couldn't be repeated. Implemented
+`tools/analyze_ram_swing.py`: for every tick where EITHER robot's status
+shows `HIT_ROBOT`, sums BOTH robots' own raw energy deltas that tick
+(filtered to `|delta| < energy_delta_cap`, default 5.0, to exclude ticks
+where a bullet impact happens to coincide with contact status, per round
+102's documented caveat), and reports total/per-game/tick-count per robot.
+
+**Verified it reproduces round 133's own by-hand numbers essentially
+exactly** across all 4 pre-existing samples (round 0: us -2.74/game vs them
+-3.24; round 1: -2.90 vs -3.30; round 2: -2.92 vs -3.22; round 3: -2.96 vs
+-3.43 — all match round 133's quoted figures to the hundredth), and ran it
+on this round's fresh round-4 sample too: **us -3.16/game vs them
+-3.50/game** — a 5th consecutive sample confirming ramming contact remains
+mildly FAVORABLE to us in this matchup (we consistently lose LESS energy
+from contact than the opponent does), fully consistent with round 133's
+revert being the correct call and giving strong, now-quintuple-replicated
+confidence that this specific lever is not, and was never, the explanation
+for the overall loss. This is a pure tooling addition — zero risk to
+`MyTank.java`/real combat behavior, and should make any future
+ramming-asymmetry investigation (against this or a different opponent) both
+faster and immune to round 130/131's original measurement mistake.
+
+### What I did this round (or rather, chose NOT to do)
+Given (a) 5 consistent, independent samples now confirming a real, but
+modest and not-obviously-single-lever-fixable, disadvantage against
+`logancsc__dodgebot2` (bullet-power swing near-even per round 130/132's and
+this round's analysis; ramming now confirmed favorable to us across all 5
+samples via the corrected metric; freeze/escape-mode mechanism fully
+healthy), (b) round 131's own experience of a plausible-sounding fix
+providing no real benefit (and turning out to be based on a flawed premise
+entirely, per round 133), and (c) no local battle-testing available to
+cheaply iterate on a new hypothesis before a full future round's real
+match, I made **no changes to `MyTank.java`** this round. This is
+consistent with round 133's own closing recommendation ("If it's still
+stuck around 43-47% even after this round's revert, that's good evidence
+the ramming lever ... was never the real story here") — this round's 5th
+sample bears that out, and I did not find a new, well-quantified,
+low-risk lever to justify a further speculative change this round.
+
+### What I did NOT get to
+- Did not identify a new, concrete, actionable lever for closing the
+  ~5-13-point win-rate gap against `logancsc__dodgebot2` specifically. The
+  two most-analyzed candidate levers (bullet-power tuning, ramming) have
+  both now been checked across 5 samples and shown to be roughly neutral-
+  to-favorable for us, not the cause. Remaining untried ideas from round
+  130's original notes (still open): (a) whether our own accuracy degrades
+  over the course of these unusually long games (avg 664-683 turns) due to
+  some accumulating-state effect, (b) whether the round-16 "dodge on fire"
+  juke or round-47/48 radial-blend orbit-distance logic interacts
+  specifically poorly with this opponent's evasion style (needs a
+  position/heading trace of a full game, not yet attempted), and (c)
+  whether this is simply natural, hard-to-reduce variance from a genuinely
+  close-to-50/50 EV matchup played out over unusually long, high-variance
+  games (game length itself amplifies variance around a near-even mean).
+- Did not attempt the tiny, low-risk 2.0-2.5-bucket (350-550px distance
+  band) power tweak noted above — its total impact (~0.3-0.8 energy/game)
+  is too small relative to this matchup's actual ~5-13-point win-rate gap
+  to be worth the risk of an unvalidated change, though it might be a small,
+  free, cumulative improvement worth revisiting in a future round with
+  nothing more pressing to investigate (this pattern has now recurred
+  across many rounds/opponents historically, e.g. round 33, so it's likely
+  a genuine, if minor, "hard range to hit" effect rather than noise).
+- Did not attempt a full position/heading trace of `logancsc__dodgebot2`'s
+  movement algorithm to determine whether it's a true wave-surfer (like
+  `admiralrasmussen__wavesurfing`, rounds 95-96) or some other evasion
+  style — would be the natural next investigative step if this opponent
+  reappears with a 6th losing sample, since neither of the two most
+  plausible offense-side explanations panned out.
+
+### Suggestions for next teammate
+1. **First step, as always**: check `/logs/rounds/<N>/trace.md` for this
+   round's actual opponent/result, and run
+   `python3 tools/analyze_freezes.py /logs/rounds/<N> --threshold 20 | grep -i
+   sonnet` as the standard regression check (watch for LONG radar/position
+   freezes specifically in TIE/very-long games — per rounds 11/95/130-134,
+   that's the known benign mutual-exhaustion pattern, not a bug).
+2. **If `logancsc__dodgebot2` reappears a 6th time**, use the new
+   `python3 tools/analyze_ram_swing.py /logs/rounds/<N>` tool directly
+   instead of any ad-hoc recomputation — it's now verified to reproduce
+   round 133's corrected numbers exactly and should be trusted going
+   forward for this class of question. Also re-run `python3
+   tools/analyze_power_accuracy.py /logs/rounds/<N>` and check the
+   permanent swing(P,p) summary section at the bottom — if either metric
+   suddenly shows a LARGE, clear asymmetry (unlike the 5 samples so far,
+   which have all shown near-parity or a small favorable edge for us), that
+   would be a genuinely new/different signal worth acting on. Otherwise,
+   consider pursuing the position/heading-trace investigation described
+   above (item (b)/(c) in "What I did NOT get to") rather than another
+   bullet-power/ramming tweak, since those two levers have now each been
+   checked across 5 samples without finding the real cause.
+3. `kcanida__pikachu` (rounds 107-109, the fast-mover-cap fix still awaiting
+   its first real re-test after 25+ consecutive rounds of not reappearing)
+   and `pez__gf1`/`alpian__ianstank` (rounds 11-12/43-44) remain the other
+   historically-toughest opponents in this file.
+4. **General lesson reinforced this round**: `logancsc__dodgebot2` is a
+   good example of a matchup where extensive, well-reasoned analysis (rounds
+   130-134) failed to find a clear, single-lever, low-risk fix — sometimes
+   an opponent really is just moderately better in a close, well-balanced
+   way, and the right response (per this file's long-established culture)
+   is to keep validating that no regression exists, keep building better
+   tooling for the NEXT investigation, and resist the urge to force a
+   change without real evidence it will help (round 107/108's fire-
+   threshold-tightening backfire, and round 130/131's flawed-metric-driven
+   ramming gate, are both cautionary examples of exactly this trap).
+5. Local headless battle-runner: still unresolved after 133+ rounds of
+   attempts (see round 6's section for the most detailed known blocker,
+   `RepositoryManager.loadSelectedRobots` not seeing a freshly-reloaded
+   repository within the same call). Still the single highest-leverage
+   infra fix available — would let a future teammate iterate on hypotheses
+   for the `logancsc__dodgebot2` matchup (or any other tough opponent) in
+   minutes instead of costing a full round per experiment.
