@@ -4745,3 +4745,49 @@ lead + close orbit + fast bullets. Do NOT go back to a wide orbit / head-on (tha
 LOST 0/120 in R0). Do NOT conserve energy (documented loss vs wallspoet). Always
 re-check `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING first.
 Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 1 / current pass) — opponent = pez__wallspoetas (WINNING 76%, tuned gun W 0.0 -> 0.5)
+
+## STATUS: WINNING the match (opus 35414 vs wallspoetas 13163, 76% share, 9/10 firsts)
+Opponent CHANGED to pez__wallspoetas (a DIFFERENT bot from the tough pez__wallspoet
+we barely won ~55%). Verified /logs/rounds/0 (INDEX: i=0=opus, i=1=wallspoetas):
+- results.json: winner=opus-4-8, 35414 vs 13163.
+- results_0.txt: opus 1358 (76%), 9/10 firsts; enemy 434 (24%, 1 first).
+- Full 250-sim sweep: 33 LOSSES, 46 close(<20E), ourFE mean 59.6, killtick mean
+  479, turns mean 650 (max 1024). Long grind games (mutual fighter).
+
+## Opponent = MODERATE near-straight LEAD-gun mover
+Per-sim analysis: movefrac 0.57, avgV 3.46, avg|dh| 0.0092 (NEAR-STRAIGHT),
+engages ~250px. Enemy gun offset when firing: median 0.467 rad, mean 0.535 -> a
+LEAD gun (aims where we WILL be). Fires ~half as often as us (850 vs 1698 in 60
+sims). Loses the energy war but grinds long -> the 33 survival losses.
+
+## CHANGE THIS PASS: gun aim W 0.0 -> 0.5 (HALF LEAD)
+The gun was left at W=0.0 (FULL linear lead) from the robo_code__walls match (a
+PERFECT v=8 wall mover -> full lead was exact). WRONG for this moderate near-straight
+mover. W-sweep replay (per-tick interception, 2 independent 80-game slices), CLEAN
+PEAK at W=0.5:
+  slice A: W0.0 0.251 | W0.25 0.277 | W0.5 0.364 | W0.75 0.325 | W1.0 0.311
+  slice B: W0.0 0.273 | W0.25 0.288 | W0.5 0.356 | W0.75 0.317 | W1.0 0.301
+W=0.5 hits ~36% vs current W=0.0 ~25% and head-on ~31%. Damage/net-energy model
+(120 games, distance-tiered power): W=0.0 dmg 14858 net +362 -> W=0.5 dmg 19229
+(+29%) net +3091 (8.5x). BOTH damage AND net energy up -> no downside. Higher hit
+rate = faster kills = fewer of the 33 grind losses + more bullet-dmg share.
+Only ONE functional line changed (line 345). Movement (~170px orbit), power tiers
+(3.0/<160 2.4/<250 1.6/<400 1.0/<560 0.5), dodge, enemyPassive mode UNCHANGED.
+enemyPassive stays OFF (wallspoetas fires & deals real damage -> damageTaken>=5).
+Compiles Java 8 (major version 52). Backup of prior source: /tmp/MyTank.bak.java.
+
+## For next teammate — VERIFY
+- Want NEW /logs: the 33 losses REDUCED, killtick DOWN from 479, share UP from 76%,
+  enemy score DOWN from 13163, ourFE mean UP from 59.6. If it REGRESSED (unlikely —
+  W-sweep clean on 2 slices + damage model strongly positive), revert W to 0.0
+  (/tmp/MyTank.bak.java or git prior). wallspoetas is a MODERATE near-straight
+  LEAD-gun mover -> KEEP W=0.5 half-lead. If it becomes a FAST curving dodger
+  (avg|dh|>0.06), set W=0.0 (circular); if near-stationary/slow, raise W toward 1.0.
+- NOTE: this is pez__wallspoetas (near-straight, avg|dh| 0.009), NOT pez__wallspoet
+  (the heavy-curve active wave surfer we barely won ~55% with the aggressive gun).
+  Different bot -> different tuning. Re-check `head -1 /logs/rounds/0/sim_0.jsonl`.
+- The remaining lever if grind losses persist is WAVE SURFING (high-risk, harness
+  broken). Do NOT conserve energy / lower power (documented loss vs wallspoet).
+- Keep MyTank class name + Java-8 bytecode (only hard requirement).
