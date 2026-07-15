@@ -308,6 +308,13 @@ public class MyTank extends AdvancedRobot {
                 drivePerpendicularEscape(absBearing, getEnergy() < 38.0 ? 285.0 : 245.0);
                 return;
             }
+            if (mediumPowerWallCruiser()) {
+                // TannerBot's medium wall shots are simple but frequent; a pure orbit
+                // reversal can leave us parallel to the wall and on the same line.  Step
+                // across the shot, especially in the mid/late reserve phase.
+                drivePerpendicularEscape(absBearing, getEnergy() < 42.0 ? 315.0 : 255.0);
+                return;
+            }
             if (npcSniperEnemy() && getEnergy() < 24.0) {
                 // The remaining NPCSniper loss came from a late low-energy exchange:
                 // after a few medium bullets our bot kept orbiting predictably near
@@ -390,6 +397,10 @@ public class MyTank extends AdvancedRobot {
             // Avoid low-energy point-blank wall scrambles against the current power-2
             // stop/go shooter; resume the normal close band after a safe gap is open.
             driveAwayFrom(absBearing, 335.0);
+            return;
+        }
+        if (mediumPowerWallCruiser() && getEnergy() < 28.0 && e.getDistance() < 340.0) {
+            driveAwayFrom(absBearing, 380.0);
             return;
         }
         if (lowFireTracker() && e.getDistance() < 415.0) {
@@ -513,6 +524,14 @@ public class MyTank extends AdvancedRobot {
             // Medium/weak stationary shooters are best farmed faster from a closer band.
             // Heavy stationary shooters are handled by the previous wider branch.
             preferredDistance = 330.0;
+        } else if (mediumPowerWallCruiser()) {
+            // Current TannerBot profile: medium-power wall/perimeter runner with long
+            // straight cardinal legs plus corner stops.  Keep a short linear-shot band
+            // while healthy, but open a little once reserve is low to avoid the long
+            // self-depletion wall chases seen in round-0 loss traces.  Put this before
+            // fixed-heading wall-axis branches; long cardinal wall legs can otherwise
+            // look like one-dimensional fixed-heading motion for too long.
+            preferredDistance = getEnergy() < 24.0 ? 440.0 : 315.0;
         } else if (weakFixedAxisOscillator()) {
             // Current Tarektank-style target is a one-dimensional 100px
             // oscillator with a weak fixed-heading gun.  Move closer than the
@@ -1072,6 +1091,24 @@ public class MyTank extends AdvancedRobot {
                 power = Math.min(Math.max(power, 1.65), 2.1);
             }
         }
+        if (mediumPowerWallCruiser()) {
+            // TannerBot fires repeated ~power-2 shots while sliding/stopping along
+            // the border.  Our round-0 losses are almost all self-depletion after
+            // max-power wall shots miss or hit walls.  Full linear aiming is better
+            // on replay, and medium/faster bullets preserve energy without giving up
+            // too much kill speed against this predictable path.
+            if (e.getEnergy() < 9.0 && getEnergy() > 5.5) {
+                power = Math.min(Math.max(power, lethalPower(e.getEnergy())), 1.65);
+            } else if (getEnergy() > 60.0) {
+                power = Math.min(Math.max(power, distance < 420 ? 1.90 : 1.60), 1.95);
+            } else if (getEnergy() > 34.0) {
+                power = Math.min(Math.max(power, distance < 380 ? 1.30 : 1.05), 1.45);
+            } else if (getEnergy() > 16.0) {
+                power = Math.min(power, distance < 340 ? 0.55 : 0.35);
+            } else {
+                power = Math.min(power, getEnergy() < 8.0 ? 0.15 : 0.22);
+            }
+        }
         if (hardToHitMover) {
             if (getEnergy() < 12) {
                 power = Math.min(power, 0.15);
@@ -1183,6 +1220,11 @@ public class MyTank extends AdvancedRobot {
                     ? GUN_HEAD_ON : GUN_AVERAGED;
         } else if (crazyEnemyScans > 3) {
             gun = GUN_CIRCULAR;
+        } else if (mediumPowerWallCruiser()) {
+            // Round-0 TannerBot replay strongly favors full linear/circular lead for
+            // its long straight border legs; averaged/wall-damped/fixed-axis shots lag
+            // behind and waste energy in the corner-chase losses.
+            gun = GUN_LINEAR;
         } else if (fixedHeadingHighPowerShooter()) {
             // When this class parks/stops to fire power-3, the safest aim is nearly
             // head-on; avoid the weak-axis midpoint/opposite-endpoint gun that was
@@ -1357,6 +1399,9 @@ public class MyTank extends AdvancedRobot {
         }
         if (m9WallStopGoEnemy()) {
             tolerance = Math.min(tolerance, Math.atan2(16.0, distance));
+        }
+        if (mediumPowerWallCruiser()) {
+            tolerance = Math.min(tolerance, Math.atan2(15.0, distance));
         }
         if (turningHighPowerEnemy()) {
             tolerance = Math.min(tolerance, Math.atan2(15.0, distance));
@@ -1624,6 +1669,30 @@ public class MyTank extends AdvancedRobot {
                 && virtualGunError[GUN_HEAD_ON] + 5.0 < virtualGunError[GUN_DRIFT_HEAD_ON];
     }
 
+    private boolean mediumPowerWallCruiser() {
+        // tannerrogalsky__tannerbot1 in /logs/rounds/0: almost always on a wall,
+        // many straight cardinal runs plus corner stops, and repeated medium (~p2)
+        // fire.  It is faster and straighter than M9/MarkRobo, and much stronger
+        // than QuadWall's weak-fire profile.  Use this to keep linear aim but avoid
+        // the generic fast/dangerous-wall max-power self-depletion behavior.
+        return wallEnemyScans > 10
+                && straightEnemyScans > 10
+                && enemyFireCount > 2
+                && enemyFirePowerSamples > 1
+                && enemyFirePowerAvg > 1.45
+                && enemyFirePowerAvg <= 2.22
+                && enemySpeedAvg > 1.8
+                && enemySpeedAvg < 5.9
+                && enemyAbsTurnRateAvg < 0.040
+                && crazyEnemyScans <= 4
+                && !spinBotEnemy()
+                && !stationaryShooter()
+                && !m9WallStopGoEnemy()
+                && !quadWallEnemy()
+                && !lowFireTracker()
+                && !lowFireRammer();
+    }
+
     private boolean quadWallEnemy() {
         // gabriel_lw__quadwall in the current logs is a wall/perimeter runner with
         // many hard stops and frequent weak shots.  It superficially resembles the
@@ -1666,7 +1735,8 @@ public class MyTank extends AdvancedRobot {
                 && Math.abs(enemyVelocityAvg) > 3.6
                 && modestFire
                 && crazyEnemyScans <= 4
-                && !quadWallEnemy();
+                && !quadWallEnemy()
+                && !mediumPowerWallCruiser();
     }
 
     private boolean easyHeadOnStopGoEnemy() {
@@ -1969,7 +2039,7 @@ public class MyTank extends AdvancedRobot {
         // of the old "harmless wall target" max-power close-orbit mode.
         return wallEnemyScans > 4 && enemyFireCount > 3 && stopGoEnemyScans <= 12
                 && !highPowerStopGoDodger()
-                && !heavyStopGoShooter() && !m9WallStopGoEnemy() && !mediumStopGoShooter() && !quadWallEnemy() && !fastWallCruiser() && !npcSniperEnemy();
+                && !heavyStopGoShooter() && !m9WallStopGoEnemy() && !mediumStopGoShooter() && !quadWallEnemy() && !mediumPowerWallCruiser() && !fastWallCruiser() && !npcSniperEnemy();
     }
 
     private double bestGunError() {
