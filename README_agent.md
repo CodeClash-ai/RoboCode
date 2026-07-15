@@ -1048,3 +1048,165 @@ diff/revert if next round's accuracy or shot-volume numbers look worse.
    (see round 6's section for the most specific known blocker). Still the
    single highest-leverage infra fix available if anyone has spare steps to
    dig into `RepositoryManager.loadSelectedRobots`/`checkDbExists`/`reload`.
+
+## Round 11 update (this round) — new tougher opponent (pez__gf1), added energy-management tuning + freeze-tool fix
+
+### Context
+Only `/logs/rounds/0/` exists in this environment for me. Per `trace.md` /
+`results.json`, this round's opponent is a **new, noticeably tougher**
+opponent, `pez__gf1` (different from all opponents documented in rounds 1-10
+above). Confirmed real combat via `python3 tools/analyze_sim_logs.py
+/logs/rounds/0` (2 robots, bullets, movement present). Result: **64% win rate
+(160/250)**, 22% for `pez__gf1`, **34 ties (13.6%)** — by far the highest tie
+rate of any round in this file's history (previous rounds: 0 losses/0 ties or
+very few). Our accuracy dropped to **17%** (vs 41-70% against previous, much
+weaker/more passive opponents) and avg min energy dropped to **24** (vs
+86-96 previously) — this is the first opponent that's genuinely competitive:
+it moves (avg speed 4.1) and lands real hits on us (their listed accuracy is
+13%, similar ballpark to ours, unlike every previous opponent's <10%). Team
+score is still solidly in our favor (23998 vs 12879) so we're still net
+ahead, but this is a real step down in dominance vs previous rungs and is
+worth taking seriously.
+
+### Investigation: are the ties a bug, or just a hard opponent?
+First checked for regressions using `tools/analyze_freezes.py` (the standard
+health check from rounds 3/4/6/8/9/10's notes) — **found it was reporting 140
+false-positive "freeze" findings on our own bot**, but on closer inspection
+(wrote an ad-hoc script checking robot status `s` at the end of each flagged
+freeze streak) **all 140 were explained by the robot being `DEAD`** (i.e. a
+dead robot's last x/y/rh trivially stop changing — not a bug at all, just the
+tool not accounting for death). **Fixed `tools/analyze_freezes.py`** to skip
+any freeze streak whose robot status at the end of the streak is `DEAD`, so
+future teammates get a clean signal instead of noise. Re-ran after the fix:
+zero findings on `sonnet_5` across all 250 games (all 45 remaining findings
+are on the opponent, and even those aren't obviously death-related — didn't
+dig further since they're on the opponent, not us). **Conclusion: no
+wall-standoff or radar-freeze regression** — the round-3/round-4 fixes are
+still holding. The tie rate is a real behavioral/tactical issue, not a latent
+bug resurfacing.
+
+Manually inspected one tie game (`sim_4.jsonl`, 1465 turns — very long).
+Both robots' energy visibly ground down to 0.0 by around turn 800-1200, both
+robots then sat frozen (0 velocity, can't fire/move meaningfully at 0
+energy) for the rest of the very long game until finally both showing `DEAD`
+at the very end (t=1464). This looks like **mutual energy exhaustion**: both
+sides spent down their energy (via missed/low-accuracy shots, which cost
+energy up front regardless of hit/miss — see `Rules.html`'s bullet power
+cost) faster than either landed a decisive kill, and once both hit ~0 there
+was no way back (no easy income of energy in this ruleset apart from
+landing more hits, which neither could do anymore). This is consistent with
+the accuracy drop: at ~17% hit rate, a rough expected-value calculation using
+Robocode's actual damage formula (`damage = 4*power + 2*max(0,power-1)` on a
+hit, cost = `power` spent regardless of hit or miss; see `Rules.html`/
+`Rules.RAMMING`-adjacent constants) shows firing at *any* power level has a
+close-to-breakeven-or-negative expected net energy return around 17%
+accuracy (rough breakeven is around p ~= 1/6 = 16.7% for power in (1,3]) —
+i.e. we may have literally been firing at a rate where the "expected" outcome
+of a shot is spending slightly more energy than it earns back in damage, on
+average, against this specific harder-to-hit opponent. This doesn't mean
+"never fire" (accuracy is an average — plenty of individual shots are still
+much better than that when the angle is tight — and abstaining entirely would
+forfeit all offense) but it does suggest **energy-management triage** is
+worth adding: don't keep spending at a flat/naive rate regardless of how the
+energy race is going.
+
+### Change made this round: energy-aware bullet power (`robots/custom/MyTank.java`)
+In `onScannedRobot()`, right after computing the distance-based
+`bulletPowerForDistance()` value, added two override cases:
+1. **Finishing triage**: if the enemy's remaining energy (`e.getEnergy()`) is
+   `<= 16` (i.e. a single power-3 hit, dealing up to 16 damage, could kill
+   them outright), always use max power (3.0) regardless of distance — worth
+   the extra spend to try to close out the kill and deny them a chance to
+   recover, rather than a diluted long-range-conservation shot.
+2. **Survival triage**: if OUR OWN energy (`getEnergy()`) is `<= 15` AND the
+   enemy is NOT already in the immediate-kill-range case above (i.e. this is
+   a real ongoing race, not "we're both nearly dead and I should go for the
+   kill"), throttle bullet power down to a cheap 1.0 instead of continuing to
+   fire full-price shots into a fight we're not favored to win purely by
+   volume — conserves energy for survival (and for ramming opportunities,
+   which are "free" 1.8-for-0.6 damage trades per `Rules.html`'s
+   `ROBOT_HIT_BONUS`/`ROBOT_HIT_DAMAGE` constants, not yet exploited in this
+   bot's `onHitRobot()`, which still only defends/backs away — a good next
+   step for a future teammate with more time, see below) rather than racing
+   to 0 on a bet we're statistically not favored to win at our current
+   accuracy against this opponent.
+Both thresholds are intentionally simple/coarse (no distance dependence,
+just two energy checks) — this is meant as basic triage, not a rewrite of
+the targeting math, and should be very low risk: it only changes behavior in
+the specific edge cases of "enemy nearly dead" or "we're nearly dead", not
+normal mid-fight firing.
+
+Verified `javac -cp libs/robocode.jar -d robots robots/custom/MyTank.java`
+compiles clean (no errors/warnings), `.class` up to date. Old version
+preserved at `archive/round1_backups/MyTank.java.before_round11_energy_mgmt`
+for a quick diff/revert if next round's numbers look worse (e.g. if tie rate
+or loss rate goes UP, or accuracy/score drops).
+
+### What I did NOT get to
+- **Not validated by a real match** (same long-standing limitation as every
+  previous round — no working local headless battle runner in this sandbox;
+  see round 6's section for the most detailed writeup of exactly where that
+  effort gets stuck). Treat this change with the same caution as every
+  previous round's real (non-bugfix) tuning change: check next round's tie
+  rate, loss rate, and avg-min-energy numbers closely. If tie rate is still
+  high or gets worse, the thresholds (16 / 15) may need adjusting, or a
+  more fundamental fix (e.g. actual wave-surfing dodge to reduce damage
+  *taken*, or exploiting ramming for cheap damage — see below) may be needed
+  instead of just throttling our own offense.
+- **Did NOT implement deliberate ramming-for-damage.** Per `Rules.html`,
+  ramming an opponent by moving into them deals `ROBOT_HIT_BONUS = 1.2` bonus
+  damage to them (on top of the base `ROBOT_HIT_DAMAGE = 0.6` both sides
+  take from any robot-robot collision) — a genuinely "profitable" trade (1.8
+  dealt for 0.6 taken) if you're the one actively driving into contact,
+  totally free of bullet-energy cost. Our current `onHitRobot()` always backs
+  away defensively regardless of the energy race state, and there's no
+  offensive-ramming logic anywhere in `run()`/`onScannedRobot()`'s movement.
+  Given this round's finding that we may be firing at close to
+  breakeven-or-negative EV against this tougher opponent, deliberately ramming
+  when already very close (e.g. inside ~40px) instead of always avoiding
+  contact could be a meaningfully better lever than bullet-power throttling
+  alone — did not have enough remaining steps this round to design and test
+  this safely (risk: could interact badly with the existing wall-avoidance /
+  stuck-watchdog logic if not careful, e.g. mistaking "intentionally pressing
+  into the enemy" for "stuck against a wall").
+- Did not touch movement/dodging (orbit strafing, `PREFERRED_DISTANCE`,
+  wave-surfing) at all — all of this round's opponent-side hit rate (their
+  13% accuracy vs. our being hit down to avg min energy 24) suggests our
+  *defense* may also be a bigger lever than offense against this specific
+  opponent, but that's a much bigger, riskier change (see round 1's original
+  suggestion of wave-surfing) than I wanted to attempt with the time left
+  this round given it's untested locally either way.
+
+### Suggestions for next teammate
+1. **First step, as always**: check `/logs/rounds/<N>/trace.md` for this
+   round's real result.
+   - If tie rate drops and/or accuracy/score improves vs this round's
+     baseline (64% win / 22% opp / 14% tie, 17% accuracy, min energy 24,
+     score 23998 vs 12879), the energy-triage change is validated — consider
+     extending the idea (e.g. tune the 16/15 thresholds, or add the
+     ramming-for-damage idea above).
+   - If tie rate goes UP or a clear regression appears, revert via
+     `archive/round1_backups/MyTank.java.before_round11_energy_mgmt` and
+     consider a different lever (e.g. defense/dodging improvements instead of
+     offense throttling).
+2. Run `python3 tools/analyze_freezes.py /logs/rounds/<N> --threshold 100 |
+   grep -i sonnet` (now fixed to ignore expected end-of-life freezes, see
+   above) as the standard regression check — should print nothing if healthy.
+3. Seriously consider implementing deliberate close-range ramming (see "What
+   I did NOT get to" above) if this opponent (or a similarly tough future
+   one) keeps showing up — it's a mechanically free damage source per
+   `Rules.html` that the bot has never exploited in 10 rounds of history, and
+   this round's analysis suggests our bullet-only offense may be running
+   close to breakeven EV against tougher/more mobile opponents.
+4. If `pez__gf1` keeps appearing, consider a proper accuracy/miss-clustering
+   analysis (e.g. bucket misses by opponent recent turn-rate/speed at time of
+   firing) to see if the round-9/10 circular-prediction + fire-threshold
+   logic specifically struggles against this opponent's movement style, vs.
+   it just being a genuinely hard target for any linear/circular predictive
+   aiming.
+5. Local headless battle-runner: still unresolved after 10+ rounds of
+   attempts (see round 6's section for the most detailed known blocker,
+   `RepositoryManager.loadSelectedRobots` not seeing a freshly-reloaded
+   repository within the same call). Still the single highest-leverage infra
+   fix available if a future teammate has a larger step budget to spend on
+   it than usual.

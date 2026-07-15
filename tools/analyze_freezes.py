@@ -49,11 +49,13 @@ def analyze_file(path, threshold):
             for u in rec.get("u", []):
                 i = str(u["i"])
                 x, y, rh = u.get("x"), u.get("y"), u.get("rh")
+                status = u.get("s")
                 st = state.setdefault(i, {
                     "last_x": None, "last_y": None, "pos_streak": 0, "pos_start": t,
                     "last_rh": None, "rh_streak": 0, "rh_start": t,
                     "max_pos_streak": 0, "max_pos_range": (t, t),
                     "max_rh_streak": 0, "max_rh_range": (t, t),
+                    "max_pos_streak_status": None, "max_rh_streak_status": None,
                 })
                 if st["last_x"] == x and st["last_y"] == y:
                     st["pos_streak"] += 1
@@ -64,6 +66,7 @@ def analyze_file(path, threshold):
                 if st["pos_streak"] > st["max_pos_streak"]:
                     st["max_pos_streak"] = st["pos_streak"]
                     st["max_pos_range"] = (st["pos_start"], t)
+                    st["max_pos_streak_status"] = status
 
                 if st["last_rh"] == rh:
                     st["rh_streak"] += 1
@@ -74,14 +77,18 @@ def analyze_file(path, threshold):
                 if st["rh_streak"] > st["max_rh_streak"]:
                     st["max_rh_streak"] = st["rh_streak"]
                     st["max_rh_range"] = (st["rh_start"], t)
+                    st["max_rh_streak_status"] = status
 
     for i, st in state.items():
         name = robots.get(i, i)
-        if st["max_pos_streak"] >= threshold:
+        # Skip freezes that end with the robot in DEAD status -- that's expected
+        # (a dead robot's last known x/y/rh obviously stop changing) and not a
+        # bug, so it would just be noise obscuring genuine in-life freezes.
+        if st["max_pos_streak"] >= threshold and st["max_pos_streak_status"] != "DEAD":
             findings.append(
                 f"  robot {i} ({name}): position frozen for {st['max_pos_streak']} "
                 f"ticks, range {st['max_pos_range']} (game had {max_t} total ticks)")
-        if st["max_rh_streak"] >= threshold:
+        if st["max_rh_streak"] >= threshold and st["max_rh_streak_status"] != "DEAD":
             findings.append(
                 f"  robot {i} ({name}): radar heading frozen for {st['max_rh_streak']} "
                 f"ticks, range {st['max_rh_range']} (game had {max_t} total ticks)")

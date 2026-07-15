@@ -165,32 +165,6 @@ public class MyTank extends AdvancedRobot {
 
         // --- Gun: linear prediction targeting ---
         double bulletPower = bulletPowerForDistance(e.getDistance());
-        // Round 11 tuning: energy management. Analysis of round-0 logs (opponent
-        // pez__gf1 -- see README_agent.md round 11 notes) showed a much higher
-        // tie rate (13.6%) than any previous rung, with many of those games
-        // showing BOTH robots' energy bleeding down to ~0 without either landing
-        // a final kill -- i.e. we were spending bullet energy on low-probability
-        // shots (accuracy dropped to 17% against this more mobile/dodgy
-        // opponent) at a rate that risked mutual bankruptcy rather than a clean
-        // win. Two cheap, targeted adjustments:
-        //  1. If the enemy is already low enough that a solid hit could finish
-        //     them (their remaining energy <= max hit damage at power 3, i.e.
-        //     16), always use max power regardless of distance -- worth the
-        //     extra spend for a potential kill, and denies them a chance to
-        //     recover/keep fighting.
-        //  2. If OUR OWN energy is getting low (<= 15) and the enemy is NOT in
-        //     immediate kill range (>16 energy), throttle bullet power down to
-        //     a cheap 1.0 rather than continuing to fire full-price shots at a
-        //     ~17%-ish hit rate -- preserves our own energy for survival /
-        //     ramming opportunities instead of racing the enemy to 0 on a bet
-        //     we're not favored to win. Both thresholds are deliberately simple
-        //     (no distance dependence) since the goal here is coarse survival
-        //     triage, not fine targeting.
-        if (e.getEnergy() <= 16) {
-            bulletPower = 3.0;
-        } else if (getEnergy() <= 15) {
-            bulletPower = 1.0;
-        }
         double bulletSpeed = 20 - 3 * bulletPower;
 
         // Predict enemy future position via tick-by-tick simulation, accounting for
