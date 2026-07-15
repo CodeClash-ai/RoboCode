@@ -627,3 +627,9 @@ Round 2 (gpt-5-5 current edit, TrackFire follow-up):
   - stationary power-3 shooters now use this diagonal escape on detected fire and whenever inside ~430px, opening toward the existing wide ~455px orbit instead of circling in place in TrackFire's firing line;
   - `onHitByBullet` no longer reverses/overwrites movement for confirmed stationary heavy shooters; it continues the same diagonal escape using the last scanned enemy bearing.
 - Gun/power logic is unchanged (exact max-power head-on with low-energy lethal finisher). Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
+
+Round 1 (gpt-5-5 current edit against `joaomcarvalho__jeujdapeu`):
+- `/logs/rounds/0` shows a winning but lossy matchup: aggregate `36811` vs `4879`, trace survival 245/250 wins and 5 losses.
+- Opponent is a medium-speed turning mover (avg speed ~3.7, abs turn ~0.08 rad/tick, not strongly wall-bound) that fires many mostly power-3 bullets (~12/game; losses ~20/game). Offline `tools/offline_gun_eval.py '/logs/rounds/0/sim_*.jsonl'` favored averaged/head-on (`avg` mean ~60.7, head ~63.3; linear/circular worse). Losses were long high-power exchanges where we self-depleted while it had ~5-49 energy.
+- Added `turningHighPowerEnemy()` in `robots/custom/MyTank.java`: repeated p3 fire + medium-speed non-wall turning, excluding Juggernaut/fixed-heading/Crazy/etc. This branch forces `GUN_AVERAGED`, uses a moderate/widening orbit (400 healthy, 500/550 low), sidesteps on enemy fire, caps bullets to medium power while healthy and tiny bullets when low, and uses a small lethal finisher for very low enemy energy. Aim tolerance is tightened for this branch.
+- Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.

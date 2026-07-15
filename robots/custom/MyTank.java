@@ -311,6 +311,13 @@ public class MyTank extends AdvancedRobot {
                 drivePerpendicularEscape(absBearing, 275.0);
                 return;
             }
+            if (turningHighPowerEnemy()) {
+                // Current jeujdapeu profile: frequent power-3 shots while making
+                // medium-speed turns.  Do not just reverse the orbit on the firing tick;
+                // step across the gun line so its simple high-power aim has to reacquire.
+                drivePerpendicularEscape(absBearing, getEnergy() < 38.0 ? 330.0 : 285.0);
+                return;
+            }
         }
 
         if (stationaryHeavyShooter() && e.getDistance() < 430.0) {
@@ -356,6 +363,12 @@ public class MyTank extends AdvancedRobot {
             // high-damage band; spend the movement command crossing/perpendicular to
             // the gun line until the range reopens.
             drivePerpendicularEscape(absBearing, 330.0);
+            return;
+        }
+        if (turningHighPowerEnemy() && getEnergy() < 38.0 && e.getDistance() < 360.0) {
+            // Late losses against the current power-3 turner were decided by one more
+            // heavy hit while we were low.  Reopen range before resuming the orbit.
+            drivePerpendicularEscape(absBearing, 380.0);
             return;
         }
         if (lowFireTracker() && e.getDistance() < 415.0) {
@@ -522,6 +535,11 @@ public class MyTank extends AdvancedRobot {
             // gated by low virtual error/fire count so RegullarMonk-style self-
             // depletion cases still use their conservation profile.
             preferredDistance = 255.0;
+        } else if (turningHighPowerEnemy()) {
+            // jeujdapeu turns continuously while firing power-3.  Keep the healthy
+            // exchange near our accurate averaged-gun band, but widen before the late
+            // low-energy phase where all recorded losses occurred.
+            preferredDistance = getEnergy() < 18.0 ? 550.0 : (getEnergy() < 38.0 ? 500.0 : 400.0);
         } else if (juggernautEnemy()) {
             // Juggernaut is a dangerous power-3 stop/turn bot; stay a bit wider than
             // the Ultron farming band and open further once the reserve falls.
@@ -878,6 +896,22 @@ public class MyTank extends AdvancedRobot {
             if (getEnergy() > 24 && distance < 720) {
                 power = Math.max(power, distance < 560 ? 3.0 : 2.45);
             }
+        } else if (turningHighPowerEnemy()) {
+            // jeujdapeu losses were long power-3 exchanges where generic branches still
+            // spent too much after we fell behind.  Use medium pressure while healthy,
+            // then very cheap/faster bullets; if the enemy is almost dead, use only the
+            // minimum lethal power so we do not waste a 3.0 overkill shot.
+            if (e.getEnergy() < 8.5 && getEnergy() > 9.0) {
+                power = Math.min(power, Math.min(1.35, lethalPower(e.getEnergy())));
+            } else if (getEnergy() > 54 && distance < 720) {
+                power = Math.min(Math.max(power, distance < 420 ? 2.15 : 1.85), 2.20);
+            } else if (getEnergy() > 34) {
+                power = Math.min(Math.max(power, distance < 360 ? 1.15 : 0.90), 1.30);
+            } else if (getEnergy() > 18) {
+                power = Math.min(power, distance < 330 ? 0.35 : 0.25);
+            } else {
+                power = Math.min(power, getEnergy() < 8 ? 0.12 : 0.18);
+            }
         } else if (juggernautEnemy()) {
             // Current Juggernaut traces differ from Ultron: it turns/stops enough that
             // the averaged gun beats head-on, and excessive 0.6-1.4 power pinpricks
@@ -1090,6 +1124,10 @@ public class MyTank extends AdvancedRobot {
             // generic damped stop-go or high-power-shooter head-on branches once
             // virtual waves show linear is winning.
             gun = GUN_LINEAR;
+        } else if (turningHighPowerEnemy()) {
+            // Current power-3 turner: offline replay over round-0 traces puts the
+            // averaged gun slightly ahead of head-on and clearly ahead of linear/circular.
+            gun = GUN_AVERAGED;
         } else if (juggernautEnemy()) {
             // Replay over the current power-3 stop/turn opponent favors the damped
             // averaged predictor; head-on was overused by the generic high-power
@@ -1220,7 +1258,9 @@ public class MyTank extends AdvancedRobot {
         if (velociRobotEnemy()) {
             tolerance = Math.min(tolerance, Math.atan2(18.0, distance));
         }
-        if (juggernautEnemy()) {
+        if (turningHighPowerEnemy()) {
+            tolerance = Math.min(tolerance, Math.atan2(15.0, distance));
+        } else if (juggernautEnemy()) {
             tolerance = Math.min(tolerance, Math.atan2(16.0, distance));
         } else if (highPowerStopGoDodger()) {
             // Cheap head-on shots are still wasted if the gun is broadside; wait for
@@ -1510,6 +1550,31 @@ public class MyTank extends AdvancedRobot {
                 && Math.abs(enemyVelocityAvg) < 4.4;
     }
 
+
+    private boolean turningHighPowerEnemy() {
+        // joaomcarvalho__jeujdapeu in /logs/rounds/0: a medium-speed, non-wall
+        // turner that fires repeated power-3 bullets.  It is less stop-heavy than
+        // Juggernaut and not fixed-heading like Exterminador/Chilibot; the virtual
+        // gun replay favors averaged aim, while the only losses are low-energy
+        // self-depletion after long high-power exchanges.
+        return enemyFireCount > 2
+                && enemyFirePowerSamples > 1
+                && enemyFirePowerAvg > 2.45
+                && stationaryScans <= 5
+                && enemySpeedAvg > 2.75
+                && enemySpeedAvg < 5.35
+                && enemyAbsTurnRateAvg > 0.055
+                && enemyAbsTurnRateAvg < 0.13
+                && wallEnemyScans <= 18
+                && crazyEnemyScans <= 4
+                && !spinBotEnemy()
+                && !fixedHeadingHighPowerShooter()
+                && !fixedHeadingMediumShooter()
+                && !fixedHeadingStopGoEnemy()
+                && !fixedHeadingLineEnemy()
+                && !fastWallCruiser()
+                && !straightStopGoLinearEnemy();
+    }
 
     private boolean juggernautEnemy() {
         return juggernautScans > 0 || juggernautSignatureRaw();
