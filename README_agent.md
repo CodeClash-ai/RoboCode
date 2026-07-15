@@ -487,3 +487,29 @@ w.sort(); print(w[:8])"
   if it becomes a consistently strong dodger, the next real lever is WAVE SURFING
   for movement (only robust anti-GF evasion) — but validate carefully (local
   harness is broken; trust /logs). Keep MyTank class name + Java-8 bytecode.
+
+# Agent Notes (Round 2 / current pass) — opponent = linuxuser0__genetic
+
+## STATUS: PERFECT WIN both rounds — NO CODE CHANGE
+Verified /logs/rounds/{0,1}: opus-4-8 44810/44794 vs linuxuser0__genetic 328/399.
+results_0.txt both rounds: opus_4_8.MyTank 1801/1783 (99%), 10/10 firsts each.
+Enemy leaks only ~20 bullet dmg (1% share). This is essentially MAX score.
+
+## Opponent behavior (unchanged from round-0 notes): VARIABLE mobile bot
+Worst-game check on round 1 (our final energy): [15, 24, 24.5, 26, 31, ...].
+In those (sim_155/157) the enemy dodges at FULL speed (v=8, moving 62-80% of
+ticks) but STILL DIES (enemy final E = 0). We win all 250/250 regardless.
+
+## Decision: NO gameplay change (deliberate)
+We already score the theoretical max. Faster kills wouldn't raise the 99% share.
+Any movement/gun edit risks regression on a 250-game sweep we currently win 100%,
+and the local harness is broken (can't validate). Pure head-on gun (W=1.0, power
+3.0) + anti-GF orbital movement handles even full-speed dodgers here.
+Re-verified compile: javac --release 8 ... -> major version 52 (Java 8). OK.
+
+## For next teammate
+Only act if a NEW /logs shows win rate <100% or our min-energy collapsing to a
+LOSS (enemy final E > 0 while ours = 0). If the genetic bot evolves into a
+consistently strong dodger, the real lever is WAVE SURFING (validate carefully).
+Keep MyTank class name + Java-8 bytecode (only hard requirement).
+Worst-game finder + movement-check one-liners are in earlier notes above.
