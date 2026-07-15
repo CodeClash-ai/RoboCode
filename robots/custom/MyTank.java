@@ -18,7 +18,7 @@ import robocode.util.Utils;
  * time collecting repeated hits.
  */
 public class MyTank extends AdvancedRobot {
-    private static final double WALL_MARGIN = 42.0;
+    private static final double WALL_MARGIN = 58.0;
     private static final double PREFERRED_DISTANCE = 410.0;
 
     private int moveDirection = 1;
@@ -130,7 +130,7 @@ public class MyTank extends AdvancedRobot {
         // Orbit perpendicular, with a distance-control offset.  Far away we cut
         // inward; too close we open out.  wallSmooth then bends the path away
         // from the battlefield edges before we commit to it.
-        double preferredDistance = slowEnemyScans > 12 ? 335.0 : PREFERRED_DISTANCE;
+        double preferredDistance = slowEnemyScans > 12 ? 285.0 : PREFERRED_DISTANCE;
         double distanceOffset = limit(-0.62, (e.getDistance() - preferredDistance) / 430.0, 0.55);
         double desired = absBearing + moveDirection * (Math.PI / 2.0 - distanceOffset);
         desired = wallSmooth(desired, moveDirection);
@@ -172,7 +172,7 @@ public class MyTank extends AdvancedRobot {
         // kill reduces exposure.  Moving opponents keep the conservative ladder.
         if (stationaryScans > 5 && getEnergy() > 12) {
             power = 3.0;
-        } else if (slowEnemyScans > 12 && getEnergy() > 18 && distance < 560) {
+        } else if (slowEnemyScans > 8 && getEnergy() > 12 && distance < 720) {
             // The current recorded opponent is a very slow stop-and-go shooter.
             // Once a target has proven it cannot exceed about speed 3, heavier
             // bullets trade a little travel time for much faster damage and a
@@ -270,11 +270,11 @@ public class MyTank extends AdvancedRobot {
     private double wallSmooth(double angle, int orientation) {
         double smoothed = angle;
         int tries = 0;
-        while (!insideBattlefield(projectX(getX(), smoothed, 155.0), projectY(getY(), smoothed, 155.0), WALL_MARGIN)
+        while (!insideBattlefield(projectX(getX(), smoothed, 190.0), projectY(getY(), smoothed, 190.0), WALL_MARGIN)
                 && tries++ < 28) {
             smoothed += orientation * 0.075;
         }
-        if (insideBattlefield(projectX(getX(), smoothed, 155.0), projectY(getY(), smoothed, 155.0), WALL_MARGIN)) {
+        if (insideBattlefield(projectX(getX(), smoothed, 190.0), projectY(getY(), smoothed, 190.0), WALL_MARGIN)) {
             return smoothed;
         }
 
@@ -282,11 +282,11 @@ public class MyTank extends AdvancedRobot {
         // corner), try the other way before falling back to the center escape.
         smoothed = angle;
         tries = 0;
-        while (!insideBattlefield(projectX(getX(), smoothed, 155.0), projectY(getY(), smoothed, 155.0), WALL_MARGIN)
+        while (!insideBattlefield(projectX(getX(), smoothed, 190.0), projectY(getY(), smoothed, 190.0), WALL_MARGIN)
                 && tries++ < 28) {
             smoothed -= orientation * 0.075;
         }
-        if (insideBattlefield(projectX(getX(), smoothed, 155.0), projectY(getY(), smoothed, 155.0), WALL_MARGIN)) {
+        if (insideBattlefield(projectX(getX(), smoothed, 190.0), projectY(getY(), smoothed, 190.0), WALL_MARGIN)) {
             return smoothed;
         }
         return Math.atan2(getBattleFieldWidth() / 2.0 - getX(), getBattleFieldHeight() / 2.0 - getY());
