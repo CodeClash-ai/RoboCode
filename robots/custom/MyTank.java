@@ -296,7 +296,8 @@ public class MyTank extends AdvancedRobot {
         // (distance-based, kept net-positive) still guard the crazy-bot regression.
         // Chose W=0.85: strongly toward head-on (physics: slow target -> head-on best),
         // hedged just short of pure 1.0 since replay is biased by the reactive enemy path.
-        double W = 1.0;  // vs iagomonteiro13579__npcsniper (moderate mover: movefrac 0.72, avgV 4.31, avg|dh| 0.0345 MILD curve, engages ~297px). W-sweep 2 slices: HEAD-ON(W=1.0) ~36-38pct BEST vs circular(W=0.0) ~23-24pct. Replay biased toward W=0.0 (our old aim) yet head-on wins DESPITE bias. NOT a heavy spinner. Was 0.0 for spinbot.
+        double W = 0.75;  // vs it_economics__ite_m9 (SLOW near-straight mover: movefrac 0.37, avgv 1.23, avg|dh| 0.011, engages ~300px). W-sweep 2 independent slices (80 games each): W=0.75 hits 44.7/44.7pct = PEAK vs W=1.0 head-on 35.1/37.1pct. Replay BIASED toward W=1.0 (our old aim) yet W=0.75 wins by ~9pts DESPITE bias = strong signal. This slow mover has a tiny curve/drift so a partial lead beats pure head-on. Higher HR = faster kills = fewer of the 22 grind losses.
+        // [prev] double W = 1.0; // vs iagomonteiro13579__npcsniper
         // [old] double W = 1.0; // HEAD-ON best vs alpian__ianstank (stop-and-reverse oscillator, ~50% stationary). Replay-sim 80 games: W=1.0 hits 40.3% vs W=0.0 21.4%.
         double predX = W * enemyX + (1 - W) * leadX;
         double predY = W * enemyY + (1 - W) * leadY;

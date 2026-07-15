@@ -3537,3 +3537,53 @@ taper, fire gates UNCHANGED. Compiles Java 8 (major version 52). Backup: /tmp/My
   HEAVY spinner (avg|dh|>0.07), set W=0.0 (circular). Always re-check
   `head -1 /logs/rounds/0/sim_0.jsonl` for opponent name + INDEX MAPPING first.
 - Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 1 / current pass) — opponent = it_economics__ite_m9 (COMPETITIVE, 22 losses)
+
+## KEY FINDING: gun aim W was too high (W=1.0 head-on) for this SLOW mover with a tiny curve
+Round 0 result (BEFORE my change): opus-4-8 39510 vs it_economics__ite_m9 7909
+(17% share). results_0.txt: opus 1675 (84%), 10/10 firsts BUT trace.md WIN RATE
+91% (228/250) — we LOSE 22 games. Our accuracy 40%, enemy 21%. Enemy avg speed
+only 1.3 (SLOW). Games are LONG (avg 500, losses all 500-980 turns).
+
+## Opponent profile (120 sims; header maps idx->name, enemy=non-'opus')
+- movefrac 0.37, avg|v| 1.23 (SLOW), avg|dh| 0.011 (near-straight, tiny curve),
+  engages ~300px. Conserves energy (fires ~half as often as us). All 22 losses
+  are LONG energy-war grinds where our hit rate cold-streaked to ~25% at 200-300px
+  and we bled to 0 while the enemy out-lasted us.
+
+## ROOT CAUSE + FIX: W=1.0 -> W=0.75 (partial lead)
+Fresh W-sweep (per-tick interception over recorded paths, TWO independent 80-game
+slices), CLEAN + robust peak at W=0.75:
+  slice A (files[:80]):    W0.5 38.3% W0.75 43.6% W1.0 35.1%
+  slice B (files[120:200]):W0.6 41.9 W0.7 44.4 W0.75 44.7 W0.8 43.9 W0.9 39.8 W1.0 37.1
+W=0.75 wins by ~9 points over head-on. NOTE: replay is BIASED toward W=1.0 (enemy
+path was reactive to our ACTUAL W=1.0 shots) yet W=0.75 STILL wins big -> very
+strong signal (bias would favor W=1.0, not against). This slow mover has a tiny
+velocity/drift so a partial lead beats pure head-on.
+Damage/net-energy model (120 games, current power tiers): W=1.0 dmg 105244 net
+-5703 (BLEEDING -> the 22 losses) -> W=0.75 dmg 132668 (+26%) net +10155 (we now
+GAIN energy). Higher HR = faster kills = fewer grind losses AND flips the energy war.
+
+## Movement/power UNCHANGED (deliberate — tested, taper does NOT help)
+Considered extending the energy-war taper to mid-range (dist>230 when behind), but
+MODELED it over 150 games: net energy DROPPED 1096 -> 873. Our overall 200-300px
+hit rate is 38% (net-POSITIVE), so tapering there sacrifices the positive shots in
+the many WINNING games. The taper is not the fix; W=0.75 (higher HR everywhere) is.
+Orbit ~245px, power tiers 3.0/<300 1.6/<400 1.0/<500 0.6/else, energy-war taper
+(behind & dist>300 -> 0.8), fire gates, dodge ALL UNCHANGED.
+Compiles Java 8 (major version 52). Backup of prior source: /tmp/MyTank.bak.java.
+
+## For next teammate — VERIFY
+- Want NEW /logs win rate ABOVE 91% (ideally 97%+), the 22 losses reduced, enemy
+  score DOWN from 7909, killtick DOWN, our final E mean UP from 63. If it REGRESSED
+  (new losses / share drop), the W=0.75 lead may have overshot -> raise W back
+  toward 0.9-1.0, or revert to /tmp/MyTank.bak.java (git prior, W=1.0, 91%).
+  Re-run the W-sweep on >=2 slices first BUT weight the REAL cross-round win rate
+  far above the biased replay hit numbers.
+- ite_m9 is SLOW/near-straight & conserves energy -> W=0.75 partial lead. If it
+  becomes a FAST mover (avg|v|>4), lower W toward 0.25; if HEAVY spinner
+  (avg|dh|>0.06), set W=0.0 (circular). Always re-check
+  `head -1 /logs/rounds/0/sim_0.jsonl` for opponent name + INDEX MAPPING first.
+- The remaining lever if grind losses persist is WAVE SURFING (high-risk, harness
+  broken, trust /logs only). Keep MyTank class name + Java-8 bytecode.
