@@ -14631,3 +14631,234 @@ touching already-working code without a clear, actionable signal.
    spend on it than usual — especially valuable for iterating faster on
    tough matchups like `kcanida__pikachu`, where each experiment currently
    costs a full round to validate or refute.
+
+## Round 130 update (this round) — new tough opponent (logancsc__dodgebot2), FIRST OVERALL MATCH LOSS in this file's history; deep swing analysis shows a genuinely close, well-balanced matchup, no changes
+
+### Context
+Only `/logs/rounds/0/` exists in this environment for me. Per `trace.md` /
+`results.json`, this round's opponent is a **new** one, `logancsc__dodgebot2`
+(different from every opponent documented in rounds 1-129 above, and — per
+its name — very plausibly an evasive/dodging bot, similar in spirit to
+`admiralrasmussen__wavesurfing`, rounds 95-96, but apparently considerably
+stronger). Result: **we LOST the overall match**: `logancsc__dodgebot2` won
+51% (128/250) vs our 46% (114/250), with **8 draws**. `results.json`:
+`logancsc__dodgebot2` score 27703 vs `sonnet-5` 25333. **This is the first
+time in this entire file's history (130 rounds) that the team lost the
+overall round result** (every previous "tough opponent" — `pez__gf1` rounds
+11-12, `kcanida__pikachu` rounds 107-109, `admiralrasmussen__wavesurfing`
+rounds 95-96, `alexbay218__shreker` rounds 101-102, etc. — still had us
+net-ahead on win rate/score even when close). Game length: min 318, avg
+664, max 1630 turns (notably long, similar to `kcanida__pikachu`'s
+grindy-fight profile). Our own accuracy 24%, opponent's 22%; our avg speed
+5.9, avg walls/game 0.5, **avg rams/game 2.9** (elevated vs the usual
+0.3-2.2 range), **avg min energy 14** (very low — we're routinely almost
+dead even in wins), avg death turn 564 (long fights).
+
+### Investigation
+1. `python3 tools/analyze_freezes.py /logs/rounds/0 --threshold 20 | grep -i
+   sonnet` -> only **3 findings**: a short (29-tick) benign position-freeze,
+   plus two LONG (234-tick, 272-tick) "radar heading frozen" findings in
+   `sim_241.jsonl` and `sim_7.jsonl` — both of which are the two **TIE**
+   games in this round's sample (1630 and 1389 turns respectively, the two
+   longest games in the whole sample). Traced `sim_7.jsonl`'s raw per-tick
+   data directly at the freeze window: **BOTH robots have energy = 0.0 and
+   are pinned motionless (v=0, x/y/heading all frozen) for hundreds of
+   ticks, while BOTH robots' status stays `ACTIVE` (not `DEAD`) the entire
+   time** — this is the same "mutual energy exhaustion, status stays ACTIVE
+   for a long tail before ever flipping to DEAD" pattern first documented in
+   round 11's notes (`sim_4.jsonl`, that round's `pez__gf1` matchup) and
+   again in round 95's notes (`admiralrasmussen__wavesurfing`) — **not a new
+   bug**, just a robot literally being unable to move/turn/fire at 0 energy,
+   sitting inert until the very-long-game tail finally resolves it as a
+   draw. `analyze_freezes.py`'s existing DEAD-status exclusion (round 11)
+   doesn't catch this specific case because status remains `ACTIVE`, not
+   `DEAD`, throughout — a known, already-documented limitation (round 95
+   flagged the same "ACTIVE but 0-energy for ~400 ticks" quirk), not
+   something to fix reactively this round. **Conclusion: no
+   freeze/escape-mode regression** — rounds 20/23/25/34-37/40's fixes are
+   still healthy; the ties are genuine mutual-attrition draws, not a bug.
+2. **Traced a real loss** (`sim_0.jsonl`) tick-by-tick (per-index energy
+   deltas, correctly mapping `robots['0']`/`robots['1']` via the log's `i`
+   field this time, since a naive dict-based re-keying by robot name in an
+   earlier attempt this round mixed up which robot was which — worth
+   flagging for a future teammate doing similar traces: **always index by
+   the log's own `"i"` field inside each `u[]` entry, cross-referenced
+   against the header's `"robots": {"0": ..., "1": ...}` map, not by
+   insertion order alone**, since a naive re-print without this mapping
+   produced a confusing, seemingly-impossible-looking energy trace on a
+   first attempt). Once correctly mapped: `logancsc__dodgebot2` repeatedly
+   lands full power-3 hits (`-16.0` damage on us, `+9.0` bonus to them) at a
+   steady cadence throughout a long game, while we land smaller, less
+   frequent hits back (`+5.7` to `+8.7`-ish gains) — we simply get
+   out-traded on a per-hit basis in this specific game and grind down to 0
+   by t~504 while the opponent finishes with ~42 energy. Not a
+   self-inflicted-attrition-from-zero-accuracy pattern (we ARE landing real
+   hits throughout) and not a freeze — just genuinely losing the damage
+   race in this game.
+3. `python3 tools/analyze_power_accuracy.py /logs/rounds/0 --bucket-width
+   0.5` -> sanity check: 65.6 shots/game combined vs `trace.md`'s
+   35.2+31.5=66.7 (within ~2%, tool still trustworthy per round 28's
+   tick-step fix and round 113's ghost-frame-hit-attribution fix). Full
+   per-bucket breakdown for both robots:
+   ```
+   sonnet_5:          0.0-0.5: 25/24.0%   0.5-1.0: 5256/17.4%   1.0-1.5: 7/14.3%
+                       1.5-2.0: 660/19.8%  2.0-2.5: 100/7.0%     2.5-3.0: 2596/24.2%
+   logancsc__dodgebot2: 0.0-0.5: 12/25.0% 0.5-1.0: 136/19.9%    1.0-1.5: 2057/13.6%
+                       1.5-2.0: 2805/14.8% 2.0-2.5: 1383/17.8%  2.5-3.0: 588/23.3%
+                       3.0-3.5: 769/38.0%
+   ```
+4. **Key new finding — a full round-12 `swing(P,p)` breakdown by bucket,
+   summed across the whole 250-game sample (not just an average accuracy
+   number), shows the matchup's EXPECTED energy swing is almost exactly
+   EVEN between us and the opponent** (using `swing = p*(9P-2)-P` for `P>1`
+   and the flat `swing = P*(7p-1)` for `P<=1`, both from round 12/109's
+   math, applied per-bucket then summed with each bucket's shot count as
+   weight):
+   ```
+   sonnet_5 total swing (summed over all buckets, all 250 games): ~+8572  (~34.3/game)
+   logancsc__dodgebot2 total swing (same):                        ~+8739  (~35.0/game)
+   ```
+   These are within ~2% of each other — i.e. **our own bullet-power tuning
+   is NOT meaningfully disadvantaged against this opponent overall; the
+   actual near-50/50 result (46% vs 51%, 8 draws) is consistent with this
+   being a genuinely close, well-balanced fight at the bullet-power level**,
+   not a lopsided EV problem with an obvious single-lever fix (unlike round
+   107-109's `kcanida__pikachu` situation, where the fast-mover bucket was
+   clearly and measurably below breakeven). The opponent's own big
+   contributor is its small-but-very-effective max-power bucket (769 shots
+   at 38% accuracy, swing ~+6.5/shot, ~+5000 total) — its own targeting
+   is clearly sophisticated, similar in spirit to `kcanida__pikachu`'s
+   strong power-scaled accuracy (rounds 107-109) — but our own large-volume
+   2.5-3.0 bucket (2596 shots at 24.2%, swing ~+2.76/shot, ~+7165 total) is
+   actually a bigger absolute contributor for us, roughly offsetting it.
+5. **Secondary finding: a real, if modest, ramming-contact energy
+   asymmetry unfavorable to us.** Computed net `HIT_ROBOT`-status-tick
+   energy deltas (filtered to `|delta|<5` per round 102's documented caveat,
+   to exclude ticks where a bullet impact happens to coincide with contact
+   status) across a 60-game sample: **we lose -139.5 total energy from pure
+   contact vs the opponent's -79.8** — i.e. we're disproportionately ending
+   up on the more expensive "rammed" (1.8 dmg) side of collisions rather
+   than the cheap "ramming initiator" (0.6 dmg) side, relative to the
+   opponent. This works out to roughly -1.0 energy/game net disadvantage
+   from ramming specifically — real, but small compared to the ~34-35
+   energy/game swing from bullets, so almost certainly NOT the primary
+   driver of the loss on its own, though consistent with the elevated `avg
+   rams/game` (2.9) and very low `avg min energy` (14) this round, and a
+   plausible sign that round 12's opportunistic-ramming trigger
+   (`enemyDistance < 60`, charge forward) may be a slightly worse bet
+   specifically against a genuinely evasive/dodging opponent that's good at
+   avoiding being the one that gets "caught" in a bad collision.
+6. `javac -Xlint:all -cp libs/robocode.jar -d /tmp/build_check
+   robots/custom/MyTank.java` compiles clean (exit 0, no errors/warnings).
+7. `diff archive/round1_backups/MyTank.java.before_round109_lowpower_fastcap
+   robots/custom/MyTank.java` — confirmed round 109's low-power fast-mover
+   cap change (and nothing else since) is exactly what's currently live in
+   `MyTank.java`; no accidental drift or reversion. `MyTank.java` is 1273
+   lines, unchanged from round 109 onward through round 129.
+
+### What I did this round (or rather, chose NOT to do)
+Despite this being the first outright match loss in this file's history, I
+made **no changes to `MyTank.java`** this round, for several concrete
+reasons specific to this situation (not just reflexive caution):
+1. **The bucket-level swing analysis shows this is a genuinely close,
+   roughly EV-neutral matchup at the bullet-power level** — unlike
+   `kcanida__pikachu` (rounds 107-109), where one specific bucket was
+   clearly, measurably running below its own breakeven accuracy (a real,
+   fixable inefficiency), there is no single obviously-broken lever here to
+   pull. The two candidate secondary issues found (a small ramming
+   asymmetry, ~1 energy/game; a thin-but-still-positive margin in the
+   dominant 0.5-1.0 bucket, ~0.16/shot) are both real but small relative to
+   the overall ~34-35/game swing magnitude, and neither has an obviously
+   safe, well-isolated fix the way round 109's flat-breakeven-for-P<=1
+   argument did for `kcanida__pikachu`.
+2. **This is only the FIRST round of data against this specific opponent.**
+   Every previous round's practice in this file (rounds 95-96, 99-100,
+   101-102, 110-111, etc.) has been to NOT react to a single round's
+   tougher-than-usual result with a speculative code change, and to wait
+   for at least one more sample before concluding whether something is a
+   real, actionable pattern vs. one round's variance — especially given
+   rounds 107/108's hard lesson that a plausible-sounding, seemingly
+   well-reasoned fix (round 107's fire-threshold tightening) can still
+   backfire badly in a REAL match in ways that weren't predictable from
+   log analysis alone.
+3. **No local battle-testing is available** (still true after 129+ rounds,
+   see round 6's section for the long history of attempts) to validate any
+   speculative change (e.g. reducing the ramming trigger's aggressiveness,
+   or tweaking the 0.5-1.0 bucket's power) before a full future round's
+   real match — the cost of being wrong (per round 107/108's example) is a
+   whole extra round of degraded performance, which is a real risk given
+   this opponent already appears to be one of the toughest in the file's
+   history.
+
+### What I did NOT get to
+- Did not attempt the small ramming-trigger adjustment flagged above (e.g.
+  requiring some additional condition before charging into contact against
+  a genuinely evasive opponent) — the measured effect size (~1 energy/game)
+  is small enough that I judged it not clearly worth the risk of an
+  unvalidated change on a single round's data, especially against a
+  first-time opponent this tough.
+- Did not extend `tools/analyze_power_accuracy.py` or `analyze_freezes.py`
+  with a reusable "per-bucket swing(P,p) summary" helper (the summed-swing
+  calculation this round's notes describe was done via an ad-hoc one-off
+  script, not saved) — this would be a valuable, low-risk addition for a
+  future teammate: a flag that prints, for each robot, the total summed
+  `swing(P,p)*shots` across all buckets (not just per-bucket accuracy),
+  directly answering "is this matchup's bullet-power tuning actually
+  balanced?" without requiring a manual calculation each time a new tough
+  opponent appears. Would have made this round's key finding (near-even
+  35-vs-34 total swing) immediately visible from a single command instead
+  of ad-hoc arithmetic.
+- Did not build a reusable "HIT_ROBOT contact-only net energy swing"
+  script either (also done ad-hoc this round, with the round-102-documented
+  bullet-coincidence filter) — another good candidate for a committed tool
+  if ramming-asymmetry investigation becomes a recurring need.
+- Did not investigate whether `logancsc__dodgebot2`'s movement pattern is a
+  genuine wave-surf (tracking our aim to pick a safe lateral offset) vs.
+  some other evasion style (e.g. bursty acceleration like
+  `admiralrasmussen__wavesurfing`, or pattern-based like
+  `kcanida__pikachu`) — didn't have remaining budget for a detailed
+  position/heading trace this round; a future teammate with more time could
+  check whether its dodge timing correlates specifically with our own
+  fire events (the way round 16's own "dodge on fire" reactive juke does
+  for us) as a way to identify a true wave-surfer.
+
+### Suggestions for next teammate
+1. **First step, as always**: check `/logs/rounds/<N>/trace.md` for this
+   round's actual opponent/result, and run
+   `python3 tools/analyze_freezes.py /logs/rounds/<N> --threshold 20 | grep -i
+   sonnet` as the standard regression check (watch for LONG, e.g. 100+ tick,
+   radar/position freezes specifically in TIE games — per this round's
+   finding, that's very likely just the known benign mutual-exhaustion
+   pattern, not a new bug, but always cross-check the flagged game's winner/
+   tie status and whether BOTH robots show `e=0.0`/`ACTIVE` before assuming
+   it's benign).
+2. **If `logancsc__dodgebot2` reappears**, this is the single highest-value
+   comparison this round set up: check whether the overall win rate stays
+   close to 46% (confirming a stable, genuinely-close-to-even matchup) or
+   moves meaningfully in either direction. If a 2nd sample confirms it's
+   still this close/this tough, THEN it would be reasonable to consider the
+   two candidate levers flagged above (ramming-trigger tuning against
+   evasive opponents specifically; possibly re-examining the 0.5-1.0
+   bucket's power value) — but only with a 2nd independent data point in
+   hand, consistent with this file's established practice.
+3. Consider building the two ad-hoc analysis scripts described above
+   ("per-bucket swing(P,p) summary" and "HIT_ROBOT contact-only net energy
+   swing") as committed tools in `tools/` — both were valuable this round
+   and would save real time if `logancsc__dodgebot2` (or another
+   genuinely-tough opponent) reappears.
+4. `kcanida__pikachu` (rounds 107-109, ~24-37% win, the fast-mover-cap fix
+   still awaiting its first real re-test after 20 consecutive rounds of not
+   reappearing) and `pez__gf1`/`alpian__ianstank` (rounds 11-12/43-44) remain
+   the other historically-toughest opponents in this file — if any of them
+   reappear alongside `logancsc__dodgebot2`, that would suggest a real
+   "harder rung" of the ladder has arrived, worth extra caution/investigation
+   across the board rather than treating each as an isolated one-off.
+5. Local headless battle-runner: still unresolved after 129+ rounds of
+   attempts (see round 6's section for the most detailed known blocker,
+   `RepositoryManager.loadSelectedRobots` not seeing a freshly-reloaded
+   repository within the same call). Still the single highest-leverage
+   infra fix available if a future teammate has a larger step budget to
+   spend on it than usual — especially valuable now that the ladder may be
+   producing genuinely tough, close-to-even opponents where blind,
+   unvalidated tuning changes carry real risk (per round 107/108's
+   cautionary example) and a full round's turnaround time to check.
