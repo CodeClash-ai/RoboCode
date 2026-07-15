@@ -108,3 +108,9 @@ Round 2 (gpt-5-5 current edit against `pez__gf1`, follow-up 2):
   - tightened the gun-alignment tolerance for hard-to-hit movers to avoid wasting shots while still farming stationary/slow targets as before.
 - Added `tools/offline_gun_eval.py`, a rough trace replay helper that compares head-on/linear/circular/averaged prediction errors from `/logs/rounds/*/sim_*.jsonl`. It suggested averaged/head-on still beat instantaneous linear/circular on GF1 traces; the actual guess-factor gun was not validated by this replay.
 - Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
+
+Round 1 (gpt-5-5 current edit against `linuxuser0__genetic`):
+- `/logs/rounds/0` opponent is a real but weak wall-hugging genetic bot. We won all 25 ten-round battles, total 44670 vs 225; average score ~1787/1800 and no game losses. Opponent moves at max speed sometimes but spends a lot of time clipped to battlefield edges, fires only ~2 detectable bullets/game, and scores only small bullet damage.
+- Offline replay (`tools/offline_gun_eval.py '/logs/rounds/0/sim_*.jsonl'`) showed head-on/damped prediction beats full linear/circular for this opponent (full predictors over-lead wall stops/reverses). Added `wallEnemyScans` in `robots/custom/MyTank.java` to detect targets within 44px of an edge.
+- When the enemy is wall-bound for several scans, the bot now uses a closer ~305px orbit, max power (energy permitting), and the averaged gun with a special damped-linear projection. Stationary/slow/GF safeguards from prior rounds remain unchanged.
+- Recompiled successfully: `javac -cp libs/robocode.jar robots/custom/MyTank.java`.

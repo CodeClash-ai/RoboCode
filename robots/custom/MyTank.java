@@ -30,6 +30,7 @@ public class MyTank extends AdvancedRobot {
     private int stationaryScans = 0;
     private int slowEnemyScans = 0;
     private int enemyFireCount = 0;
+    private int wallEnemyScans = 0;
     private double enemyVelocityAvg = 0.0;
     private double enemyTurnRateAvg = 0.0;
 
@@ -112,6 +113,17 @@ public class MyTank extends AdvancedRobot {
         } else {
             slowEnemyScans = 0;
         }
+        // Several logged opponents (including the current genetic bot) spend
+        // long stretches pinned against a wall.  When a target is wall-bound it
+        // has only one real escape direction, and our virtual-gun traces show
+        // simple head-on shots beat circular/linear over-leading.  Track this
+        // separately from "slow" because the bot can still burst at max speed
+        // while sliding along the edge.
+        if (enemyNearWall(enemyX, enemyY, 44.0)) {
+            wallEnemyScans++;
+        } else {
+            wallEnemyScans = Math.max(0, wallEnemyScans - 2);
+        }
 
         updateVirtualGuns(enemyX, enemyY);
 
@@ -164,7 +176,7 @@ public class MyTank extends AdvancedRobot {
         // Orbit perpendicular, with a distance-control offset.  Far away we cut
         // inward; too close we open out.  wallSmooth then bends the path away
         // from the battlefield edges before we commit to it.
-        double preferredDistance = headOnGunIsBest() ? 330.0 : (slowEnemyScans > 12 ? 285.0 : PREFERRED_DISTANCE);
+        double preferredDistance = wallEnemyScans > 6 ? 305.0 : (headOnGunIsBest() ? 330.0 : (slowEnemyScans > 12 ? 285.0 : PREFERRED_DISTANCE));
         // Against the current GF-style opponent our gun struggles mostly due
         // to long bullet flight, while its own gun almost never connects.  Once
         // virtual guns report a hard-to-hit mover, tighten the orbit a bit to
@@ -213,6 +225,11 @@ public class MyTank extends AdvancedRobot {
         // kill reduces exposure.  Moving opponents keep the conservative ladder.
         if (stationaryScans > 5 && getEnergy() > 12) {
             power = 3.0;
+        } else if (wallEnemyScans > 6 && getEnergy() > 16 && distance < 760) {
+            // Wall-huggers have very limited escape room; use max-power
+            // head-on/near-head-on shots to finish them before they can spend
+            // energy on stray bullets (which lowers our available bullet score).
+            power = 3.0;
         } else if (headOnGunIsBest() && getEnergy() > 18 && distance < 720) {
             // The current DeepThought opponent dodges/reverses enough that a
             // head-on gun wins the virtual-gun race.  Once detected, spend more
@@ -260,6 +277,8 @@ public class MyTank extends AdvancedRobot {
         int gun = chooseGun();
         if (stationaryScans > 5) {
             gun = GUN_HEAD_ON;
+        } else if (wallEnemyScans > 6) {
+            gun = GUN_AVERAGED;
         } else if (virtualSamples < 14 && slowEnemyScans > 12) {
             gun = GUN_AVERAGED;
         }
@@ -315,7 +334,7 @@ public class MyTank extends AdvancedRobot {
     }
 
     private boolean headOnGunIsBest() {
-        if (stationaryScans > 5) {
+        if (stationaryScans > 5 || wallEnemyScans > 6) {
             return true;
         }
         if (virtualSamples < 16) {
@@ -389,7 +408,14 @@ public class MyTank extends AdvancedRobot {
         if (gunType == GUN_HEAD_ON) {
             return new double[] {enemyX, enemyY};
         }
-        if (gunType == GUN_AVERAGED) {
+        if (wallEnemyScans > 6 && gunType == GUN_AVERAGED) {
+            // A wall-bound bot often alternates between max-speed bursts and
+            // hard stops/reverses.  A damped linear projection was slightly
+            // better than pure head-on in trace replay, while still avoiding
+            // the heavy over-lead of full circular/linear prediction.
+            velocity = limit(-2.2, 0.25 * velocity + 0.35 * enemyVelocityAvg, 2.2);
+            turnRate = 0.0;
+        } else if (gunType == GUN_AVERAGED) {
             // Good against stop-and-go and random-reversal bots: do not trust a
             // single-tick burst or stop to continue for the whole bullet flight.
             velocity = limit(-3.5, 0.45 * velocity + 0.55 * enemyVelocityAvg, 3.5);
@@ -498,6 +524,11 @@ public class MyTank extends AdvancedRobot {
     private boolean insideBattlefield(double x, double y, double margin) {
         return x > margin && x < getBattleFieldWidth() - margin
                 && y > margin && y < getBattleFieldHeight() - margin;
+    }
+
+    private boolean enemyNearWall(double x, double y, double margin) {
+        return x < margin || x > getBattleFieldWidth() - margin
+                || y < margin || y > getBattleFieldHeight() - margin;
     }
 
     private static double projectX(double x, double angle, double length) {
