@@ -1478,3 +1478,57 @@ Copy them into /workspace/tools/ if you want them persisted. They read
 Head-on aim should convert most of the 16 losses. If opponent unchanged, verify
 win margin improved in new logs. If opponent changes again, re-run the W-sweep
 replay to pick aim. Keep MyTank.java compiling to Java 8 (major version 52).
+
+# Agent Notes (Round 2 / current pass) — opponent = alpian__ianstank
+
+## STATUS: round 1 head-on gun won 249/250 (93% share). THIS pass fixes the grind bleed.
+Verified /logs/rounds/{0,1}: opus 43302(86%)/45251(93%) vs ianstank 4939/3516.
+Round-1 teammate's head-on (W=1.0) change was correct (86%->93%, 9->10 firsts).
+Full 250-sim sweep round 1: 249 wins, 1 LOSS (sim_37). Our final-E mean 85, but
+the 1 loss + ~8 CLOSE games (finalE 0-20) are ALL LONG GRINDS (861-1178 turns).
+
+## ROOT CAUSE of loss/close games: energy-war bleed at range
+ianstank = energy-CONSERVING stop-and-reverse oscillator: fires ~half as often as
+us (~18-25 shots/game vs our 44-60). MEASURED real head-on hit rate by distance
+(energy-gain events / fire events, 150 games):
+  100-200px 70% | 200-300px 36% | 300-400px 21% | 400-500px 16% | 500-600px 17%.
+Net energy/shot @p3 = hr*9-3: 300-400px = -1.11, 400-500px = -1.56 (BLEED!).
+56% of ticks are 200-300px (marginal +0.24), 30% are 300-500px (net-negative).
+In the LOSS (sim_37) we were BEHIND on energy 94% of ticks (vs ~26% in wins),
+fired ~60 shots at 15% real hit, and drained to 0 while enemy kept energy.
+Round-1 config fired flat power 3.0 out to 550px -> big per-miss drain in grinds.
+
+## CHANGE THIS PASS: distance power taper + earlier energy-war cut
+1. Power tiers: was flat 3.0/<550, 2.4/<650, 1.5/else. NOW 3.0/<300 (keeps the
+   dominant 200-300px zone at full power, 36% hit = net-positive), 2.4/<400,
+   1.6/<550, 1.0/else. Cuts per-miss cost where hit rate is below break-even.
+2. Energy-war cut: was `ourE<enemyE-15 && dist>350 -> power<=1.6`. NOW
+   `ourE<enemyE && dist>300 -> power<=1.0`. Triggers in the grind-loss state
+   (behind on energy at range) and cuts power hard so misses barely cost energy.
+Kept W=1.0 head-on (data-optimal for this stop-and-reverse oscillator), movement
+unchanged (orbit ~230px, proven at 249/250).
+
+## Validation (grind-sim over recorded games with MEASURED real hit rates)
+  current (flat p3): all-150-games net firing energy -106, grind games -111.
+  NEW (taperC):      all-150-games net +574, grind games -45 (60% less bleed),
+  while retaining ~93% of winning-game bullet damage (22655 vs 24233) so score
+  share barely drops. Should convert the loss + most close games to comfortable
+  wins without sacrificing the dominant win margin.
+
+## Tools: /tmp/grindsim2.py, /tmp/gs3.py (rebuild from these notes if lost).
+Key one-liner (REAL hit rate by distance = energy-gain events / fire events):
+count our energy DROPS in (-3.1,-0.05) as fires, GAINS >0.1 as hits, bucket by
+the distance at the PREVIOUS tick. This is more trustworthy than the replay sim
+(which overstates hit rate ~49% vs real ~36% at 200-300px because the enemy path
+was reactive to our actual shots).
+
+## Compile: javac --release 8 ... -> major version 52 (Java 8). Backup: /tmp/MyTank.bak.java
+
+## For next teammate
+- VERIFY new /logs: want the 1 loss GONE, worst-game final-E UP from 0-6, win rate
+  100%, score share held >=93%. If share DROPPED with no fewer losses, the taper
+  is too aggressive -> raise the 300px tiers back toward 3.0/<400. If losses
+  PERSIST, cut far power more (400px->1.0) and orbit closer (rangeBias 250/160).
+- ianstank fires only when we're close/predictable; the real remaining lever is
+  MOVEMENT (fewer enemy hits in grinds) — high risk, local harness broken.
+- Keep MyTank class name + Java-8 bytecode (only hard requirement). W=1.0 head-on.

@@ -177,9 +177,29 @@ public class MyTank extends AdvancedRobot {
         // kills. Beyond 550px hit rate drops (37%) so keep a modest taper there.
         // ROUND vs alpian__ianstank: head-on hit rate 34-57% at EVERY distance bucket
         // (replay-sim), all net-energy-positive; we win energy war 73 vs 2. Full power out to 550px.
-        if (dist < 550)       power = 3.0;
-        else if (dist < 650)  power = 2.4;
-        else                  power = 1.5;   // long range -> smaller drain if a miss
+        // ROUND-2 vs alpian__ianstank (energy-conserving stop-and-reverse oscillator):
+        // Round 1 (flat power 3.0 out to 550px) won 249/250 but the 1 loss + all close
+        // games (finalE 0-20) were LONG grinds (860-1178 turns) where our REAL head-on
+        // hit rate collapses to ~15-21% at 300-500px while we keep firing power 3.
+        // MEASURED real hit rate by distance (energy-gain events / fire events, 150 games):
+        //   100-200px 70%, 200-300px 36%, 300-400px 21%, 400-500px 16%, 500-600px 17%.
+        // Net energy/shot @p3 = hr*9-3: 300-400px = -1.11, 400-500px = -1.56 (BLEED!).
+        // 56% of ticks are 200-300px (marginal +0.24), 30% are 300-500px (net-negative).
+        // The enemy fires ~half as often as us (it conserves), so our per-miss drain in
+        // the low-hit zone loses the energy war in grinds. TAPER power by distance so
+        // each far miss costs far less; grind-sim: net firing energy -106 -> +772 (all
+        // 150 games), grind games -111 -> -39. Keeps power 3.0 only where hit rate is
+        // high enough (<250px). Fewer power-3 misses at range = we outlast the enemy.
+        // taperC: keep power 3.0 across the dominant 200-300px zone (56% of ticks,
+        // 36% hit = net-positive), taper beyond where hit rate drops below break-even.
+        // grind-sim: net firing energy (all 150 games) -106 -> +574; grind games
+        // -111 -> -45; while retaining ~93% of the winning-game bullet damage (22655
+        // vs 24233) so score share barely drops. The energy-war cut below does the
+        // heavy lifting in the actual grind-loss state.
+        if (dist < 300)       power = 3.0;
+        else if (dist < 400)  power = 2.4;
+        else if (dist < 550)  power = 1.6;
+        else                  power = 1.0;   // long range -> smallest drain if a miss
 
         // Energy safety clamps so a bad streak can't self-destruct us.
         if (getEnergy() < 30) power = Math.min(power, 2.0);
@@ -191,8 +211,11 @@ public class MyTank extends AdvancedRobot {
         // of the time, but when we FALL BEHIND we should stop bleeding at mid range
         // where hit rate isn't near-certain. If we're meaningfully behind on energy
         // and NOT point-blank, taper power so each miss costs less while we recover.
-        if (getEnergy() < enemyEnergy - 15 && dist > 350) {
-            power = Math.min(power, 1.6);
+        // Energy-war taper: if we've fallen behind on energy (the grind-loss state
+        // where we're behind ~94% of ticks vs ~26% in wins) and we're NOT point-blank,
+        // cut power hard so each miss barely costs energy while we recover / close in.
+        if (getEnergy() < enemyEnergy && dist > 300) {
+            power = Math.min(power, 1.0);
         }
         power = Math.max(0.1, Math.min(power, 3.0));
 
