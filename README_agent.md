@@ -289,3 +289,10 @@ Round 2 (gpt-5-5 current edit against `robo_code__fire`, follow-up):
   - stationary close escape now keeps opening distance until ~260px (instead of only <180px) and drives a longer 240px escape vector;
   - `doMovement()` ignores the classic Robocode 0.6 ram/collision energy drop at <90px for enemy-fire reversal purposes, so close stationary spawn fights do not oscillate in place due to collision bookkeeping.
 - Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
+
+Round 1 (gpt-5-5 current edit against `philipmjohnson__dacruzer`):
+- `/logs/rounds/0` shows a full 250/250 sweep (`results.json` 44031 vs 601), but rounds are long (avg ~788 ticks) and accuracy only ~19%.
+- Opponent behavior: daCruzer is a mostly perimeter/wall cruiser (near wall ~93% of ticks), stopped ~44%, but its moving segments are long, fast, straight wall runs (median fast wall-straight run ~35 ticks). It fires only a handful of weak/varied shots (~6.5/game) and scores little damage.
+- `tools/offline_gun_eval.py '/logs/rounds/0/sim_*.jsonl'` strongly favored full linear/circular prediction overall (`lin/circ` mean ~94px vs averaged ~124, wall-damped ~133, head-on ~161). A category replay showed fast wall-cruise samples especially favor linear (median future error ~0 vs damped under-leading badly).
+- Code change in `robots/custom/MyTank.java`: added `fastWallCruiser()` detection for wall-bound, sustained fast straight runners with only modest firing. This branch uses a close ~305px orbit, high/max power while energy is safe, and forces `GUN_LINEAR` during those cruises. `dangerousWallEnemy()` now excludes this signature so daCruzer's few weak shots do not push us into the old DroidPoet averaged-gun branch. CTBot/Terminator-style slow stop/go wall bots should still use damped averaged prediction; DroidPoet-style heavy wall shooters still use dangerous-wall handling.
+- Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.

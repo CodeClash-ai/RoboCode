@@ -233,6 +233,8 @@ public class MyTank extends AdvancedRobot {
             // body heading while alternating stops/straight bursts and weak shots.
             // It scores very little, so stay closer and shorten head-on flights.
             preferredDistance = 305.0;
+        } else if (fastWallCruiser()) {
+            preferredDistance = 305.0;
         } else if (activeStopGoShooter()) {
             // RegullarMonk-style bots stop/reverse constantly but fire repeated
             // weak bullets.  They are easiest to hit with fast head-on shots;
@@ -298,6 +300,7 @@ public class MyTank extends AdvancedRobot {
 
     private void doGun(ScannedRobotEvent e, double absBearing, double enemyX, double enemyY) {
         double distance = e.getDistance();
+        double turnRate = haveEnemyHeading ? Utils.normalRelativeAngle(e.getHeadingRadians() - lastEnemyHeading) : 0.0;
         double power;
         if (distance < 155) {
             power = 3.0;
@@ -347,6 +350,9 @@ public class MyTank extends AdvancedRobot {
             // Keep pressure high while the slightly wider orbit reduces rare
             // point-blank ram/leakage in long field-crossing runs.
             power = Math.max(power, distance < 620 ? 3.0 : 2.65);
+        }
+        if (fastWallCruiser() && getEnergy() > 14 && distance < 820) {
+            power = Math.max(power, distance < 650 ? 3.0 : 2.55);
         }
         if (crazyEnemyScans > 4) {
             // High-speed continuous turners are easier to hit with faster,
@@ -412,7 +418,6 @@ public class MyTank extends AdvancedRobot {
         power = Math.min(power, Math.max(0.1, getEnergy() - 0.15));
 
         double bulletSpeed = 20.0 - 3.0 * power;
-        double turnRate = haveEnemyHeading ? Utils.normalRelativeAngle(e.getHeadingRadians() - lastEnemyHeading) : 0.0;
 
         double[][] candidates = new double[GUN_COUNT][2];
         candidates[GUN_HEAD_ON] = predictEnemy(enemyX, enemyY, e.getHeadingRadians(), e.getVelocity(), 0.0, bulletSpeed, GUN_HEAD_ON);
@@ -444,6 +449,21 @@ public class MyTank extends AdvancedRobot {
             // favors the normal averaged stop/reversal predictor over head-on,
             // linear, circular, or the old wall-damped special case.
             gun = GUN_AVERAGED;
+        } else if (wallEnemyScans > 4 && straightEnemyScans > 12
+                && enemyFireCount <= 8
+                && Math.abs(e.getVelocity()) > 4.5 && Math.abs(enemyVelocityAvg) > 3.6
+                && Math.abs(turnRate) < 0.025 && crazyEnemyScans <= 4
+                && !activeStopGoShooter() && !fixedHeadingStopGoEnemy()
+                && (virtualSamples < 35 || virtualGunError[GUN_LINEAR] <= virtualGunError[GUN_AVERAGED] + 2.0)) {
+            // daCruzer-style opponents spend most of the game on the perimeter and
+            // fire a handful of weak shots, but unlike CTBot/Terminator their wall
+            // movement includes long fast straight cruises.  The older low-fire
+            // guard disabled the linear cold start after those shots, leaving the
+            // damped stop/go wall gun to under-lead.  If the target is currently in
+            // a genuine fast wall cruise, force linear unless virtual waves clearly
+            // prefer the averaged gun.  Slow stop/go wall bots and DroidPoet-style
+            // dangerous wall shooters are excluded above.
+            gun = GUN_LINEAR;
         } else if (straightEnemyScans > 2 && harmlessLowFireEnemy() && wallEnemyScans <= 4) {
             // Short non-wall straight-looking snippets are often stop/reverse
             // noise (e.g. Tirolio).  The current Claptrap traces also show the
@@ -538,6 +558,19 @@ public class MyTank extends AdvancedRobot {
         return enemyFireCount <= 2;
     }
 
+    private boolean fastWallCruiser() {
+        // daCruzer/Antiwalls-style perimeter cruisers: wall-bound, long straight
+        // fast runs, and only a modest number of weak shots (currently <=8 detected drops).  These are very
+        // different from stop/go wall bots (CTBot/Terminator) and DroidPoet's
+        // sustained active gunner; trace replay strongly favors full linear lead
+        // during the current fast edge cruises.
+        return wallEnemyScans > 4
+                && straightEnemyScans > 12
+                && Math.abs(enemyVelocityAvg) > 3.6
+                && enemyFireCount <= 8
+                && crazyEnemyScans <= 4;
+    }
+
     private boolean activeStopGoShooter() {
         // RegullarMonk-style movement in the latest logs: half the time stopped,
         // small low-turn bursts, and many weak shots.  Treat it separately from
@@ -547,6 +580,7 @@ public class MyTank extends AdvancedRobot {
         return stopGoEnemyScans > 8
                 && enemyFireCount > 3
                 && !fixedHeadingStopGoEnemy()
+                && !fastWallCruiser()
                 && crazyEnemyScans <= 4
                 && Math.abs(enemyVelocityAvg) < 3.8
                 && Math.abs(enemyTurnRateAvg) < 0.035;
@@ -584,7 +618,7 @@ public class MyTank extends AdvancedRobot {
         // Current DroidPoet logs: a high-speed wall/perimeter runner that fires
         // often.  Do not wait for many virtual-wave samples before switching out
         // of the old "harmless wall target" max-power close-orbit mode.
-        return wallEnemyScans > 4 && enemyFireCount > 3 && stopGoEnemyScans <= 12;
+        return wallEnemyScans > 4 && enemyFireCount > 3 && stopGoEnemyScans <= 12 && !fastWallCruiser();
     }
 
     private double bestGunError() {
