@@ -639,14 +639,14 @@ public class MyTank extends AdvancedRobot {
                 && crazyEnemyScans <= 4
                 && Math.abs(enemyVelocityAvg) < 3.8
                 && Math.abs(enemyTurnRateAvg) < 0.004
-                && (!haveEnemyAxis || enemyAxisSamples < 20 || enemyAxisMax - enemyAxisMin < 210.0);
+                && (!haveEnemyAxis || enemyAxisSamples < 20 || enemyAxisMax - enemyAxisMin < 135.0);
     }
 
     private boolean fixedHeadingLineEnemy() {
         // MyFirstKiller-style signature in the current logs: identical body
         // heading for the whole round, repeated stops/straight bursts along one
         // axis, and a weak/simple firing pattern.  Unlike fixedHeadingStopGoEnemy
-        // it can span more than 210px, so do not force the learned midpoint; use a
+        // it can span well over a tight ~135px oscillator, so do not force the learned midpoint; use a
         // tiny drift projection and somewhat heavier bullets instead of the very
         // conservative activeStopGoShooter mode.
         return stopGoEnemyScans > 8
@@ -655,6 +655,7 @@ public class MyTank extends AdvancedRobot {
                 && Math.abs(enemyVelocityAvg) < 4.2
                 && Math.abs(enemyTurnRateAvg) < 0.004
                 && enemyAxisSamples > 18
+                && (!haveEnemyAxis || enemyAxisMax - enemyAxisMin >= 135.0)
                 && !fastWallCruiser();
     }
 
