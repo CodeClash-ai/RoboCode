@@ -45,9 +45,10 @@ public class MyTank extends AdvancedRobot {
     private static final int GUN_CIRCULAR = 2;
     private static final int GUN_AVERAGED = 3;
     private static final int GUN_GUESS_FACTOR = 4;
-    private static final int GUN_COUNT = 5;
+    private static final int GUN_DRIFT_HEAD_ON = 5;
+    private static final int GUN_COUNT = 6;
     private static final int VIRTUAL_WAVES = 96;
-    private final double[] virtualGunError = {55.0, 60.0, 60.0, 58.0, 70.0};
+    private final double[] virtualGunError = {55.0, 60.0, 60.0, 58.0, 70.0, 56.0};
     private final boolean[] virtualActive = new boolean[VIRTUAL_WAVES];
     private final long[] virtualTime = new long[VIRTUAL_WAVES];
     private final double[] virtualSourceX = new double[VIRTUAL_WAVES];
@@ -403,6 +404,7 @@ public class MyTank extends AdvancedRobot {
         candidates[GUN_CIRCULAR] = predictEnemy(enemyX, enemyY, e.getHeadingRadians(), e.getVelocity(), turnRate, bulletSpeed, GUN_CIRCULAR);
         candidates[GUN_AVERAGED] = predictEnemy(enemyX, enemyY, e.getHeadingRadians(), e.getVelocity(), turnRate, bulletSpeed, GUN_AVERAGED);
         candidates[GUN_GUESS_FACTOR] = predictGuessFactor(absBearing, distance, bulletSpeed);
+        candidates[GUN_DRIFT_HEAD_ON] = predictEnemy(enemyX, enemyY, e.getHeadingRadians(), e.getVelocity(), 0.0, bulletSpeed, GUN_DRIFT_HEAD_ON);
         addVirtualWave(candidates, bulletSpeed, absBearing);
 
         int gun = chooseGun();
@@ -414,7 +416,7 @@ public class MyTank extends AdvancedRobot {
             // Fixed-heading stop/go movement has no lateral turn component; the
             // simple head-on gun beats our averaged/linear predictors in trace
             // replay and should be used as soon as the signature is clear.
-            gun = GUN_HEAD_ON;
+            gun = GUN_DRIFT_HEAD_ON;
         } else if (activeStopGoShooter()) {
             // Current RegullarMonk traces: very frequent stops/reverses and
             // power-1 firing.  Offline shot replay favored head-on over linear,
@@ -584,8 +586,9 @@ public class MyTank extends AdvancedRobot {
         if (virtualSamples < 16) {
             return false;
         }
+        double bestHeadFamily = Math.min(virtualGunError[GUN_HEAD_ON], virtualGunError[GUN_DRIFT_HEAD_ON]);
         double bestOther = Math.min(Math.min(Math.min(virtualGunError[GUN_LINEAR], virtualGunError[GUN_CIRCULAR]), virtualGunError[GUN_AVERAGED]), virtualGunError[GUN_GUESS_FACTOR]);
-        return virtualGunError[GUN_HEAD_ON] <= bestOther + 3.0;
+        return bestHeadFamily <= bestOther + 3.0;
     }
 
     private void addVirtualWave(double[][] candidates, double bulletSpeed, double absBearing) {
@@ -651,6 +654,15 @@ public class MyTank extends AdvancedRobot {
             double turnRate, double bulletSpeed, int gunType) {
         if (gunType == GUN_HEAD_ON) {
             return new double[] {enemyX, enemyY};
+        }
+        if (gunType == GUN_DRIFT_HEAD_ON) {
+            // Fixed-heading stop/go bots in the current logs move a little farther
+            // along their body axis by bullet-arrival time than pure head-on, but
+            // full linear prediction badly over-leads their frequent stops/reverses.
+            // A tiny 5% projection keeps the robust head-on character while shaving
+            // a small amount off replay error with moderate/fast bullets.
+            double drift = limit(-0.45, 0.05 * velocity, 0.45);
+            return projectClamped(enemyX, enemyY, heading, drift, bulletSpeed, 70);
         }
         if (gunType == GUN_AVERAGED && !dangerousWallEnemy()
                 && (wallEnemyScans > 4 || (stopGoEnemyScans > 8 && (harmlessLowFireEnemy() || activeStopGoEnemy())))
@@ -770,6 +782,22 @@ public class MyTank extends AdvancedRobot {
         }
         setTurnRightRadians(turn);
         setAhead(ahead);
+    }
+
+    private double[] projectClamped(double enemyX, double enemyY, double heading, double velocity, double bulletSpeed, int maxTicks) {
+        double predictedX = enemyX;
+        double predictedY = enemyY;
+        double time = 0.0;
+        while ((++time) * bulletSpeed < distance(getX(), getY(), predictedX, predictedY) && time < maxTicks) {
+            predictedX += Math.sin(heading) * velocity;
+            predictedY += Math.cos(heading) * velocity;
+            if (!insideBattlefield(predictedX, predictedY, 18.0)) {
+                predictedX = limit(18.0, predictedX, getBattleFieldWidth() - 18.0);
+                predictedY = limit(18.0, predictedY, getBattleFieldHeight() - 18.0);
+                break;
+            }
+        }
+        return new double[] {predictedX, predictedY};
     }
 
     private boolean insideBattlefield(double x, double y, double margin) {
