@@ -5546,3 +5546,47 @@ Backup of prior (losing) source: /tmp/MyTank.bak.java.
   orbit + LOW dodge (0.12). The dodging-at-range is the key: closing beats it.
 - Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING.
 - Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 2 / current pass) — opponent = logancsc__dodgebot2
+
+## STATUS: R1's close-orbit+W=0.9 change FLIPPED THE MATCH — this pass pushes orbit closer
+Opponent = logancsc__dodgebot2 (MODERATE curving DODGER, movefrac 0.79, avgV 3.51,
+avg|dh| 0.056, HEAD-ON gun offset ~0.10 rad). It DODGES our shots at range but not
+up close. Cross-round MATCH results (results.json winner):
+- R0 (W=0.5 leftover + orbit ~270px): LOST — opus 14327 vs dodgebot2 23384. 81
+  losses/120 (bled out in 200-300px losing zone).
+- R1 (prior teammate: gun W=0.5->0.9 near-head-on + orbit ~270px->~150px target):
+  WON — opus 38016 vs dodgebot2 11495. Full 250-sim sweep: 11 LOSSES (down from
+  81), 22 close(<20E), ourFE mean 58.1, killtick 359.8, ENGAGEMENT DIST 205.8px
+  (target ~150 NEVER reached — the fast dodger keeps distance open).
+
+## KEY UNBIASED SIGNAL (R1 250-sim hit density by distance): CLOSE = WIN
+  0-100px:   our 30.8/1k  enemy 8.2/1k  ratio 3.76 (crush; only 2077 ticks reached)
+  100-200px: our 18.4/1k  enemy 10.2/1k ratio 1.80 (WIN zone; 49121 ticks — most time)
+  200-300px: our  4.8/1k  enemy 7.2/1k  ratio 0.67 (LOSE; 16696 ticks — bleeding)
+  300-400px: our  1.3/1k  enemy 2.9/1k  ratio 0.44 (LOSE badly; 6117 ticks)
+Its shots collapse at range (dodges what it sees coming) but not up close. We spent
+~23k ticks in the 200-400px LOSING zones -> the 11 losses + 22 close games.
+
+## CHANGE THIS PASS (movement only): stronger inward pull, hold ~120px (was ~150)
+rangeBias was: >300 -1.0, >220 -0.7, >170 -0.35, <90 +0.7, <130 +0.3, else 0.0.
+NOW: >300 -1.2, >200 -0.95, >140 -0.55, <75 +0.7, <110 +0.2, else -0.1. Pulls
+inward HARDER from farther out so more ticks land in the 100-200px WIN zone (and
+dip toward the 0-100px crush zone) instead of the 200-400px losing zones. Wall-hug
+was only 3.9% at the R1 orbit (achieved ~206px) so a tighter orbit is safe on
+800x600. Gun aim W=0.9 CONFIRMED optimal (fresh W-sweep 2 R1 slices: W=0.75-0.9
+peak ~0.50 vs W=0.0 ~0.41 vs W=1.0 ~0.48). Dodge-on-fire 0.12 (correct for its
+HEAD-ON gun — reversing walks into head-on bullets) UNCHANGED. Only the rangeBias
+block changed. Backup: /tmp/MyTank.bak.java. Compiles Java 8 (major version 52).
+
+## For next teammate — VERIFY
+- Want NEW /logs: the 11 losses REDUCED, ourFE mean UP from 58.1, enemy score DOWN
+  from 11495, engagement dist DOWN from 206 toward ~150px, MORE ticks in 100-200px.
+  If it REGRESSED (new losses / share drop): the tighter orbit may have exposed us
+  to ram/close-gun damage the density analysis understated -> pull orbit back toward
+  ~170px (thresholds 320/240/190, <100 +0.6, <150 +0.2) or REVERT to /tmp/MyTank.bak.java
+  (git prior = R1 config, ~150px target/~206 achieved, 11 losses / WON the match).
+- dodgebot2 DODGES at range but not close -> KEEP W=0.9 + CLOSE orbit + LOW dodge
+  (0.12, head-on gun). The closer-orbit direction is the proven lever (R1 flip).
+- Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING.
+- Keep MyTank class name + Java-8 bytecode (only hard requirement).

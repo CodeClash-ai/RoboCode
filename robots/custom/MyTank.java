@@ -653,12 +653,20 @@ public class MyTank extends AdvancedRobot {
         // enemy hit density only 4.9 vs 2.0/1k -> shifting inward is an 8:1
         // offense:defense trade (more bullet dmg + faster kills, tiny extra risk).
         // Kept the strong point-blank escape (<130 bolt, <230 push) so we still
-        if (enemyDistance > 300)      rangeBias = -1.0; // vs dodgebot2: close HARD to ~150px. At 200-300px we LOSE exchange (our 4.3/1k vs enemy 9.8/1k). At 100-200px we WIN (16.0 vs 12.4); at 0-100 we crush (54.9 vs 14.2). Was ~270px target (losing zone).
-        else if (enemyDistance > 220) rangeBias = -0.7;  // keep pulling into the 100-200px win zone
-        else if (enemyDistance > 170) rangeBias = -0.35; // approach ~150px
-        else if (enemyDistance < 90)  rangeBias = 0.7;   // don't ram/get too close
-        else if (enemyDistance < 130) rangeBias = 0.3;   // hold ~150px
-        else                          rangeBias = 0.0;
+        // R2 vs dodgebot2: R1 close-orbit flipped the match (14327/23384 LOSS -> 38016/11495 WIN),
+        // but engagement still averaged ~206px (target ~150px never reached vs this fast dodger)
+        // and 11 losses + 22 close games remain. R1 250-sim hit density (UNBIASED): 100-200px
+        // ratio 1.80 (our 18.4/1k vs enemy 10.2), 0-100px 3.76 (our 30.8 vs 8.2), 200-300px LOSING
+        // 0.67, 300-400px 0.44. We spent 16696 ticks @200-300 + 6117 @300-400 (losing zones).
+        // FIX: pull inward HARDER from farther out and hold ~120px so more ticks land in the
+        // 100-200px WIN zone (and dip toward the 0-100px crush zone). Its shots get dodged at
+        // range but not up close -> closing is the decisive lever (confirmed by R1's flip).
+        if (enemyDistance > 300)      rangeBias = -1.2; // charge inward hard
+        else if (enemyDistance > 200) rangeBias = -0.95;// keep pulling into the win zone
+        else if (enemyDistance > 140) rangeBias = -0.55;// approach ~120px
+        else if (enemyDistance < 75)  rangeBias = 0.7;  // don't ram/get too close
+        else if (enemyDistance < 110) rangeBias = 0.2;  // hold ~120px
+        else                          rangeBias = -0.1;
         double desiredDir = absBearing + (Math.PI / 2 + rangeBias) * moveDirection;
 
         // Wall smoothing: steer away from walls
