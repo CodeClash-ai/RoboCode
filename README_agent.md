@@ -3635,3 +3635,57 @@ argument — the cross-round REAL result is decisive. If it becomes a FAST mover
 WAVE SURFING (high-risk, harness broken, trust /logs only). Always re-check
 `head -1 /logs/rounds/0/sim_0.jsonl` for opponent name + INDEX MAPPING first.
 Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 1 / current pass) — opponent = admiralrasmussen__wavesurfing (WE WERE LOSING 0/10 FIRSTS!)
+
+## CRITICAL: this opponent is a NON-FIRING WAVE SURFER — we were LOSING EVERY ROUND
+Round 0 result (BEFORE my change): admiralrasmussen__wavesurfing 15005 vs opus-4-8
+2125. results_*.txt: enemy 600 (88-94%) with 10/10 FIRSTS EVERY battle; us 37-83
+(6-12%), 0 firsts, 10 seconds. WE LOSE THE MATCH.
+
+## ROOT CAUSE: we FIRED OURSELVES TO DEATH. The enemy does ZERO damage.
+Verified across ALL 250 sim games:
+- Enemy fires ZERO bullets (0 ticks with an enemy bullet in the air, all 250 games).
+- Enemy never rams (0 ram dmg in results).
+- So the enemy deals us NO damage at all. Yet WE DIE (ourE=0.0) while enemy keeps
+  ~65-99 energy. In sim_0: we fired 69 shots, had 0 big energy drops (no wall/ram
+  hits). We drained ~200 energy firing at a perfect dodger and bled to 0.
+- Our hit rate vs this wave surfer = 2.2% (57 hits / 2602 fires over 40 games).
+  It moves fast (avgV 4.9) and curves hard (avg|dh| 0.106) and SURFS our waves.
+- Net energy/shot at 2% hit, power 3 = 0.02*9 - 3 = -2.8. Every shot bleeds us.
+Enemy strategy = pure "outlast": never shoot, dodge perfectly, wait for our
+suicide. It won 10/10 rounds as LAST SURVIVOR (500 survival + 100 bonus).
+
+## THE FIX: PASSIVE-ENEMY CONSERVATION MODE (survive = win)
+Since the enemy does 0 damage, our ONLY threat is self-inflicted bleed. If we DON'T
+die, the round hits the turn limit with BOTH alive -> enemy gets NO last-survivor
+bonus (that's the only way it beat us), and BULLET DAMAGE decides -> we win because
+it fires 0 bullets and we land a few cheap ones.
+Changes in aimAndFire (robots/custom/MyTank.java, fire-gate block ~line 354):
+1. Track enemy fires (small energy drops) -> enemyFireCount. If t>120 and
+   enemyFireCount<=4 (enemy is non-firing), enter conservation mode.
+2. In conservation mode: power<=1.0 (close) / 0.5 (else); NO fire if getEnergy()<60
+   (keep a big reserve so we can NEVER bleed to death); NO fire if dist>260;
+   tight align (0.045); NO fire if getEnergy()<enemyEnergy. This keeps us alive
+   INDEFINITELY while still landing a few close shots for bullet-damage points.
+New fields: enemyFireCount, enemyEnergyHigh, turnCount. Enemy-fire detection added
+in onScannedRobot (drop 0.09..3.05 = a fire). Threshold <=4 tolerates false counts
+from OUR ~2%% hits (which also drop enemy energy).
+Compiles Java 8 (major version 52). Backup of prior source: /tmp/MyTank.bak.java.
+
+## For next teammate — VERIFY (this is a LOSING matchup we're trying to flip)
+- Want NEW /logs: WE STOP DYING (our final E stays high, e.g. >60), the round goes
+  to turn limit with both alive, enemy loses its last-survivor bonus, and OUR
+  bullet damage > enemy's 0 -> we WIN or at least stop losing 0/10.
+- If we STILL lose (enemy still gets firsts): we may still be bleeding somewhere.
+  Check: are we hitting walls? (only 16 big drops / 250 games in round 0, so
+  unlikely). Consider firing EVEN LESS (raise the getEnergy()<60 gate to <80, or
+  STOP FIRING ENTIRELY in conservation mode -- allowFire=false always -- to
+  guarantee survival; then it's a pure tie on survival, better than a 0/10 loss).
+- If the enemy STARTS firing in a new round (enemyFireCount>4), conservation mode
+  disables and the normal gun/movement (W=0.75, distance power tiers, orbit ~245px)
+  takes over -- so this change is SAFE vs a firing opponent.
+- Consider WAVE SURFING for OUR movement too (this enemy is a wave surfer; if it
+  ever fires, dodging is key). High-risk, local harness broken -> trust /logs.
+- Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING.
+- Keep MyTank class name + Java-8 bytecode (only hard requirement).

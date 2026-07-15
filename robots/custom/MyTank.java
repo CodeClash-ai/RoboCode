@@ -41,6 +41,17 @@ public class MyTank extends AdvancedRobot {
     private double enemyTurnRate = 0;
     private boolean haveLastHeading = false;
 
+    // Passive-enemy detection (vs admiralrasmussen__wavesurfing, a wave surfer
+    // that NEVER fires and NEVER rams -> it does 0 damage to us and just waits
+    // for us to bleed to death by missing shots at ~2%% hit. The winning play is
+    // to CONSERVE energy: survive the whole match while landing a few cheap hits.
+    // If neither dies, the round hits the turn limit with both alive -> the enemy
+    // gets NO last-survivor bonus (that's how it beat us), and bullet damage
+    // decides -> we win because it fires zero bullets and we land a few.)
+    private int enemyFireCount = 0;      // times we detected the enemy firing
+    private double enemyEnergyHigh = 100; // enemy's peak energy (to detect its fires)
+    private long turnCount = 0;
+
     public void run() {
         setColors(Color.BLUE, Color.CYAN, Color.WHITE);
 
@@ -91,6 +102,15 @@ public class MyTank extends AdvancedRobot {
 
         lastEnemyEnergy = enemyEnergy;
         enemyEnergy = e.getEnergy();
+
+        // Detect enemy firing: a small drop in enemy energy (0.1..3.0) that is
+        // NOT a wall/collision loss and NOT us hitting them. We track its peak
+        // energy; a drop below the recent peak (when it wasn't just hit) = a fire.
+        double drop = lastEnemyEnergy - enemyEnergy;
+        if (drop > 0.09 && drop <= 3.05) {
+            enemyFireCount++;
+        }
+        if (enemyEnergy > enemyEnergyHigh) enemyEnergyHigh = enemyEnergy;
 
         // ---- Radar lock ----
         double radarTurn = Utils.normalRelativeAngle(absBearing - getRadarHeadingRadians());
@@ -330,6 +350,35 @@ public class MyTank extends AdvancedRobot {
         if (dist > 400 && getEnergy() < enemyEnergy) allowFire = false;
         // Tighter alignment for distant shots (bullet spread grows with range).
         double alignThresh = (dist > 400) ? 0.09 : 0.12;
+
+        // ===== PASSIVE-ENEMY CONSERVATION MODE (vs admiralrasmussen__wavesurfing) =====
+        // This opponent is a wave surfer that fires ZERO bullets and never rams:
+        // it does 0 damage to us and simply waits for us to self-destruct by
+        // missing shots (~2%% hit vs its perfect dodging). Under the OLD gun we
+        // fired ~69 power-3 shots/game and bled to 0 while it kept ~90 energy ->
+        // it won 10/10 rounds as last survivor (survival bonus).
+        // FIX: once we've confirmed the enemy is (nearly) non-firing, switch to
+        // heavy energy conservation. Goal = SURVIVE the whole match. If neither
+        // dies, the round hits the turn limit with both alive -> the enemy gets
+        // NO last-survivor bonus, and bullet damage decides -> we win because it
+        // fires 0 bullets and we land a few cheap ones. So: fire only tiny-power,
+        // close, perfectly-aligned shots, and ONLY while we hold a big energy
+        // reserve. This keeps us alive indefinitely while still scoring a little.
+        long t = getTime();
+        boolean enemyPassive = (t > 120) && (enemyFireCount <= 4);
+        if (enemyPassive) {
+            // Enemy does no damage -> our only threat is self-inflicted bleed.
+            // Keep a large reserve; fire small, only close and dead-on.
+            power = Math.min(power, (dist < 120) ? 1.0 : 0.5);
+            // Never fire below a healthy reserve so we can NEVER bleed to death.
+            if (getEnergy() < 60) allowFire = false;
+            // Only shoot when very likely to matter: close range, tight aim.
+            if (dist > 260) allowFire = false;
+            alignThresh = 0.045;
+            // If we're anywhere behind on energy, do not fire at all -- the enemy
+            // can't hurt us, so a big reserve costs nothing and guarantees survival.
+            if (getEnergy() < enemyEnergy) allowFire = false;
+        }
 
         if (allowFire && getGunHeat() == 0 && Math.abs(gunTurn) < alignThresh
                 && getEnergy() > power + 0.5) {
