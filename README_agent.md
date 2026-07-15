@@ -5360,3 +5360,37 @@ lead. If it becomes a HEAVY spinner (avg|dh|>0.06), circular (W=0.0 predictor
 already applies); if SLOW/near-stationary, raise W toward 1.0. Tool: /tmp/wsweep.py
 (rebuild from earlier notes). Always re-check `head -1 /logs/rounds/0/sim_0.jsonl`
 for opponent + INDEX MAPPING first. Keep MyTank class name + Java-8 bytecode.
+
+# Agent Notes (Round 2 verification pass, THIS pass) — opponent = gjgomez__mb2
+
+## STATUS: PERFECT WIN both rounds — NO CODE CHANGE (deliberate)
+Opponent = gjgomez__mb2 (MODERATE near-straight mover, movefrac 0.836, avgV 3.31,
+avg|dh| 0.035, HEAD-ON gun offset ~0.14 rad, engages ~304px). INDEX both rounds
+i=0=mb2, i=1=opus. Cross-round MATCH results (results.json winner = opus-4-8 both):
+- Round 0: opus 43187 vs mb2 6828 (88% share). results_0.txt 1749 (88%), 10/10 firsts.
+- Round 1 (prior teammate made NO change; W=0.0 confirmed): opus 43298 vs mb2 6666
+  (86% share). results_0.txt 1753 (86%), 10/10 firsts. Full 250-sim sweep:
+  LOSSES = 0/250, close(<20E) = 0. ourFE mean 92.6, min 27.5 (huge margin).
+  killtick mean 303. Enemy DIES every game.
+
+## Decision this pass: NO code change (deliberate)
+git diff on MyTank.java = empty (unchanged winning config). W=0.0 full linear lead
+(line 349) is W-sweep-optimal for this moderate near-straight mover (R0 W-sweep 2
+slices: W=0.0 top ~0.47, head-on W=1.0 clearly worse ~0.36). The ~12-14% score leak
+is unavoidable enemy bullet damage during the ~303 ticks before the kill; raising
+power to kill faster REGRESSES (longer cooldown -> longer engagement -> more enemy
+hits — documented repeatedly across myfirstkiller/exterminador/tracker/crazy). Any
+gun/movement edit only risks regression on a 250/250 sweep we win with 27+ E to spare.
+Re-verified compile:
+  javac --release 8 -cp libs/robocode.jar -d robots robots/custom/MyTank.java  # OK
+  javap -v robots/custom/MyTank.class | grep "major version"  # -> 52 (Java 8)
+
+## For next teammate
+Only act if a NEW /logs shows win rate <100% or our energy collapsing to a loss.
+mb2 is a MODERATE near-straight mover with a HEAD-ON gun -> KEEP W=0.0 full linear
+lead. Dodge 0.30 (anti-lead-gun) is fine; measured reversal-vs-hit data here was
+ambiguous-to-favorable, so left unchanged (movement changes REPEATEDLY backfire).
+If it becomes a HEAVY spinner (avg|dh|>0.06), circular (W=0.0 predictor applies);
+if SLOW/near-stationary, raise W toward 1.0. Always re-check
+`head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING first.
+Keep MyTank class name + Java-8 bytecode (only hard requirement).
