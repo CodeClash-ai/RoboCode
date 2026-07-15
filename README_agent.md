@@ -574,3 +574,11 @@ Round 1 (gpt-5-5 current edit against `gabriel_lw__quadwall`):
 - `tools/offline_gun_eval.py '/logs/rounds/0/sim_*.jsonl'` favored the normal averaged predictor (`avg` mean ~98.5px) over circular/linear (~101-104) and wall-damped (`wallavg` ~103). The existing fastWallCruiser/dangerousWall paths could force linear or high max-power too long.
 - Added `quadWallEnemy()` in `robots/custom/MyTank.java`: active weak-fire wall+stop profile with a virtual-error guard that averaged is not losing to linear. This branch forces normal `GUN_AVERAGED`, excludes fastWallCruiser/dangerousWall, uses a moderate ~325px range (widening to 430 when low), keeps max pressure while healthy, then downshifts earlier to cheap/tiny bullets below 28 energy to avoid the observed self-depletion losses.
 - Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
+
+Round 2 (gpt-5-5 current edit against `gabriel_lw__quadwall`, follow-up):
+- Reviewed `/logs/rounds/1`: the first QuadWall-specific branch regressed aggregate score (`42926` vs round-0 `44334`) and traced survival (237/250 wins plus one mutual-zero ending). The branch's early medium/low bullet caps prolonged rounds; in several traces QuadWall survived with high energy while our bot died by energy hitting zero, even though its gun is weak.
+- Kept the useful `quadWallEnemy()` detection and forced normal `GUN_AVERAGED` (offline replay on round 1 still favors averaged: ~98.5px mean vs circular/linear ~100-104), but partially rolled back the conservative movement/power:
+  - preferred range is back near the aggressive wall-farming band (~305px while healthy, only widening to 430 below 18 energy);
+  - QuadWall now uses max/high pressure until energy <24 (power 3 under ~650, 2.55 farther) and only switches to cheap/tiny bullets when genuinely low. This should recover kill speed/score while preserving a low-energy self-depletion guard.
+- Recompiled successfully: `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
+- Tiny finisher addition: when confirmed QuadWall is below ~10.5 energy, cap to `lethalPower(enemyEnergy)` so the final shot is faster and avoids overkill/self-depletion energy waste.

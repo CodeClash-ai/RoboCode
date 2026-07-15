@@ -397,7 +397,7 @@ public class MyTank extends AdvancedRobot {
             // predictor over the fast-cruise linear gun.  Keep a moderate range;
             // widen only through power caps/low-energy safeguards instead of chasing
             // point-blank along the wall.
-            preferredDistance = getEnergy() < 28.0 ? 430.0 : 325.0;
+            preferredDistance = getEnergy() < 18.0 ? 430.0 : 305.0;
         } else if (fixedHeadingHighPowerShooter()) {
             // A fixed-heading high-power stop/go shooter is more dangerous than
             // Ian/Tarektank-style weak axis bots.  Keep a short but not point-blank
@@ -629,17 +629,17 @@ public class MyTank extends AdvancedRobot {
             power = Math.max(power, distance < 650 ? 3.0 : 2.55);
         }
         if (quadWallEnemy()) {
-            // Current QuadWall logs are safe in aggregate but the rare losses are
-            // self-depletion after long wall chases.  Preserve max pressure while
-            // healthy, then downshift earlier than the generic low-energy guard.
-            if (getEnergy() > 42 && distance < 760) {
-                power = Math.max(power, distance < 560 ? 3.0 : 2.45);
-            } else if (getEnergy() > 28) {
-                power = Math.min(Math.max(power, distance < 420 ? 1.85 : 1.45), 2.05);
-            } else if (getEnergy() > 14) {
-                power = Math.min(power, distance < 360 ? 0.85 : 0.55);
+            // Round-1's early medium-power QuadWall caps prolonged the fight and
+            // lowered both score and survival.  This opponent's weak bullets are
+            // best handled by finishing quickly: keep near the original max-pressure
+            // wall-farming behavior while healthy, but retain tiny bullets only when
+            // our reserve is genuinely low to prevent self-depletion in outlier chases.
+            if (getEnergy() > 24 && distance < 820) {
+                power = Math.max(power, distance < 650 ? 3.0 : 2.55);
+            } else if (getEnergy() > 12) {
+                power = Math.min(Math.max(power, distance < 420 ? 1.35 : 1.05), 1.55);
             } else {
-                power = Math.min(power, getEnergy() < 8 ? 0.15 : 0.30);
+                power = Math.min(power, getEnergy() < 7 ? 0.15 : 0.30);
             }
         }
         if (lowFireTracker() && getEnergy() > 14 && distance < 760) {
@@ -896,6 +896,13 @@ public class MyTank extends AdvancedRobot {
             // then killed us after (or just before) the final hit.  A minimal lethal
             // bullet is faster and saves 1-2+ energy, which is exactly the survival
             // margin in those traces.
+            power = Math.min(power, lethalPower(e.getEnergy()));
+        }
+        if (quadWallEnemy() && e.getEnergy() < 10.5) {
+            // QuadWall loss traces often leave it under one bullet of life while our
+            // slow high-power shots are still in flight.  A minimum lethal bullet is
+            // faster, avoids overkill energy spend, and should land before the next
+            // weak wall shot can decide a mutual-kill race.
             power = Math.min(power, lethalPower(e.getEnergy()));
         }
         power = Math.min(power, Math.max(0.1, getEnergy() - 0.15));
