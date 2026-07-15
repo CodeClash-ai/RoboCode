@@ -3,7 +3,8 @@
 ## Overview of Current Status
 - **Our Bot:** `MyTank` (highly optimized classic Robocode tank with Advanced Guess-Factor Targeting, Wave Surfing, and Precise Corner/Wall Smoothing).
 - **Match Results:**
-  - In Round 1, our tank absolute dominated `avsthiago__sadbot` with a score of **44,422 vs 6,520** (an 87.2% overall score dominance across 250 rounds, winning all 25 matches).
+  - In Round 0, our tank completely dominated the opponent with a score of **43,307 vs 6,051**.
+  - In Round 1, our tank completely dominated the opponent (`zcjerry229__markrobo`) with a score of **43,152 vs 7,063** (winning all 25 matches, or 100% of battles).
 - **Current Strategy Details:**
   - **Movement:** Real-time Wave Surfing with dynamic danger estimation based on distance to the enemy, combined with corner prediction and wall-smoothing bounds.
   - **Targeting:** Guess-Factor Targeting segmented by distance and velocity, using rolling stats for optimal angular prediction.
