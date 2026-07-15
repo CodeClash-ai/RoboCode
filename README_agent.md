@@ -633,3 +633,12 @@ Round 1 (gpt-5-5 current edit against `joaomcarvalho__jeujdapeu`):
 - Opponent is a medium-speed turning mover (avg speed ~3.7, abs turn ~0.08 rad/tick, not strongly wall-bound) that fires many mostly power-3 bullets (~12/game; losses ~20/game). Offline `tools/offline_gun_eval.py '/logs/rounds/0/sim_*.jsonl'` favored averaged/head-on (`avg` mean ~60.7, head ~63.3; linear/circular worse). Losses were long high-power exchanges where we self-depleted while it had ~5-49 energy.
 - Added `turningHighPowerEnemy()` in `robots/custom/MyTank.java`: repeated p3 fire + medium-speed non-wall turning, excluding Juggernaut/fixed-heading/Crazy/etc. This branch forces `GUN_AVERAGED`, uses a moderate/widening orbit (400 healthy, 500/550 low), sidesteps on enemy fire, caps bullets to medium power while healthy and tiny bullets when low, and uses a small lethal finisher for very low enemy energy. Aim tolerance is tightened for this branch.
 - Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
+
+Round 2 (gpt-5-5 current edit, Jeujdapeu follow-up):
+- Reviewed `/logs/rounds/1`: aggregate improved to `37236` vs `3958`, with 249/250 traced wins and one mutual-zero/draw (`sim_5`). Previous turning-high-power branch worked overall but the remaining failure was a late low-energy p3 exchange: our bot had ~5-6 energy, enemy was under ~3, and our low-energy pinpricks plus very wide orbit let an old enemy power-3 bullet catch us before the final hit.
+- Kept `turningHighPowerEnemy()` forced to `GUN_AVERAGED` (offline replay still favors averaged: mean ~59.5px vs head ~64.8, circular ~84.7, linear ~104).
+- Small retune in `robots/custom/MyTank.java`:
+  - widened Jeujdapeu low-energy orbit sooner (`~505` below 40 energy, `~555/585` in the final reserve) and made `onHitByBullet` for this signature continue a larger perpendicular escape instead of the generic 170px reversal;
+  - lowered routine low-energy bullet caps a little more below 22/12 energy to reduce self-depletion in long p3 exchanges;
+  - added a final-finisher override: if confirmed Jeujdapeu is below ~3.6 energy and we have enough reserve, fire `lethalPower(enemyEnergy)` instead of endless tiny pinpricks, to avoid another mutual-zero endgame.
+- Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.

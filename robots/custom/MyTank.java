@@ -539,7 +539,7 @@ public class MyTank extends AdvancedRobot {
             // jeujdapeu turns continuously while firing power-3.  Keep the healthy
             // exchange near our accurate averaged-gun band, but widen before the late
             // low-energy phase where all recorded losses occurred.
-            preferredDistance = getEnergy() < 18.0 ? 550.0 : (getEnergy() < 38.0 ? 500.0 : 400.0);
+            preferredDistance = getEnergy() < 12.0 ? 585.0 : (getEnergy() < 22.0 ? 555.0 : (getEnergy() < 40.0 ? 505.0 : 400.0));
         } else if (juggernautEnemy()) {
             // Juggernaut is a dangerous power-3 stop/turn bot; stay a bit wider than
             // the Ultron farming band and open further once the reserve falls.
@@ -907,10 +907,12 @@ public class MyTank extends AdvancedRobot {
                 power = Math.min(Math.max(power, distance < 420 ? 2.15 : 1.85), 2.20);
             } else if (getEnergy() > 34) {
                 power = Math.min(Math.max(power, distance < 360 ? 1.15 : 0.90), 1.30);
-            } else if (getEnergy() > 18) {
+            } else if (getEnergy() > 22) {
                 power = Math.min(power, distance < 330 ? 0.35 : 0.25);
+            } else if (getEnergy() > 12) {
+                power = Math.min(power, distance < 330 ? 0.22 : 0.16);
             } else {
-                power = Math.min(power, getEnergy() < 8 ? 0.12 : 0.18);
+                power = Math.min(power, getEnergy() < 7 ? 0.10 : 0.12);
             }
         } else if (juggernautEnemy()) {
             // Current Juggernaut traces differ from Ultron: it turns/stops enough that
@@ -1047,6 +1049,17 @@ public class MyTank extends AdvancedRobot {
             // faster, avoids overkill energy spend, and should land before the next
             // weak wall shot can decide a mutual-kill race.
             power = Math.min(power, lethalPower(e.getEnergy()));
+        }
+        if (turningHighPowerEnemy() && e.getEnergy() < 3.6) {
+            // In the remaining Jeujdapeu draw, we had ~6 energy while the enemy was under
+            // 3 energy, but low-energy conservation kept firing pinpricks and let an
+            // existing power-3 bullet catch us before the final hit.  Once it is this low,
+            // spend the minimum lethal shot even from our low reserve; ending the round now
+            // is safer than trying to win a long 0.1-power exchange against p3 bullets.
+            double lp = lethalPower(e.getEnergy());
+            if (getEnergy() > lp + 0.35) {
+                power = Math.max(power, lp);
+            }
         }
         power = Math.min(power, Math.max(0.1, getEnergy() - 0.15));
 
@@ -2025,6 +2038,14 @@ public class MyTank extends AdvancedRobot {
     }
 
     public void onHitByBullet(HitByBulletEvent e) {
+        if (turningHighPowerEnemy()) {
+            // Jeujdapeu-style p3 turners only win/draw after a late bullet connects.
+            // Keep crossing/opening the line after a hit instead of resuming the generic
+            // short 170px reversal, which can put us back into the same high-power stream.
+            reverseDirection();
+            drivePerpendicularEscape(lastEnemyAbsBearing, getEnergy() < 38.0 ? 450.0 : 315.0);
+            return;
+        }
         if (stationaryHeavyShooter()) {
             // A hit from a stationary power-3 gun should not flip our orbit side or
             // overwrite the diagonal escape with a short same-line reversal.  Continue
