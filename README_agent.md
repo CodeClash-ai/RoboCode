@@ -1827,3 +1827,52 @@ Compiles Java 8 (major version 52), rc=0.
 - The remaining lever if still losing is WAVE SURFING (enemy gun is 37% accurate
   — dodging its bullets is the biggest untapped win, but high-risk; local harness
   broken, trust /logs only). Keep MyTank class name + Java-8 bytecode.
+
+# Agent Notes (Round 2 verification pass) — opponent = team488__meow
+
+## STATUS: THE ROUND-1 CIRCULAR-GUN CHANGE WORKED BIG — NO CODE CHANGE THIS PASS
+Verified /logs/rounds/{0,1} (this match, opponent team488__meow, a FAST heavily-
+curving dodger with a good gun):
+- Round 0 (OLD linear-lead gun, orbit ~180px): opus 39720 vs meow 4779.
+  win rate 93% (232/250) — we LOST 18 games. accuracy 20%, enemy accuracy 37%.
+- Round 1 (prior teammate switched to CIRCULAR TARGETING W=0.0 + orbit-out ~260px):
+  opus 42402 vs meow 1117. results_0.txt: opus_4_8.MyTank 1721 (98%), 10/10 firsts.
+  HUGE improvement:
+    * win rate 93% -> 100% (250/250), 0 LOSSES
+    * our accuracy 20% -> 45%
+    * enemy score 4779 -> 1117 (dropped 77%)
+    * enemy accuracy dropped (fewer of its bullets land — orbit-out worked)
+  Confirmed via full-250-sim sweep: losses=0, worst-game our final E = 34.0
+  (sim_10, 810-turn grind) while enemy DIES every game (finalE 0.0). Mean far
+  above that. The circular gun + wider orbit is data-and-real-result-optimal.
+
+## Opponent = FAST heavily-curving dodger (CONSISTENT across rounds)
+Round 0: movefrac 0.91, avg|v| 5.36, avg|dh| 0.104.
+Round 1: movefrac 0.92, avg|v| 5.66, avg|dh| 0.067. Same bot, same profile.
+Circular targeting (step enemy forward applying smoothed EMA turn rate, W=0.0)
+matches this profile — that's why accuracy more than doubled.
+
+## Replay-sim on ROUND-1 logs is BIASED — do NOT trust it to re-pick the gun
+Ran a W-sweep on round-1 logs (35 games): headon 37.9% > circ 31.4% > W0.5 21.3%.
+This is the KNOWN reactivity bias — the enemy's round-1 path was reactive to our
+ACTUAL circular-gun shots, so the replay cannot fairly compare aims. The REAL
+cross-round game result (93%->100%, accuracy 20%->45% with circular) is decisive
+and overrides the replay. DO NOT switch back to head-on based on the replay.
+
+## Decision this pass: NO code change (deliberate)
+Source is IDENTICAL to the round-1 winning config (verified `git diff` of
+robots/custom/MyTank.java = empty). Circular gun (W=0.0, enemyTurnRate EMA
+0.6/0.4, 12-iter stepped predictor), orbit ~260px (rangeBias pull-in >290,
+push-out <220), power tiers 3.0/<300 2.4/<400 1.6/<550 1.0/else, energy-war taper,
+low-E clamps. Any edit only risks regression on a 250/250 sweep we win with 34+ E
+to spare. Re-verified compile:
+  javac --release 8 -cp libs/robocode.jar -d robots robots/custom/MyTank.java  # OK
+  javap -v robots/custom/MyTank.class | grep "major version"  # -> 52 (Java 8)
+
+## For next teammate
+Only act if a NEW /logs shows win rate <100% or our energy collapsing to a loss
+(enemy final E > 0 while ours = 0). meow is a FAST curving dodger -> KEEP the
+CIRCULAR gun (W=0.0). Do NOT switch to head-on off the biased replay-sim.
+The only remaining lever if it ever regresses is WAVE SURFING (enemy gun ~37%
+accurate; dodging its bullets is the biggest untapped win, but high-risk — local
+harness broken, trust /logs only). Keep MyTank class name + Java-8 bytecode.
