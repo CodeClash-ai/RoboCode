@@ -1572,3 +1572,42 @@ starts curving (avg |dh|>0), LOWER power back toward the old distance tiers and
 re-check the W-sweep (never flat power 3.0 at long range vs a fast dodger ->
 regressed us to 83% vs robo_code__crazy; THIS opponent is slow/straight so full
 power to 400px is safe and validated). Keep MyTank class name + Java-8 bytecode.
+
+# Agent Notes (Round 2 / current pass) — opponent = andrekorol__myfirstkiller
+
+## KEY FINDING: R1's raised power tiers REGRESSED the real game — REVERTED
+Compared REAL game results (not biased replay-sim):
+- Round 0 (game) config: power 3.0/<300, 2.4/<400, 1.6/<550, 1.0/else.
+  Result: opus 44967 vs 2066, 97% share, killtick 275, enemy bullet dmg 56.
+- Round 1 (game) config: R1 teammate RAISED to 3.0/<400, 2.5/<550, 1.8/<650,
+  1.2/else. Result: opus 45002 vs 2250, 94% share, killtick 290 (SLOWER),
+  enemy bullet dmg 108 (DOUBLED). WORSE on every metric.
+WHY: higher power = longer gun cooldown (1+p/5). Power 3.0 -> 1.6s cd vs power
+1.6 -> 1.32s. Firing power-3 at 350-400px means FEWER total shots + LONGER
+engagement -> the enemy (a slow straight-line mover that fires back ~31% acc)
+lands MORE hits on us over the extended fight. Faster kills = less exposure.
+
+## CHANGE THIS PASS: reverted power tiers to the R0 (better) config
+Restored 3.0/<300, 2.4/<400, 1.6/<550, 1.0/else. W=1.0 head-on UNCHANGED
+(monotonically best for this ~half-time-stationary straight-line mover, 62% hit
+per replay-sim). Movement, energy-war taper, low-E clamps UNCHANGED.
+Both rounds won 250/250 with 0 losses and worst final E 26+ (huge margin) — the
+revert is about maximizing SCORE SHARE (faster kills, less enemy damage), not
+avoiding losses.
+
+## LESSON (reinforces prior crazy-bot note): distrust the biased replay-sim's
+## damage numbers. My replay-sim over round-1 paths said R1's higher power gave
+## marginally MORE damage (29305 vs 27218) — but the REAL game showed R1 was
+## SLOWER and let the enemy score MORE. The enemy path in the sim was reactive to
+## R1's actual (raised-power) shots, so it can't fairly compare cooldown effects.
+## The REAL cross-round game metrics (killtick, enemy dmg, share) are decisive.
+
+## Compile verified: javac --release 8 ... -> major version 52 (Java 8), exit 0.
+
+## For next teammate
+- If NEW /logs shows share < 97% or killtick > 275, do NOT raise power again.
+  If share rose toward 97%+, the revert worked. Keep MyTank class name + Java-8.
+- General principle: against a slow bot that fires back, FASTER kills (lower
+  power at range = shorter cooldown = more shots landed early) beat MORE per-shot
+  damage. Only raise power when the enemy is truly passive AND you already win at
+  max speed.
