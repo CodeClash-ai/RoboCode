@@ -3635,3 +3635,128 @@ not ruled out) to justify a code change on its own this round.
    repository within the same call). Still the single highest-leverage infra
    fix available if a future teammate has a larger step budget to spend on it
    than usual.
+
+## Round 30 update (this round) — acted on the 2.9-power "sweet spot" finding, lowered close-range band + finishing override cap to 2.9
+
+### Context
+Only `/logs/rounds/0/` and `/logs/rounds/1/` exist in this environment for me.
+Both real combat against `it_economics__ite_terminator` (same opponent round
+29's notes describe — this is round 2 of facing this rung, no code change
+happened between them). Both: **100% win (250/250)**, 0 losses, 0 ties, score
+~44k vs ~1.1k, accuracy 48%. `python3 tools/analyze_freezes.py
+/logs/rounds/1 --threshold 20 | grep -i sonnet` -> only 2 short (20-21 tick)
+radar-heading-settled findings, both traced and confirmed benign (radar
+genuinely locked on a near-stationary-relative target with normal ongoing
+combat throughout — not the round-4 freeze bug pattern, no action needed).
+`python3 tools/analyze_power_accuracy.py /logs/rounds/1` sanity check: 20.8
+shots/game vs trace.md's 17.7+3.7=21.4 — within ~3%, tool still trustworthy
+per round 28's tick-step fix.
+
+### Decision: acted on the accumulating cross-round accuracy-by-power signal
+Rounds 28 and 29 both independently flagged the same pattern (see those
+sections above): the 150-350px/2.9-power distance band consistently shows
+BETTER (round 29/this round's round-1 data: 63.9%, the single best of 5
+buckets) or comparable accuracy vs. the close-range/finishing/press-advantage
+3.0-power bucket (36.0% this round, well below average despite supposedly
+including easy close-range shots), across at least 2 different opponents now.
+Per round 12's `swing(P,p) = p*(9P-2) - P` framework, a large accuracy gap
+like 63.9% vs 36.0% easily outweighs the tiny extra damage-per-hit that 3.0
+has over 2.9 (`9*2.9-2=24.1` vs `9*3.0-2=25.0`, <4% difference) — so this is a
+real, actionable improvement opportunity, not just noise, and round 29's own
+notes explicitly flagged it as "worth seriously considering" if the pattern
+held a 3rd time, which it now effectively has (2 independent full-sample
+confirmations).
+
+**Change made** (`robots/custom/MyTank.java`):
+1. `bulletPowerForDistance()`: close-range band (`distance < 150`) lowered
+   from `3.0` to `2.9` — no longer a "special max power" case, just matches
+   the already-tuned, empirically-best 150-350 band.
+2. `onScannedRobot()`'s "finishing" (`e.getEnergy() <= 16`) and "press the
+   advantage" (`getEnergy() - e.getEnergy() > 15`) overrides: default
+   `maxUsablePower` (used when the enemy is slow, i.e. the velocity caps from
+   round 17 don't apply) lowered from `3.0` to `2.9`. These overrides were the
+   biggest single contributor to the old "3.0-3.5" bucket's shot volume
+   (round 29 found 46% of all our shots landed there) and below-average
+   accuracy, so this is the highest-leverage half of the change.
+3. Velocity-based caps (1.3 for enemy velocity >6, 1.9 for >3) are UNCHANGED
+   — round 17/18's fast-mover reasoning is untouched, this round's change
+   only affects the "enemy is slow" default case.
+4. Verified `javac -Xlint:all -cp libs/robocode.jar -d robots
+   robots/custom/MyTank.java` compiles clean, `.class` up to date. Old
+   (pre-this-round) version preserved at
+   `archive/round1_backups/MyTank.java.before_round30_cap29` for a quick
+   diff/revert if next round's numbers look worse.
+
+### What I did NOT get to
+- **Not validated by a real match** (same long-standing limitation as every
+  previous round — no working local headless battle runner in this sandbox;
+  see round 6's section for the most detailed writeup). This is a real,
+  previously-untested behavior change (a small one — 3.0->2.9 is only a
+  ~3-4% damage-per-hit reduction — but it does change the *value*, not just
+  the label, of two live code paths). **First thing to check next round**:
+  run `python3 tools/analyze_power_accuracy.py /logs/rounds/<N>` and see
+  whether the old "3.0-3.5" bucket's shot volume drops to ~0 (everything
+  that used to land there should now land in "2.5-3.0" instead) and whether
+  that merged/relabeled bucket's accuracy stays as high as the old 2.9
+  band's (60%+) rather than regressing toward the old 3.0 band's (36%) —
+  if it regresses, that would suggest the low accuracy wasn't really about
+  bullet SPEED at all, but about the TACTICAL SITUATIONS these overrides
+  fire in (e.g. late-game finishing attempts against an already-evasive,
+  low-energy-but-still-moving enemy are just intrinsically harder to land
+  regardless of bullet speed) — in which case this change wouldn't help and
+  should be reverted via the archive file above.
+- Did not touch the 350-550 (2.2) or 550+ (1.5) distance bands, movement/
+  orbit tuning, fire-angle threshold, or any of the stuck-ramming/escape
+  logic this round — wanted to isolate this one bullet-power change so it's
+  cleanly attributable in next round's logs, consistent with this file's
+  usual one-change-per-round practice.
+- Did not verify whether the accuracy gap is really about bullet SPEED
+  (physics: `bulletSpeed = 20-3*power`, 11.3 vs 11.0 — an almost trivial
+  0.3 difference between 2.9 and 3.0!) or something else entirely — 2.9 vs
+  3.0's bulletSpeed difference is far too small to plausibly explain a
+  63.9% vs 36.0% accuracy gap on its own. **This is a real gap in the
+  reasoning above worth flagging explicitly**: the round 28/29 notes'
+  "sweet spot" framing may be misattributing a TACTICAL/CONTEXTUAL
+  confound (WHEN the 2.9-band fires — mid-fight at 150-350px — vs. WHEN the
+  3.0-band/overrides fire — point-blank ramming-adjacent chaos, or
+  desperate finishing attempts against a fleeing low-energy enemy, or
+  "pressing an advantage" which by definition happens when we're already
+  ahead and possibly the enemy is specifically maneuvering evasively) to
+  the power VALUE itself, when the real driver might be the SITUATION. If
+  next round's data shows the merged bucket's accuracy sitting at some
+  in-between value (not close to the old 60%+ number), that would confirm
+  it's situational, not power-driven — and this change would need to be
+  reconsidered (though it costs little either way: 2.9 vs 3.0 barely changes
+  damage output, so even a "wrong" change here isn't very costly, unlike the
+  round 11 energy-throttle mistake which was corrected in round 12).
+
+### Suggestions for next teammate
+1. **First step, as always**: check `/logs/rounds/<N>/trace.md` for this
+   round's actual opponent/result, and run
+   `python3 tools/analyze_freezes.py /logs/rounds/<N> --threshold 20 | grep -i
+   sonnet` as the standard regression check.
+2. Run `python3 tools/analyze_power_accuracy.py /logs/rounds/<N>
+   --bucket-width 0.5` and specifically look at the merged 2.5-3.0 bucket
+   (should now include what used to be split across "2.5-3.0" and "3.0-3.5").
+   - If its accuracy stays high (55%+), this round's change is validated —
+     the power-value hypothesis holds, no further action needed on this
+     front for now.
+   - If its accuracy drops toward the middle (40-50%) or the old 3.0-band's
+     level (35-40%), see the "gap in reasoning" section above — the
+     accuracy difference was probably situational/tactical, not really
+     about bullet power/speed, and this round's change should likely be
+     reverted (`archive/round1_backups/MyTank.java.before_round30_cap29`)
+     since it doesn't cost much to keep OR revert either way, but reverting
+     would restore the original, clearer distance-band semantics (3.0 as a
+     genuine "max power" signal) for future analysis.
+3. `pez__gf1` (rounds 11-12, ~14% tie rate from mutual energy attrition)
+   remains the toughest opponent in this file's history and the single most
+   valuable target for directly re-testing the many stuck-ramming/energy-
+   management/dodge-on-fire changes accumulated since round 12 — still
+   hasn't reappeared after 18 rounds.
+4. Local headless battle-runner: still unresolved after 29+ rounds of
+   attempts (see round 6's section for the most detailed known blocker,
+   `RepositoryManager.loadSelectedRobots` not seeing a freshly-reloaded
+   repository within the same call). Still the single highest-leverage infra
+   fix available if a future teammate has a larger step budget to spend on it
+   than usual.

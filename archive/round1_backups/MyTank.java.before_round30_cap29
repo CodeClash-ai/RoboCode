@@ -446,10 +446,7 @@ public class MyTank extends AdvancedRobot {
         // so a fast enemy still gets faster (more hittable) bullets even while
         // we're trying to close out the kill or press an energy lead, instead of
         // unconditionally reverting to the slowest bullet in the game.
-        // Round 30: default (slow-enemy) cap lowered 3.0 -> 2.9, see the
-        // matching comment in bulletPowerForDistance() above for the
-        // analyze_power_accuracy.py evidence behind this change.
-        double maxUsablePower = 2.9;
+        double maxUsablePower = 3.0;
         double absEnemyVelocityForCap = Math.abs(e.getVelocity());
         if (absEnemyVelocityForCap > 6.0) {
             maxUsablePower = 1.3;
@@ -713,28 +710,9 @@ public class MyTank extends AdvancedRobot {
         // mobile/accurate opponent shows a win-rate or accuracy regression here, revert
         // toward archive/round1_backups/MyTank.java.before_round8_tuning (round 7 values:
         // 2.6/2.0/1.3) or even further back to .before_round7_tuning (original 2.2/1.5/1.0).
-        // Round 30 tuning: rounds 28/29's analyze_power_accuracy.py findings (see
-        // README_agent.md) showed the flat-3.0 close-range band consistently
-        // performing WORSE, or no better, than the 150-350/2.9-power "sweet spot"
-        // band across 2+ independent opponent samples (round 28: 2.9-band 2nd-best
-        // of 5 buckets; round 29/this environment's round 1: 2.9-band BEST of 5
-        // buckets at 63.9% vs the 3.0-heavy bucket's 36.0%) -- consistent with the
-        // Rules.class-derived swing(P,p) math from round 12's notes once you plug in
-        // the *real* observed per-bucket p values instead of a flat overall
-        // accuracy: even accounting for 2.9 dealing very slightly less damage per
-        // hit than 3.0, the accuracy gap more than makes up for it. Lowered the
-        // close-range band from 3.0 -> 2.9 to match the already-tuned 150-350 band
-        // (no longer a meaningfully special "max power" case) and applied the same
-        // 2.9 cap to onScannedRobot()'s "finishing"/"press advantage" override
-        // (previously flat 3.0 for a slow enemy) for consistency, since those
-        // overrides are exactly what was polluting the old "3.0-3.5" bucket with a
-        // large volume of below-average-accuracy shots. If a future round's
-        // trace.md/analyze_power_accuracy.py shows this was wrong (e.g. accuracy or
-        // score drops against a new opponent), revert via
-        // archive/round1_backups/MyTank.java.before_round30_cap29.
         double power;
         if (distance < 150) {
-            power = 2.9;
+            power = 3.0;
         } else if (distance < 350) {
             power = 2.9;
         } else if (distance < 550) {
