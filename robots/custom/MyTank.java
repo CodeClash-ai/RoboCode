@@ -105,21 +105,41 @@ public class MyTank extends AdvancedRobot {
         double targetAngle = absoluteBearing + Math.PI / 2 + approachAngle;
         
         // Active wall smoothing & boundary check
-        double nextX = getX() + 100 * Math.sin(targetAngle);
-        double nextY = getY() + 100 * Math.cos(targetAngle);
-        double wallMargin = 45.0;
+        // We use a larger wall margin and smooth the movement vector rather than just changing moveDirection
+        double wallMargin = 60.0;
+        double width = getBattleFieldWidth();
+        double height = getBattleFieldHeight();
+        double currentX = getX();
+        double currentY = getY();
         
+        // Push the target angle away from the walls
+        double testX = currentX + 120 * Math.sin(targetAngle);
+        double testY = currentY + 120 * Math.cos(targetAngle);
+        
+        if (testX < wallMargin) {
+            targetAngle += (moveDirection > 0 ? 0.5 : -0.5);
+        } else if (testX > width - wallMargin) {
+            targetAngle -= (moveDirection > 0 ? 0.5 : -0.5);
+        }
+        
+        if (testY < wallMargin) {
+            targetAngle -= (moveDirection > 0 ? 0.5 : -0.5) * Math.signum(Math.sin(targetAngle));
+        } else if (testY > height - wallMargin) {
+            targetAngle += (moveDirection > 0 ? 0.5 : -0.5) * Math.signum(Math.sin(targetAngle));
+        }
+
         if (hitWallCooldown > 0) {
             hitWallCooldown--;
         }
 
-        if (nextX < wallMargin || nextX > getBattleFieldWidth() - wallMargin ||
-            nextY < wallMargin || nextY > getBattleFieldHeight() - wallMargin) {
+        // Second level safety: if we are still going to hit the wall or get too close, reverse direction immediately
+        double nextX = currentX + 60 * Math.sin(targetAngle) * moveDirection;
+        double nextY = currentY + 60 * Math.cos(targetAngle) * moveDirection;
+        if (nextX < 40.0 || nextX > width - 40.0 || nextY < 40.0 || nextY > height - 40.0) {
             if (hitWallCooldown == 0) {
                 moveDirection = -moveDirection;
-                hitWallCooldown = 10; // Prevent rapid oscillation
+                hitWallCooldown = 8;
             }
-            targetAngle = absoluteBearing + Math.PI / 2 + (-approachAngle);
         }
         
         setTurnRightRadians(Utils.normalRelativeAngle(targetAngle - getHeadingRadians()));
