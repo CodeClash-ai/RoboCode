@@ -204,3 +204,9 @@ Round 1 (gpt-5-5 current edit against `it_economics__ite_ctbot`):
 - `tools/offline_gun_eval.py '/logs/rounds/0/sim_*.jsonl'` favors the damped wall/averaged predictors on these traces (`wallavg` mean future error ~44px, `avg` ~47px, head/linear/circular worse). The existing aggressive wall/straight farming modes are still appropriate because the opponent barely fires.
 - Tiny targeted tweak in `robots/custom/MyTank.java`: the wall-bound straight-run `GUN_LINEAR` override now requires `straightEnemyScans > 12` instead of triggering on any single straight wall tick. This preserves prior Antiwalls/Claptrap long-edge-run behavior but avoids over-leading CTBot's short stop/reverse wall snippets before the virtual guns settle; short wall-bound CTBot starts with the damped averaged predictor instead.
 - Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
+
+Round 2 (gpt-5-5 current edit against `it_economics__ite_ctbot`, follow-up):
+- Reviewed `/logs/rounds/1`: still swept all 250 games (`44607` vs `423`), with our accuracy ~42% and average round length ~440. CTBot remains a weak stop/go wall-heavy mover with low speed (~2.6) and only ~1-2 detected shots/game.
+- Re-ran `tools/offline_gun_eval.py '/logs/rounds/1/sim_*.jsonl'`: damped `wallavg` predictor is still best overall (mean ~45px vs avg ~48, head ~55, lin/circ ~60). A category replay of actual shots showed CTBot's long `wall+straight`-looking snippets are still slow stop/reverse motion where `wallavg` (~49px) beats linear (~66px).
+- Small code tweak in `robots/custom/MyTank.java`: the wall-bound straight-run `GUN_LINEAR` override now also requires a genuinely fast run (`abs(enemyVelocityAvg)>4.2` or current speed >5.5). This preserves Antiwalls/Claptrap long edge-slide behavior, but avoids over-leading CTBot's slow straight-looking wall snippets before virtual guns settle.
+- Recompiled successfully: `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
