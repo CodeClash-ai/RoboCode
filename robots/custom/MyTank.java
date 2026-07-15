@@ -273,6 +273,12 @@ public class MyTank extends AdvancedRobot {
             // gated by low virtual error/fire count so RegullarMonk-style self-
             // depletion cases still use their conservation profile.
             preferredDistance = 255.0;
+        } else if (heavyStopGoShooter()) {
+            // Florian2-style target: spends most of the round stopped, occasionally
+            // bursts at max speed, and spends power-3 shots with poor aim.  It is
+            // safe to keep the short-flight damped stop/go exchange instead of
+            // falling into the old RegullarMonk conservation orbit.
+            preferredDistance = 275.0;
         } else if (activeStopGoShooter()) {
             // RegullarMonk-style bots stop/reverse constantly but fire repeated
             // weak bullets.  They are easiest to hit with fast head-on shots;
@@ -303,7 +309,7 @@ public class MyTank extends AdvancedRobot {
         // to long bullet flight, while its own gun almost never connects.  Once
         // virtual guns report a hard-to-hit mover, tighten the orbit a bit to
         // shorten flight time and improve hit/kill speed without going to ram range.
-        if (!dangerousWallEnemy() && !activeStopGoShooter()
+        if (!dangerousWallEnemy() && !activeStopGoShooter() && !heavyStopGoShooter()
                 && virtualSamples > 28 && bestGunError() > 72.0 && stationaryScans <= 5 && slowEnemyScans <= 12) {
             preferredDistance = 355.0;
         }
@@ -464,6 +470,18 @@ public class MyTank extends AdvancedRobot {
             if (getEnergy() > 24 && distance < 720) {
                 power = Math.max(power, distance < 560 ? 3.0 : 2.45);
             }
+        } else if (heavyStopGoShooter()) {
+            // Florian2-like heavy stop/go shooters waste mostly power-3 shots but
+            // do not aim well in the traces.  High pressure with the damped gun
+            // shortens rounds and uses our large energy surplus; retain a modest
+            // downshift if a round unexpectedly runs long.
+            if (getEnergy() > 30 && distance < 700) {
+                power = Math.max(power, distance < 560 ? 3.0 : 2.45);
+            } else if (getEnergy() > 14) {
+                power = Math.min(Math.max(power, 1.55), 2.15);
+            } else {
+                power = Math.min(power, 0.45);
+            }
         } else if (activeStopGoShooter()) {
             // RegullarMonk-like active stop/go shooters made us lose games by
             // self-depleting with repeated power-3 misses.  Head-on replay is
@@ -535,6 +553,11 @@ public class MyTank extends AdvancedRobot {
             // virtual-error gate prevents overriding the averaged gun on MarkIV /
             // Terminator-style stop-go bots where damping is better.
             gun = GUN_HEAD_ON;
+        } else if (heavyStopGoShooter()) {
+            // Current Florian2 replay favors the damped averaged predictor over
+            // head-on/linear/circular; do not let the generic active shooter
+            // conservation branch force head-on after several power-3 shots.
+            gun = GUN_AVERAGED;
         } else if (activeStopGoShooter()) {
             // Current RegullarMonk traces: very frequent stops/reverses and
             // power-1 firing.  Offline shot replay favored head-on over linear,
@@ -709,6 +732,26 @@ public class MyTank extends AdvancedRobot {
                 && Math.abs(enemyVelocityAvg) < 4.4;
     }
 
+    private boolean heavyStopGoShooter() {
+        // it_economics__ite_florian2 in the current logs: very stop-heavy, low
+        // average speed, and repeated high-power shots that mostly miss while our
+        // damped stop/go gun has low virtual error.  Prior activeStopGoShooter()
+        // logic was written for RegullarMonk-style weak but evasive shooters and
+        // capped us to low-power head-on shots after the fourth detected fire; this
+        // signature keeps high-pressure damped-averaged farming enabled.
+        return stopGoEnemyScans > 8
+                && enemyFireCount > 3
+                && enemyFirePowerSamples > 2
+                && enemyFirePowerAvg > 2.2
+                && crazyEnemyScans <= 4
+                && Math.abs(enemyVelocityAvg) < 3.4
+                && Math.abs(enemyTurnRateAvg) < 0.055
+                && !fixedHeadingStopGoEnemy()
+                && !fixedHeadingLineEnemy()
+                && !fastWallCruiser()
+                && (virtualSamples < 18 || virtualGunError[GUN_AVERAGED] < 62.0 || bestGunError() < 58.0);
+    }
+
     private boolean activeStopGoShooter() {
         // RegullarMonk-style movement in the latest logs: half the time stopped,
         // small low-turn bursts, and many weak shots.  Treat it separately from
@@ -718,6 +761,7 @@ public class MyTank extends AdvancedRobot {
         return stopGoEnemyScans > 8
                 && enemyFireCount > 3
                 && !fixedHeadingStopGoEnemy()
+                && !heavyStopGoShooter()
                 && !fastWallCruiser()
                 && crazyEnemyScans <= 4
                 && Math.abs(enemyVelocityAvg) < 3.8
@@ -774,7 +818,8 @@ public class MyTank extends AdvancedRobot {
         // Current DroidPoet logs: a high-speed wall/perimeter runner that fires
         // often.  Do not wait for many virtual-wave samples before switching out
         // of the old "harmless wall target" max-power close-orbit mode.
-        return wallEnemyScans > 4 && enemyFireCount > 3 && stopGoEnemyScans <= 12 && !fastWallCruiser();
+        return wallEnemyScans > 4 && enemyFireCount > 3 && stopGoEnemyScans <= 12
+                && !heavyStopGoShooter() && !fastWallCruiser();
     }
 
     private double bestGunError() {
@@ -877,7 +922,8 @@ public class MyTank extends AdvancedRobot {
             return projectClamped(enemyX, enemyY, heading, drift, bulletSpeed, 70);
         }
         if (gunType == GUN_AVERAGED && !dangerousWallEnemy()
-                && (wallEnemyScans > 4 || (stopGoEnemyScans > 8 && (harmlessLowFireEnemy() || activeStopGoEnemy())))
+                && (wallEnemyScans > 4 || (stopGoEnemyScans > 8
+                        && (harmlessLowFireEnemy() || activeStopGoEnemy() || heavyStopGoShooter())))
                 && !(stopGoEnemyScans <= 8 && straightEnemyScans > 12 && harmlessLowFireEnemy()
                         && (Math.abs(enemyVelocityAvg) > 3.5 || Math.abs(velocity) > 5.0))) {
             // A harmless wall-bound or recent stop/go bot often alternates between
