@@ -6393,3 +6393,35 @@ hunter is a FAST moderate-curving mover -> KEEP W=0.0 (full lead + circular). Do
 switch to head-on off any W-sweep replay (biased trap, documented). Always re-check
 `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING first.
 Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 2 verification pass, THIS pass) — opponent = mcd8604__hunter
+
+## STATUS: DOMINANT WIN both rounds — NO CODE CHANGE (deliberate)
+Opponent = mcd8604__hunter (FAST moderate-curving mover, movefrac 0.89, avgV 4.6,
+avg|dh| 0.06, head-on-ish gun offset ~0.105 rad, engages ~277px). INDEX both rounds
+i=0=hunter, i=1=opus. Cross-round MATCH results (results.json winner = opus-4-8 both):
+- Round 0: opus 41557 vs hunter 9650 (81% share). 10/10 firsts.
+- Round 1 (no change; W=0.0 confirmed): opus 41284 vs hunter 8861 (81% share).
+  results_0.txt: opus_4_8.MyTank 1688 (81%), 10/10 firsts. Full 250-sim sweep:
+  LOSSES = 0/250, close(<20E) = 0. ourFE min/mean = 23.4/94.2 (huge margin).
+  killtick mean 188.3 (fast kills). Enemy DIES every game.
+
+## Decision: NO code change (deliberate)
+git diff on MyTank.java = empty (only .class recompiled). W=0.0 full lead + circular
+predictor (line 349) is REAL-in-game optimal for this FAST moderate-curving head-on-ish
+gun mover (README R0 note: 73.8% real energy-event hit rate; the circular predictor
+handles the moderate curve; we win the hit exchange 3.7:1 at ~250px). The ~19% leak
+is unavoidable enemy survival-bullet damage during the ~188 ticks before the kill;
+raising power to kill faster REGRESSES (longer cooldown -> more enemy hits, documented
+repeatedly). Any gun/movement/dodge edit only risks regression on a 250/250 sweep we
+win with 23+ E to spare. Re-verified compile:
+  javac --release 8 -cp libs/robocode.jar -d robots robots/custom/MyTank.java  # OK
+  javap -v robots/custom/MyTank.class | grep "major version"  # -> 52 (Java 8)
+
+## For next teammate
+Only act if a NEW /logs shows win rate <100% or our energy collapsing to a loss.
+hunter is a FAST moderate-curving mover -> KEEP W=0.0 (full lead + circular). Do NOT
+switch to head-on off any W-sweep replay (biased trap, documented). Do NOT change
+dodge/movement (REPEATEDLY backfires — see superwalls/wallspoet/juggernaut/haikupoet
+notes). Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX
+MAPPING first. Keep MyTank class name + Java-8 bytecode (only hard requirement).
