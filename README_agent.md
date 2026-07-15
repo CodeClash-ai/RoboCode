@@ -2304,3 +2304,54 @@ head-on (replay W-sweep monotonic to head-on). If it becomes a FAST curving
 dodger (avg|v| up >5, movefrac up >0.9, avg|dh| up), set W=0.0 (circular) + orbit
 out ~260px (that beat team488__meow 100%); re-run the W-sweep first.
 Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 2 verification pass) — opponent = rafaeljdesa__ultron
+
+## STATUS: 249/250 win both rounds — NO CODE CHANGE THIS PASS
+Verified /logs/rounds/{0,1} (opponent rafaeljdesa__ultron, a MODERATE lightly-
+curving mover):
+- Round 0: opus 43350 vs ultron 5662. results_0.txt: 1677 (93%), 10/10 firsts.
+- Round 1: opus 43475 vs ultron 6489. results_0.txt: 1696 (90%), 10/10 firsts.
+- Full 250-sim sweep round 1: LOSSES = 1/250 (sim_38), close(<20E) = 2. Mean our
+  final energy 88.0. Mean killtick 256. We win 10/10 firsts in EVERY 10-round
+  battle (results_0..24), so the 1 sim loss is variance, not a match-level loss.
+
+## The 1 loss (sim_38) is pure hit-rate VARIANCE, not a fixable bug
+560-turn grind, avg dist 238px, behind on energy only 41% of ticks. We fired
+just 27 shots at exactly 33.3% hit (break-even) and 9 hits — a cold-streak
+coin-flip game. Only 6 of the 27 fires were while behind on energy, so the
+energy-war taper had little to bite on. No power/movement change reliably
+converts a 33%-hit game; touching the config only risks the 249 comfortable wins.
+
+## Gun aim W=1.0 head-on CONFIRMED optimal (fresh replay W-sweep, 80 round-1 games)
+Per-tick interception over recorded paths, distance-tiered power, MONOTONIC:
+  W=0.0 41.1% | W=0.5 47.3% | W=0.75 51.9% | W=1.0 58.1%.
+(Replay is biased toward W=1.0 since the path was reactive to our actual head-on
+shots, but the clean monotonic trend + round-0 W-sweep agree. KEEP W=1.0.)
+
+## Real hit rate + enemy hit density by distance (150 games) — movement is fine
+  0-100px:   our hit 86%, enemy 1.2/1k  (BEST zone: high hit AND lowest enemy dmg)
+  100-200px: our hit 60%, enemy 5.7/1k  (dominant, net-positive, most ticks)
+  200-300px: our hit 31%, enemy 3.9/1k  (~break-even, 34% of ticks)
+  300px+:    our hit ~21%, enemy <1.5/1k (net-negative)
+Current orbit (~150-180px w/ graduated inward pull -1.1/-0.85/-0.55, push-out
+<120) keeps us mostly in the 60-86% net-positive zone. CONSIDERED lowering the
+push-out threshold 120->90 to camp the 86%-hit <100px zone (both more accurate
+AND safer vs ultron), but REJECTED: movement is SHARED across the whole ladder,
+and closer orbit was DEADLY vs the fast-curving team488__meow (14.8 enemy hits/1k
+at 100-200px -> that teammate deliberately orbited FAR ~260px). A global movement
+change to shave 1 variance loss vs ultron risks regressing strong close-range
+gunners. Not worth it for a 249/250 config that wins 10/10 firsts every battle.
+
+## Decision: NO code change (deliberate)
+Source unchanged from round-1 commit 3b08f48 (only the .class was recompiled).
+Re-verified compile: javac --release 8 ... -> major version 52 (Java 8). rc=0.
+
+## For next teammate
+Only act if a NEW /logs shows a MATCH loss (enemy wins a 10-round battle) or win
+rate collapsing. ultron is a MODERATE lightly-curving mover -> KEEP W=1.0 head-on.
+If it becomes a FAST curving dodger (avg|v|>5, movefrac>0.9, avg|dh| up), set
+W=0.0 (circular) + orbit out ~260px (that beat team488__meow 100%); re-run the
+W-sweep first. Do NOT globally shrink orbit to chase ultron variance losses —
+it risks strong close-range gunners elsewhere on the ladder.
+Keep MyTank class name + Java-8 bytecode (only hard requirement).
