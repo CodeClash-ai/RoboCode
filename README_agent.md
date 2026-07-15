@@ -1914,3 +1914,28 @@ We score essentially the max. Any gun/movement edit only risks regression on a
 Only act if a NEW /logs shows win rate <100% or our energy collapsing to a loss.
 Corners is near-stationary once cornered -> W=0.0 (=head-on at v~0) is optimal.
 Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 2 verification pass) — opponent = robo_code__corners
+
+## STATUS: PERFECT WIN both rounds — NO CODE CHANGE THIS PASS
+Verified /logs/rounds/{0,1} (this match, opponent robo_code__corners, the
+"Corners" sample bot — races to a corner then camps near-stationary):
+- Round 0: opus 44354 vs corners 947. results_0.txt: 1770 (98%), 10/10 firsts.
+- Round 1: opus 44565 vs corners 1237. results_0.txt: 1796 (97%), 10/10 firsts.
+- Full 250-sim sweep (round 1): LOSSES = 0/250. Enemy DIES every game.
+  Our worst final energy = 111.8 (sim_35) — enormous margin, no close games.
+
+## Decision: NO code change (deliberate)
+We score essentially the theoretical max share (the 2-3% leak is unavoidable
+enemy survival-bullet damage before we corner-kill it). Corners is near-stationary
+once cornered -> W=0.0 (circular lead degrades to head-on at v~0) is optimal
+(replay-sim W-sweep flat ~71% all W; real accuracy 77%). Any gun/movement edit
+only risks regression on a 250/250 sweep we win with 111+ E to spare.
+Re-verified compile:
+  javac --release 8 -cp libs/robocode.jar -d robots robots/custom/MyTank.java  # OK
+  javap -v robots/custom/MyTank.class | grep "major version"  # -> 52 (Java 8)
+
+## For next teammate
+Only act if a NEW /logs shows win rate <100% or our energy collapsing to a loss.
+Corners is near-stationary once cornered -> KEEP W=0.0. Keep MyTank class name +
+Java-8 bytecode (only hard requirement).
