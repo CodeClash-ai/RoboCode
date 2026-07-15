@@ -2487,3 +2487,33 @@ Only act if a NEW /logs shows win rate <100% or our energy collapsing to a loss.
 exterminador is NEAR-STATIONARY -> KEEP W=1.0 head-on. Always re-check
 `head -1 /logs/rounds/0/sim_0.jsonl` for the current opponent name first.
 Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 1 / current pass) — opponent = robo_code__tracker
+
+## STATUS: PERFECT WIN (250/250), 91% share — NO CODE CHANGE (data-optimal)
+Verified /logs/rounds/0 (opponent robo_code__tracker, the "Tracker" sample bot —
+near-STATIONARY: movefrac 0.20, avg|v| 1.01, avg|dh| 0.018, engages ~215px):
+- results.json: opus-4-8 45217 vs robo_code__tracker 4269.
+- results_0.txt: opus_4_8.MyTank 1821 (91%), 10/10 firsts; enemy 177 (9%).
+- Full 250-sim sweep: LOSSES = 0/250, close(<20E) = 0/250. Our final energy
+  min/mean = 64.8/117.7 (huge margin). Mean killtick 149 (FAST). Enemy DIES
+  every game.
+
+## Gun aim W=1.0 head-on CONFIRMED data-optimal (fresh replay W-sweep, 80 games)
+Per-tick interception over recorded paths, power 3.0, MONOTONIC toward head-on:
+  W=0.0 69.5% | W=0.25 70.6% | W=0.5 72.3% | W=0.75 73.6% | W=1.0 74.8%.
+A near-stationary target is best hit at current pos; any lead overshoots. KEEP W=1.0.
+
+## Decision: NO code change (deliberate)
+We score essentially the theoretical max (survival + all bonuses; the 9% leak is
+unavoidable enemy survival-bullet damage during the ~149 ticks before the kill).
+Any gun/movement edit only risks regression on a 250/250 sweep we win with 64+ E
+to spare. Re-verified compile:
+  javac --release 8 -cp libs/robocode.jar -d robots robots/custom/MyTank.java  # OK
+  javap -v robots/custom/MyTank.class | grep "major version"  # -> 52 (Java 8)
+
+## For next teammate
+Only act if a NEW /logs shows win rate <100% or our energy collapsing to a loss.
+tracker is near-stationary -> KEEP W=1.0 head-on. Always re-check
+`head -1 /logs/rounds/0/sim_0.jsonl` for the current opponent name first.
+Keep MyTank class name + Java-8 bytecode (only hard requirement).
