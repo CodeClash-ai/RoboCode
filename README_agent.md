@@ -439,3 +439,51 @@ consistent lead over blends is trustworthy.
 Keep class name MyTank + compile to Java 8:
   javac --release 8 -cp libs/robocode.jar -d robots robots/custom/MyTank.java
   javap -v robots/custom/MyTank.class | grep "major version"  # -> 52
+
+# Agent Notes (Round 1 / current pass) — opponent = linuxuser0__genetic
+
+## STATUS: PERFECT WIN (100% win rate, 99% score share) — NO CODE CHANGE
+Verified /logs/rounds/0:
+- results.json: opus-4-8 44810 vs linuxuser0__genetic 328.
+- results_0.txt: opus_4_8.MyTank 1801 (99%), 10/10 firsts; enemy 20 (1%).
+- trace.md: our win 100% (250/250), accuracy 38%, avg speed 5.3, avg min E 77.
+  Enemy: 0% win, 2.6 shots/game, 14% accuracy, dies avg turn 323.
+
+## Opponent behavior: VARIABLE mobile bot (not stationary)
+Per-sim analysis (header maps index->name; enemy = non-'opus', here i=0):
+- Averaged ~40% of ticks moving; our avg final energy ~105, avg kill tick ~358.
+- BUT high variance: in worst games (sim_104/105/108/64) the enemy dodges at
+  FULL speed (v=8, ~78% of ticks) and lands many hits — we drop to ~11-16 energy
+  but STILL WIN all 250. So the genetic bot occasionally behaves like a strong
+  mobile dodger; our pure-head-on gun (W=1.0) + orbital/anti-GF movement handles
+  it every time.
+
+## Decision: NO gameplay change
+We already score essentially the maximum (survival + bonuses; only 1% leaks to the
+enemy via ~20 bullet dmg). Faster kills wouldn't raise score share meaningfully,
+and any edit risks regression on the 250-game sample we currently sweep. Left
+MyTank.java unchanged (pure head-on W=1.0, power 3.0). Re-verified compile:
+  javac --release 8 -cp libs/robocode.jar -d robots robots/custom/MyTank.java  # OK
+  javap -v robots/custom/MyTank.class | grep "major version"  # -> 52 (Java 8)
+
+## Worst-game finder (reusable — spot games where WE take heavy damage)
+cd /logs/rounds/<N> && python3 -c "
+import json,glob
+w=[]
+for fn in sorted(glob.glob('sim_*.jsonl')):
+    ls=[json.loads(l) for l in open(fn) if l.strip()]
+    hdr=ls[0]['robots']; ei=[int(k) for k,v in hdr.items() if 'opus' not in v][0]; oi=1-ei
+    fe=100
+    for d in ls:
+        if 'u' in d:
+            for u in d['u']:
+                if u['i']==oi: fe=u['e']
+    w.append((fe,fn))
+w.sort(); print(w[:8])"
+
+## For next teammate
+- Only act if a NEW /logs shows win rate <100% or our min-energy collapsing in a
+  loss. This genetic bot may EVOLVE between rounds (name suggests genetic algo);
+  if it becomes a consistently strong dodger, the next real lever is WAVE SURFING
+  for movement (only robust anti-GF evasion) — but validate carefully (local
+  harness is broken; trust /logs). Keep MyTank class name + Java-8 bytecode.
