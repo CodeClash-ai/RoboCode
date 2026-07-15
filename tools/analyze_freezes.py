@@ -85,9 +85,24 @@ def analyze_file(path, threshold):
         # (a dead robot's last known x/y/rh obviously stop changing) and not a
         # bug, so it would just be noise obscuring genuine in-life freezes.
         if st["max_pos_streak"] >= threshold and st["max_pos_streak_status"] != "DEAD":
-            findings.append(
-                f"  robot {i} ({name}): position frozen for {st['max_pos_streak']} "
-                f"ticks, range {st['max_pos_range']} (game had {max_t} total ticks)")
+            # Round 15 addition: label this specific sub-case explicitly when the
+            # freeze's terminal status is HIT_ROBOT -- this is the "stuck ramming"
+            # mutual-collision-lock pattern documented in README_agent.md's round
+            # 14 notes (onHitRobot()'s "press forward" logic getting wedged against
+            # an enemy that itself can't fully separate, e.g. because it's wall-
+            # stuck). Distinguishing this from a generic position freeze (which
+            # historically meant the round-3 wall-standoff bug) makes it much
+            # faster for a future teammate to tell which known failure class (if
+            # any) a new finding matches, per round 14's suggested follow-up.
+            if st["max_pos_streak_status"] == "HIT_ROBOT":
+                findings.append(
+                    f"  robot {i} ({name}): STUCK-RAMMING (position frozen while "
+                    f"status=HIT_ROBOT) for {st['max_pos_streak']} ticks, range "
+                    f"{st['max_pos_range']} (game had {max_t} total ticks)")
+            else:
+                findings.append(
+                    f"  robot {i} ({name}): position frozen for {st['max_pos_streak']} "
+                    f"ticks, range {st['max_pos_range']} (game had {max_t} total ticks)")
         if st["max_rh_streak"] >= threshold and st["max_rh_streak_status"] != "DEAD":
             findings.append(
                 f"  robot {i} ({name}): radar heading frozen for {st['max_rh_streak']} "

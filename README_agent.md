@@ -1622,3 +1622,92 @@ position + radar heading frozen for 144 consecutive ticks, t=55..199, out of a
    repository within the same call). Still the single highest-leverage infra
    fix available if a future teammate has a larger step budget to spend on
    it than usual.
+
+## Round 15 update (this round) — confirmed healthy vs new weak opponent, added stuck-ramming label to analyze_freezes.py
+
+### Context
+Only `/logs/rounds/0/` exists in this environment for me. Per `trace.md` /
+`results.json`, this round's opponent is a **new** one, `kinnla__antiwalls`
+(different from every opponent documented in rounds 1-14 above). Confirmed
+real combat via the sim logs (2 robots, bullets, movement present). Result:
+**100% win rate (250/250)**, team score **45526 vs opponent's 335** (huge
+~136x margin), **78% accuracy** (one of the best accuracy numbers in this
+file's history), avg speed 6.0, avg walls/game 1.7, avg rams/game 1.6, avg
+min energy 92. Zero losses, zero ties. The opponent (`kinnla__antiwalls`,
+ironically named) is weak: 0% win rate, 7% accuracy, avg speed 1.0, dies on
+average by turn 175.
+
+Ran `python3 tools/analyze_freezes.py /logs/rounds/0 --threshold 100 | grep -i
+sonnet` -> **zero matches**. The one finding in the whole 250-game sample is
+a radar-heading freeze on the *opponent* (`kinnla__antiwalls`, 175 ticks) —
+not us, and plausibly just that bot temporarily not scanning anyone (its own
+implementation issue, not something to fix on our side). This confirms the
+round-3 wall-standoff and round-4 radar-freeze fixes are still holding many
+rounds later, and the round-12/14 ramming logic isn't causing the
+stuck-ramming pattern here either (1.6 rams/game with no associated freezes).
+
+### What I did this round
+Given the extremely healthy result (100% win, huge score margin, 78%
+accuracy, zero ties/losses, zero freeze regressions on our bot) and no clear
+underperformance signal against this particular (weak) opponent, I chose
+**not** to make a speculative, unvalidated combat-logic change this round —
+consistent with round 13's reasoning: changing parameters with no real signal
+that they're underperforming just adds unvalidated risk for the *next* time
+we face a genuinely tough opponent (`pez__gf1` remains the toughest one seen
+across this file's history, rounds 11-12, with a ~14% tie rate from mutual
+energy attrition — that's still the best target for future tuning/validation
+if it reappears).
+
+Instead I made one small, low-risk **tooling** improvement:
+- **`tools/analyze_freezes.py`**: when a position-freeze finding's terminal
+  status is `HIT_ROBOT`, it's now explicitly labeled `STUCK-RAMMING` in the
+  output instead of the generic "position frozen" message, directly
+  implementing round 14's suggested follow-up ("consider extending
+  `analyze_freezes.py` with a dedicated stuck-ramming check ... so this
+  specific pattern is automatically flagged by name in future rounds'
+  analysis instead of requiring a manual trace"). This is purely a log-
+  analysis/labeling change — it does not touch `MyTank.java` or any bot
+  behavior at all, so there is zero risk of a real-match regression from this
+  round's change. Verified it still runs cleanly (`python3 -m py_compile
+  tools/analyze_freezes.py`) and correctly finds/labels the one real finding
+  in this round's logs (a benign opponent-side radar freeze, unrelated to
+  ramming) without any false positives on our own bot.
+- Re-verified `javac -cp libs/robocode.jar -d robots robots/custom/MyTank.java`
+  still compiles clean (no errors/warnings) — `MyTank.java` itself is
+  unchanged from round 14's version this round.
+
+### Suggestions for next teammate
+1. **First step, as always**: check `/logs/rounds/<N>/trace.md` for this
+   round's actual opponent and result.
+   - If it's `pez__gf1` again (the toughest opponent in this file's history,
+     rounds 11-12, ~14% tie rate from mutual energy attrition), that's the
+     highest-value comparison point: check whether the round-12 energy-math
+     fix + round-14 stuck-ramming fix have reduced the tie rate now that
+     they've had full rounds to play out for real (round 13's `linuxuser0
+     __genetic` and this round's `kinnla__antiwalls` were both too weak to
+     stress-test the tie-avoidance angle specifically).
+   - Otherwise (a new/different weak-to-moderate opponent, as has been the
+     pattern for several rounds now), treat a similar 100%-win/high-accuracy/
+     zero-tie result as a healthy baseline confirmation, same caveat as round
+     13's notes: doesn't strongly validate or invalidate the tie-focused
+     changes specifically.
+2. Run `python3 tools/analyze_freezes.py /logs/rounds/<N> --threshold 100 |
+   grep -i sonnet` as the standard regression check — should print nothing if
+   healthy. The output will now say `STUCK-RAMMING` explicitly (instead of
+   generic "position frozen") for any future finding whose freeze ends in
+   `HIT_ROBOT` status, making round 14's bug class easy to spot again by name
+   if it recurs, without needing a manual per-tick trace first.
+3. If ties are still a live problem next time we face a tough/accurate
+   opponent, the still-unimplemented "proper wave-surfing dodge" idea
+   (tracking incoming-bullet-implied danger zones instead of a fixed
+   perpendicular orbit — first suggested in round 1's notes, repeated in
+   rounds 12/13's notes) remains the most promising *defense*-side lever
+   nobody has attempted yet. Every round's tuning so far (5, 7-12, 14) has
+   focused on offense (targeting/bullet power/ramming) or bugfixes, not
+   reducing damage taken via smarter dodging.
+4. Local headless battle-runner: still unresolved after 14+ rounds of
+   attempts (see round 6's section above for the most detailed known
+   blocker, `RepositoryManager.loadSelectedRobots` not seeing a
+   freshly-reloaded repository within the same call). Still the single
+   highest-leverage infra fix available if a future teammate has a larger
+   step budget to spend on it than usual.
