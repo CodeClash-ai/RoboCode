@@ -661,12 +661,19 @@ public class MyTank extends AdvancedRobot {
         // FIX: pull inward HARDER from farther out and hold ~120px so more ticks land in the
         // 100-200px WIN zone (and dip toward the 0-100px crush zone). Its shots get dodged at
         // range but not up close -> closing is the decisive lever (confirmed by R1's flip).
-        if (enemyDistance > 300)      rangeBias = -1.2; // charge inward hard
-        else if (enemyDistance > 200) rangeBias = -0.95;// keep pulling into the win zone
-        else if (enemyDistance > 140) rangeBias = -0.55;// approach ~120px
-        else if (enemyDistance < 75)  rangeBias = 0.7;  // don't ram/get too close
-        else if (enemyDistance < 110) rangeBias = 0.2;  // hold ~120px
-        else                          rangeBias = -0.1;
+        // R1 vs lucasgch__bt7274: FAST mover (avgV 6.39, avgdh 0.046, engages ~200px, mild-lead
+        // gun ~0.23 rad). UNBIASED hit density by distance (150 sims, our/enemy hits per 1k):
+        //   0-100px ratio 0.80 (our 6.7/enemy 8.4 -- LOSING) | 100-200px 1.43 (15.7/11.0, 34003 ticks
+        //   -- most time) | 200-300px 4.27 (21.5/5.0, 16286 ticks -- OUR BEST ZONE) | 300-400px 1.71.
+        // The dodgebot2-tuned ~120px orbit camped our WORST zones (0-200px). This fast bt7274 is best
+        // fought at 200-300px where WE hit 21.5/1k and it hits only 5.0/1k (4.27:1). So orbit ~250px.
+        // Kept a farther inward charge only when very far so we don't drift out of the win zone.
+        if (enemyDistance > 400)      rangeBias = -1.0; // charge inward when very far
+        else if (enemyDistance > 300) rangeBias = -0.6; // pull toward ~250px zone
+        else if (enemyDistance > 250) rangeBias = -0.2; // approach the win zone
+        else if (enemyDistance < 150) rangeBias = 0.6;  // push OUT of the losing 0-200px zone
+        else if (enemyDistance < 210) rangeBias = 0.25; // hold ~230px
+        else                          rangeBias = 0.0;  // hold ~250px
         double desiredDir = absBearing + (Math.PI / 2 + rangeBias) * moveDirection;
 
         // Wall smoothing: steer away from walls

@@ -6031,3 +6031,46 @@ full linear lead + close orbit + dodge 0.30. Do NOT switch to head-on off any
 W-sweep/damage replay (it LOST the match in R1 — reactivity-bias trap, documented).
 Always re-check `head -1 /logs/rounds/0/sim_0.jsonl` for opponent + INDEX MAPPING.
 Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 1 / current pass) — opponent = lucasgch__bt7274 (WON 75% share, orbit-wider tweak)
+
+## STATUS: WINNING (opus 37253 vs bt7274 13317, 74% share, 10/10 firsts) — TWEAKED ORBIT ~120px -> ~250px
+Opponent CHANGED to lucasgch__bt7274. Verified /logs/rounds/0 (INDEX i=0=bt7274, i=1=opus):
+- results.json: winner=opus-4-8, 37253 vs 13317. results_0.txt: opus 1591 (75%), 10/10 firsts.
+- Full 250-sim sweep: 10 LOSSES, 11 close(<20E). ourFE mean 62.0, min 0.0, killtick 262.
+
+## Opponent = FAST mover with a MILD-LEAD gun
+- movefrac 0.869, avgV 6.39 (VERY FAST), avg|dh| 0.046 (moderate curve), engages ~200px.
+- Enemy gun offset when firing: median 0.226 rad, mean 0.326 -> MILD-LEAD gun.
+- LOSSES avg dist 215px, behind-on-energy 78% of ticks; WINS avg dist 200px, behind 18%.
+  Losses = energy-war VARIANCE in games where we drift wider and the enemy out-trades us.
+
+## KEY UNBIASED SIGNAL (hit density by distance, 150 sims, our/enemy hits per 1k ticks):
+##   0-100px   ratio 0.80 (our 6.7 / enemy 8.4)  -- LOSING zone
+##   100-200px ratio 1.43 (our 15.7 / enemy 11.0) -- 34003 ticks (MOST time, mediocre)
+##   200-300px ratio 4.27 (our 21.5 / enemy 5.0)  -- 16286 ticks -- OUR BEST ZONE by far
+##   300-400px ratio 1.71 (our 3.2 / enemy 1.9)
+## The dodgebot2-tuned ~120px orbit camped our WORST zones (0-200px). At 200-300px we hit
+## 4.3x MORE than the enemy AND take HALF the enemy hits (5.0 vs 11.0/1k). Unlike the wilde
+## R1 wider-orbit regression (which had NO defensive benefit + doubled kill time), here
+## 200-300px is BOTH better offense AND better defense -> a genuine reason to orbit wider.
+
+## CHANGE THIS PASS (movement only): orbit target ~120px -> ~230-250px
+rangeBias (lines 671-676): was charge-to-120px (>300 -1.2, >200 -0.95, >140 -0.55, <75 0.7,
+<110 0.2, else -0.1). NOW: >400 -1.0, >300 -0.6, >250 -0.2, <150 +0.6 (push OUT of losing
+0-200px zone), <210 +0.25, else 0.0 (hold ~250px). Power tiers at 250px = 2.6/2.2 (kill
+speed preserved). Gun W=0.0 full lead (correct for a FAST mover; do NOT switch to head-on
+off the biased W-sweep replay -- documented trap). Dodge 0.30 (anti-mild-lead-gun) UNCHANGED.
+Backup of prior source: /tmp/MyTank.bak.java. Compiles Java 8 (major version 52).
+
+## For next teammate — VERIFY
+- Want NEW /logs: the 10 losses REDUCED, ourFE mean UP from 62.0, enemy score DOWN from
+  13317, share UP from 75%, engagement dist UP from 200 toward ~250px, killtick NOT
+  ballooning much above 262. If it REGRESSED (new losses / share drop / slower kills):
+  the wider orbit may have slowed kills (the wilde lesson) -> pull orbit back toward ~180px
+  (>350 -1.0, >250 -0.6, >180 -0.2, <120 +0.5, <160 +0.2, else 0.0) or REVERT to
+  /tmp/MyTank.bak.java (git prior = ~120px orbit, 10 losses / 75% share WIN).
+- bt7274 is a FAST mild-lead-gun mover -> KEEP W=0.0 full lead + dodge 0.30. Do NOT switch
+  to head-on off the W-sweep replay. Re-run the UNBIASED hit-density-by-distance analysis
+  on NEW logs to confirm the win zone. Always re-check `head -1 /logs/rounds/0/sim_0.jsonl`
+  for opponent + INDEX MAPPING first. Keep MyTank class name + Java-8 bytecode.
