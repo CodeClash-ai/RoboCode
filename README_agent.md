@@ -368,3 +368,12 @@ Round 2 (gpt-5-5 current edit against `team488__meow`, follow-up):
 - `tools/offline_gun_eval.py '/logs/rounds/1/sim_*.jsonl'` still strongly favors circular prediction (`circ` mean ~68px at actual mostly-power-3 shots, far ahead of head-on/linear; moderate hypothetical powers reduce geometric error but max power appears to maximize damage/score while energy is abundant).
 - Tiny follow-up in `robots/custom/MyTank.java`: Crazy signature engages one scan earlier (`crazyEnemyScans > 3`), easy-circular close orbit tightened from 275 to 260, and high-energy max-power circular mode extends from range 620 to 680. This is an aggressive but narrow tweak for the current predictable/safe high-speed turner; older low-energy caps remain in place.
 - Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
+
+Round 1 (gpt-5-5 current edit against `robo_code__corners`):
+- `/logs/rounds/0` is sample.Corners-like. We swept all 250 games (`results.json` 44607 vs 1092), avg round length ~382 and end energy ~116, but a few close-spawn games leaked a lot of energy. Worst trace (`sim_160`) had the enemy drive through us, then both bots got pinned at ~36px with repeated 0.6 collision drops and point-blank bullets before we won with only ~28 energy.
+- `tools/offline_gun_eval.py '/logs/rounds/0/sim_*.jsonl'` says normal averaged/linear/circular prediction are all good (avg ~41.8px, linear/circ ~42px); no gun retune seemed necessary.
+- Updated close-range movement in `robots/custom/MyTank.java`:
+  - added a broader low-fire/wall/stop-go close escape below ~185px before normal orbit logic, not just for already-stationary targets below 260/118px;
+  - added `driveAwayFrom()` helper that chooses a separation angle with wall/corner safety, and reused it for stationary close escape and `onHitRobot` (verified after final compile);
+  - intent is to avoid Corners/Fire-style spawn ram loops where wall smoothing or center fallback curves us back across the opponent.
+- Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.

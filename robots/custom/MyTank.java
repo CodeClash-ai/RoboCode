@@ -205,12 +205,17 @@ public class MyTank extends AdvancedRobot {
         // pin both robots together in a ram loop until a draw.  Always open a
         // safe gap from close stationary targets before entering farm mode.
         if (stationaryScans > 5 && e.getDistance() < 260.0) {
-            double away = absBearing + Math.PI;
-            if (!insideBattlefield(projectX(getX(), away, 230.0), projectY(getY(), away, 230.0), WALL_MARGIN + 18.0)) {
-                away = Math.atan2(getBattleFieldWidth() / 2.0 - getX(), getBattleFieldHeight() / 2.0 - getY());
-            }
-            setMaxVelocity(8.0);
-            driveAlongAngle(away, 240.0);
+            driveAwayFrom(absBearing, 240.0);
+            return;
+        }
+        if (e.getDistance() < 185.0
+                && (harmlessLowFireEnemy() || wallEnemyScans > 2 || stopGoEnemyScans > 4
+                        || Math.abs(enemyVelocityAvg) < 1.2)) {
+            // Corners/sample.Fire-style close starts can turn into repeated rams
+            // before the stationary detector has enough scans.  Use a non-blocking
+            // escape command immediately, bypassing the orbit/wall-smoothing code
+            // that can curve us back across the opponent at knife range.
+            driveAwayFrom(absBearing, 225.0);
             return;
         }
         if (stationaryScans > 10 && enemyFireCount == 0) {
@@ -304,10 +309,16 @@ public class MyTank extends AdvancedRobot {
         }
         double distanceOffset = limit(-0.62, (e.getDistance() - preferredDistance) / 430.0, 0.55);
         double desired = absBearing + moveDirection * (Math.PI / 2.0 - distanceOffset);
-        if (e.getDistance() < 118 && enemyFireCount == 0) {
-            // Many simple bots only become dangerous at spawn/knife range.
-            // Open the gap immediately instead of trying to orbit through a
-            // point-blank power-3 shot or accidental ram.
+        if (e.getDistance() < 118
+                || (e.getDistance() < 185
+                        && (harmlessLowFireEnemy() || wallEnemyScans > 2 || stopGoEnemyScans > 4
+                                || Math.abs(enemyVelocityAvg) < 1.2))) {
+            // Many simple/corner bots only become dangerous at spawn/knife range.
+            // The old guard only escaped non-firing enemies below 118px; sample
+            // Corners-style opponents can start moving through us, then fire or
+            // cause 0.6 collision drops, which disabled the escape and left both
+            // tanks grinding at ~36px.  Open a larger gap from low-fire or
+            // wall/stop-go targets before resuming the close farming orbit.
             desired = absBearing + Math.PI;
         }
         desired = wallSmooth(desired, moveDirection);
@@ -996,11 +1007,7 @@ public class MyTank extends AdvancedRobot {
         // overwritten by the stationary-target stop branch and leave us pinned
         // against close-spawn stationary shooters, causing needless ram loops
         // and the occasional draw.
-        double escape = robotBearing + Math.PI;
-        if (!insideBattlefield(projectX(getX(), escape, 150.0), projectY(getY(), escape, 150.0), WALL_MARGIN)) {
-            escape = Math.atan2(getBattleFieldWidth() / 2.0 - getX(), getBattleFieldHeight() / 2.0 - getY());
-        }
-        driveAlongAngle(escape, 170.0);
+        driveAwayFrom(robotBearing, 220.0);
         if (getGunHeat() == 0 && getEnergy() > 3) {
             setFire(3.0);
         }
@@ -1041,6 +1048,40 @@ public class MyTank extends AdvancedRobot {
         lastDirectionChangeTime = getTime();
     }
 
+
+    private void driveAwayFrom(double threatBearing, double distance) {
+        double away = threatBearing + Math.PI;
+        // Usually the safest response is a direct separation vector.  When that
+        // would immediately drive into a wall/corner, choose the best nearby
+        // escape angle by maximizing both distance from the threat line and field
+        // safety instead of blindly driving to the center (which can be through the
+        // other robot during close Corners/Fire-style spawn collisions).
+        if (!insideBattlefield(projectX(getX(), away, Math.min(distance, 170.0)),
+                projectY(getY(), away, Math.min(distance, 170.0)), WALL_MARGIN + 8.0)) {
+            double best = away;
+            double bestScore = -1.0e9;
+            for (int i = -10; i <= 10; i++) {
+                double a = away + i * 0.18;
+                double px = projectX(getX(), a, 150.0);
+                double py = projectY(getY(), a, 150.0);
+                if (!insideBattlefield(px, py, 24.0)) {
+                    continue;
+                }
+                double margin = Math.min(Math.min(px, getBattleFieldWidth() - px),
+                        Math.min(py, getBattleFieldHeight() - py));
+                double separation = Math.cos(Utils.normalRelativeAngle(a - away));
+                double score = 3.0 * margin + 120.0 * separation;
+                if (score > bestScore) {
+                    bestScore = score;
+                    best = a;
+                }
+            }
+            away = bestScore > -1.0e8 ? best
+                    : Math.atan2(getBattleFieldWidth() / 2.0 - getX(), getBattleFieldHeight() / 2.0 - getY());
+        }
+        setMaxVelocity(8.0);
+        driveAlongAngle(away, distance);
+    }
 
     private void driveAlongAngle(double angle, double distance) {
         double turn = Utils.normalRelativeAngle(angle - getHeadingRadians());
