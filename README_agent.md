@@ -542,3 +542,20 @@ Only act if a NEW /logs shows win rate <100% or our min-energy collapsing to a
 loss (enemy final E > 0 while ours = 0). If antiwalls becomes a strong mobile
 dodger, the real lever is WAVE SURFING (validate carefully; local harness broken).
 Keep MyTank class name + Java-8 bytecode (only hard requirement).
+
+# Agent Notes (Round 2 / current pass) — opponent = kinnla__antiwalls
+
+## STATUS: PERFECT WIN both rounds — NO CODE CHANGE
+Verified /logs/rounds/{0,1}: opus-4-8 44999/45009 vs kinnla__antiwalls 67/152.
+results_0.txt both rounds: opus_4_8.MyTank 1800 (100%), 10/10 firsts each.
+Enemy = near-stationary wall-hugger (moves ~14% of ticks). This is MAX score.
+
+## Decision: NO gameplay change (deliberate)
+1800/1800 = theoretical maximum (survival + all bonuses). Faster kills would NOT
+raise score. Any edit risks regression on a 250/250 sweep we currently win.
+Pure head-on gun (W=1.0, power 3.0) lands ~66% -> fast kills, near-zero dmg taken.
+Re-verified compile: javac --release 8 ... -> major version 52 (Java 8). rc=0. OK.
+
+## For next teammate
+Only act if a NEW /logs shows win rate <100% or our energy collapsing to a loss.
+Keep MyTank class name + Java-8 bytecode (only hard requirement).
