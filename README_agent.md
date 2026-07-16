@@ -757,3 +757,14 @@ Round 2 (gpt-5-5 current edit, GNTest follow-up):
   - cap parked GNTest bullet power after all generic branches to faster medium/cheap tiers, with a capped lethal finisher, preventing generic p3 slow-target boosts from reappearing in the loss mode;
   - allow `gntestStopDuel()` to include stationary parked phases (still strictly name-gated).
 - Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
+
+Round 1 (gpt-5-5 current edit against `kcanida__pikachu`):
+- `/logs/rounds/0` aggregate is a score win (`29645` vs `17169`), but trace survival is poor: `tools/analyze_pikachu.py /logs/rounds/0` reports about 122 live wins / 128 losses. Pikachu fires very many tiny/weak bullets (loss avg enemy drop ~0.53) and makes short stop/turn dodges; our old generic branches spent ~50 shots at ~power 1.9-2.0 and often self-disabled while Pikachu retained ~50 energy.
+- Offline replay of shot opportunities shows head-on / very damped averaged aim is best, and faster sub-power-1 bullets reduce future-position error (p0.1 head/damped ~34px vs p2 ~44-46px and linear/circular much worse). Losses had closer range (~218px avg) and more stopped ticks, so a wider band should also help dodge the low-power stream.
+- Added a name-gated `pikachuEnemy()` branch in `robots/custom/MyTank.java`:
+  - preferred range widened to ~380 healthy / 425 mid / 470 low instead of the close generic stop-go orbit;
+  - gun forced to head-on or very-damped averaged; `predictEnemy()` damped averaged to `0.20*velocity + 0.20*EMA` capped at ±1.2, no turn;
+  - power capped aggressively (healthy ~1.1-1.35, mid ~0.75-1.0, low ~0.18-0.62, no fire below 14 energy unless Pikachu is near death) to prevent self-depletion;
+  - sidestep on detected fire after reserve is below 50, and continue a larger perpendicular escape on bullet hits;
+  - excluded Pikachu from the generic wave-surfing classifier so that name-gated caps/gun/range are not stolen.
+- Added `tools/analyze_pikachu.py` for future quick trace summaries. Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`. Local battle execution cannot reproduce hidden opponent; sample bot repository was incomplete here.

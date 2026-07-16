@@ -366,6 +366,14 @@ public class MyTank extends AdvancedRobot {
                 drivePerpendicularEscape(absBearing, getEnergy() < 42.0 ? 340.0 : 270.0);
                 return;
             }
+            if (pikachuEnemy() && getEnergy() < 50.0) {
+                // Pikachu's bullets are usually tiny, but the long losing traces show many
+                // of them landing after we simply reverse along the same close orbit.  Once
+                // our reserve is no longer huge, spend the fire tick crossing the line while
+                // the cheap-gun power caps below preserve energy.
+                drivePerpendicularEscape(absBearing, getEnergy() < 24.0 ? 360.0 : 300.0);
+                return;
+            }
             if (mediumStopGoDuelist() && getEnergy() < 44.0) {
                 // MarkRobo-style medium stop/go duelists can win only after long
                 // exchanges.  When our reserve is getting low, sidestep on their
@@ -562,7 +570,13 @@ public class MyTank extends AdvancedRobot {
         // inward; too close we open out.  wallSmooth then bends the path away
         // from the battlefield edges before we commit to it.
         double preferredDistance;
-        if (waveSurfingEnemy()) {
+        if (pikachuEnemy()) {
+            // kcanida__pikachu fires a stream of tiny bullets while making short stop/turn
+            // dodges.  The old generic stop-go logic hugged ~220px and spent power-2/3
+            // shots until self-disable.  Hold a moderately wide band: close enough for fast
+            // cheap head/damped shots, but with room to cross its low-power firing line.
+            preferredDistance = getEnergy() < 18.0 ? 470.0 : (getEnergy() < 42.0 ? 425.0 : 380.0);
+        } else if (waveSurfingEnemy()) {
             // Its gun is ineffective in the logs; closing the range shortens our cheap
             // head-on bullets, but keep extra room once our reserve is low so we do not
             // get trapped in late wall/corner scrambles while trying to finish.
@@ -1300,6 +1314,27 @@ public class MyTank extends AdvancedRobot {
                 power = Math.min(Math.max(power, 1.65), 2.1);
             }
         }
+        if (pikachuEnemy()) {
+            // kcanida__pikachu was the round-0 self-depletion matchup: it fires many
+            // power-0.1/weak bullets, while our generic stop-go/wall fallbacks spent about
+            // power 2 on 50+ low-hit-rate shots and died with Pikachu often above 50 energy.
+            // Trace replay shows fast sub-power-1 head/damped bullets have much lower future
+            // error.  Use conservative pressure and then bank energy rather than trying to
+            // win a hopeless low-reserve damage race.
+            if (e.getEnergy() < 6.0 && getEnergy() > 5.0 && distance < 520.0) {
+                power = Math.min(Math.max(power, lethalPower(e.getEnergy())), 1.20);
+            } else if (getEnergy() > 72.0) {
+                power = Math.min(Math.max(power, distance < 390 ? 1.30 : 1.10), 1.35);
+            } else if (getEnergy() > 50.0) {
+                power = Math.min(Math.max(power, distance < 380 ? 0.95 : 0.75), 1.00);
+            } else if (getEnergy() > 30.0) {
+                power = Math.min(Math.max(power, distance < 350 ? 0.55 : 0.40), 0.62);
+            } else if (getEnergy() > 14.0) {
+                power = Math.min(power, distance < 330 ? 0.28 : 0.18);
+            } else {
+                power = Math.min(power, 0.10);
+            }
+        }
         if (mediumPowerWallCruiser()) {
             // TannerBot fires repeated ~power-2 shots while sliding/stopping along
             // the border.  Our round-0 losses are almost all self-depletion after
@@ -1419,6 +1454,11 @@ public class MyTank extends AdvancedRobot {
                 gun = (virtualSamples > 24 && virtualGunError[GUN_AVERAGED] + 6.0 < virtualGunError[GUN_HEAD_ON])
                         ? GUN_AVERAGED : GUN_HEAD_ON;
             }
+        } else if (pikachuEnemy()) {
+            // Offline replay for kcanida__pikachu strongly disfavors full lead.  A very
+            // damped averaged/head-on family wins, especially with sub-power-1 bullets.
+            gun = (virtualSamples > 18 && virtualGunError[GUN_HEAD_ON] + 2.5 < virtualGunError[GUN_AVERAGED])
+                    ? GUN_HEAD_ON : GUN_AVERAGED;
         } else if (spinBotEnemy()) {
             // Pure circular is normally exact for sample.SpinBot, but near walls the
             // damped averaged predictor can occasionally score better.  Let virtual
@@ -1648,6 +1688,9 @@ public class MyTank extends AdvancedRobot {
         if (gntestStopDuel()) {
             tolerance = Math.min(tolerance, Math.atan2(15.0, distance));
         }
+        if (pikachuEnemy()) {
+            tolerance = Math.min(tolerance, Math.atan2(16.0, distance));
+        }
         if (npcSniperEnemy()) {
             tolerance = Math.min(tolerance, Math.atan2(15.0, distance));
         }
@@ -1711,6 +1754,12 @@ public class MyTank extends AdvancedRobot {
         if (gntestStopDuel() && getEnergy() < 8.0 && e.getEnergy() > 10.0) {
             fireAllowed = false;
         }
+        if (pikachuEnemy() && getEnergy() < 14.0 && e.getEnergy() > 8.0) {
+            // Do not donate the last survival points with 0.1 shots when Pikachu still has
+            // enough energy that several hits would be needed.  Preserve movement unless a
+            // low-power finisher is actually plausible.
+            fireAllowed = false;
+        }
         if (getGunHeat() == 0
                 && Math.abs(getGunTurnRemainingRadians()) < tolerance && getEnergy() > 0.25 && fireAllowed) {
             setFire(power);
@@ -1740,6 +1789,10 @@ public class MyTank extends AdvancedRobot {
         return best;
     }
 
+
+    private boolean pikachuEnemy() {
+        return enemyName != null && enemyName.contains("kcanida__pikachu");
+    }
 
     private boolean gntestEnemy() {
         return enemyName != null && enemyName.contains("josephjeon__gntest")
@@ -1777,7 +1830,8 @@ public class MyTank extends AdvancedRobot {
         // the motion/fire guards narrow so Crazy/SpinBot and active shooters retain their
         // specialized high-pressure branches.  The fire-count guard is deliberately loose
         // because our own small bullet hits also look like enemy energy drops here.
-        return virtualSamples > 10
+        return !pikachuEnemy()
+                && virtualSamples > 10
                 && bestGunError() > 78.0
                 && enemyFireCount <= 16
                 && (enemyFirePowerSamples == 0 || enemyFirePowerAvg <= 1.25)
@@ -2556,7 +2610,13 @@ public class MyTank extends AdvancedRobot {
             double drift = limit(-0.80, driftScale * velocity, 0.80);
             return projectClamped(enemyX, enemyY, heading, drift, bulletSpeed, 70);
         }
-        if (gunType == GUN_AVERAGED && !quadWallEnemy() && (!dangerousWallEnemy() || npcSniperEnemy())
+        if (gunType == GUN_AVERAGED && pikachuEnemy()) {
+            // Pikachu alternates stop/turn bursts; replay of round-0 traces preferred an
+            // almost-head-on damped predictor over full averaged/linear/circular lead,
+            // especially with fast cheap bullets.
+            velocity = limit(-1.2, 0.20 * velocity + 0.20 * enemyVelocityAvg, 1.2);
+            turnRate = 0.0;
+        } else if (gunType == GUN_AVERAGED && !quadWallEnemy() && (!dangerousWallEnemy() || npcSniperEnemy())
                 && (npcSniperEnemy()
                         || velociRobotEnemy()
                         || shrekerEnemy()
@@ -2693,6 +2753,14 @@ public class MyTank extends AdvancedRobot {
     }
 
     public void onHitByBullet(HitByBulletEvent e) {
+        if (pikachuEnemy()) {
+            // Even p0.1 hits matter because the old bot died by spending itself to zero.
+            // Keep moving perpendicular/away after every hit instead of a short generic
+            // reversal that can settle back into Pikachu's stream.
+            reverseDirection();
+            drivePerpendicularEscape(lastEnemyAbsBearing, getEnergy() < 35.0 ? 460.0 : 360.0);
+            return;
+        }
         if (shrekerEnemy()) {
             reverseDirection();
             drivePerpendicularEscape(lastEnemyAbsBearing, getEnergy() < 42.0 ? 430.0 : 310.0);
