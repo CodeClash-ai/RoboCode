@@ -373,12 +373,10 @@ public class MyTank extends AdvancedRobot {
                 return;
             }
             if (berendBotjeEnemy()) {
-                // BerendBotje repeatedly won the survival race when our old "sample walls"
-                // dodge stayed mostly perpendicular and let the range collapse below 250px
-                // (round 3 averaged ~170px and leaked huge ram/bullet damage).  On every
-                // detected shot, kite diagonally away instead: still cross the firing line,
-                // but strongly prioritize opening distance before the next p2/p3 bullet.
-                driveKiteEscape(absBearing, getEnergy() < 38.0 ? 705.0 : 610.0);
+                // BerendBotje lands enough medium/high bullets that merely reversing the
+                // close orbit loses survival.  Cross the shot line and reopen a wider lane
+                // on every detected fire tick while the cheap averaged gun preserves energy.
+                drivePerpendicularEscape(absBearing, getEnergy() < 34.0 ? 520.0 : 420.0);
                 return;
             }
             if (megaborstenEnemy()) {
@@ -752,12 +750,10 @@ public class MyTank extends AdvancedRobot {
             driveAwayFrom(absBearing, 285.0);
             return;
         }
-        if (berendBotjeEnemy() && e.getDistance() < (getEnergy() < 42.0 ? 520.0 : 470.0)) {
-            // Do not wait until true knife range: the previous builds spent most of the
-            // fight inside 250px.  Keep kiting out whenever BerendBotje has pulled into its
-            // high-hit band; the averaged gun is still acceptable from mid range and the
-            // survival/ram swing is worth the longer bullet flight.
-            driveKiteEscape(absBearing, getEnergy() < 42.0 ? 665.0 : 575.0);
+        if (berendBotjeEnemy() && e.getDistance() < (getEnergy() < 38.0 ? 360.0 : 285.0)) {
+            // Loss traces average much closer than our desired lane; open direct distance
+            // before resuming the orbit so its p2/p3 bullets are not point-blank.
+            driveAwayFrom(absBearing, getEnergy() < 38.0 ? 455.0 : 360.0);
             return;
         }
         if (hunterEnemy() && e.getDistance() < (getEnergy() < 45.0 ? 370.0 : 300.0)) {
@@ -835,10 +831,10 @@ public class MyTank extends AdvancedRobot {
             // generic Crazy 260px knife-range pull-in that donated most of its score.
             preferredDistance = getEnergy() < 24.0 ? 455.0 : (getEnergy() < 48.0 ? 405.0 : 355.0);
         } else if (berendBotjeEnemy()) {
-            // Round-3 logs showed the previous 430/485 target was never achieved; close
-            // branches and fire dodges kept us around 170px.  Use a much wider nominal lane
-            // so ordinary orbit control also resists the opponent's closing movement.
-            preferredDistance = getEnergy() < 24.0 ? 620.0 : (getEnergy() < 48.0 ? 575.0 : 525.0);
+            // BerendBotje beat us by surviving close exchanges, not by avoiding all hits.
+            // Hold a wider lane than the generic 230-300px fast-mover orbit so its p2/p3
+            // shots have longer flight time, but do not go to extreme wall-poet ranges.
+            preferredDistance = getEnergy() < 24.0 ? 540.0 : (getEnergy() < 48.0 ? 485.0 : 430.0);
         } else if (poetEnemy()) {
             preferredDistance = getEnergy() < 28.0 ? 420.0 : (getEnergy() < 48.0 ? 350.0 : 285.0);
         } else if (wildeEnemy()) {
@@ -2717,17 +2713,14 @@ public class MyTank extends AdvancedRobot {
         // zero while BerendBotje kept a large reserve.  Offline replay favors the normal
         // averaged predictor; lower/faster bullets should reduce self-depletion and hit
         // sooner than the old p2-p3 stream.
-        if (e.getEnergy() < 22.0 && getEnergy() > 9.0 && distance < 650.0) {
-            // Round-1 losses often left BerendBotje with a huge stack, but wins still
-            // sometimes needed too many reserve shots.  Use a stronger bounded finisher in
-            // the 10-22 band while keeping normal bullets fast/cheap.
-            power = Math.min(Math.max(lethalPower(e.getEnergy()), 0.35), e.getEnergy() < 9.0 ? 1.65 : 2.55);
-        } else if (getEnergy() > 70.0) {
-            power = distance < 390.0 ? 1.85 : 1.55;
-        } else if (getEnergy() > 48.0) {
-            power = distance < 380.0 ? 1.20 : 0.92;
+        if (e.getEnergy() < 18.0 && getEnergy() > 9.0 && distance < 620.0) {
+            power = Math.min(Math.max(lethalPower(e.getEnergy()), 0.35), e.getEnergy() < 9.0 ? 1.65 : 2.25);
+        } else if (getEnergy() > 68.0) {
+            power = distance < 360.0 ? 1.85 : 1.55;
+        } else if (getEnergy() > 44.0) {
+            power = distance < 340.0 ? 1.18 : 0.92;
         } else if (getEnergy() > 24.0) {
-            power = distance < 350.0 ? 0.55 : 0.38;
+            power = distance < 320.0 ? 0.48 : 0.34;
         } else if (getEnergy() > 12.0) {
             power = distance < 300.0 ? 0.22 : 0.15;
         } else {
@@ -4095,8 +4088,7 @@ public class MyTank extends AdvancedRobot {
     public void onHitByBullet(HitByBulletEvent e) {
         if (berendBotjeEnemy()) {
             reverseDirection();
-            // After an actual hit, abandon the old mostly-lateral lane and open range hard.
-            driveKiteEscape(lastEnemyAbsBearing, getEnergy() < 38.0 ? 725.0 : 625.0);
+            drivePerpendicularEscape(lastEnemyAbsBearing, getEnergy() < 34.0 ? 560.0 : 455.0);
             return;
         }
         if (poetEnemy()) {
@@ -4241,9 +4233,7 @@ public class MyTank extends AdvancedRobot {
             // along the current body axis away from the collision normal.
             emergencyStraightAwayFrom(robotBearing, 360.0);
         } else if (berendBotjeEnemy()) {
-            // In actual collision/ram overlap, immediate radial separation is more important
-            // than the scan-time lateral lane change.
-            driveAwayFrom(robotBearing, 650.0);
+            driveAwayFrom(robotBearing, 430.0);
         } else if (dodgeBot2Enemy()) {
             // Do not stay tangled with DodgeBot2: a few round-1 non-win traces ended with
             // both bots nearly overlapped while our reserve was too low for another long
@@ -4340,44 +4330,6 @@ public class MyTank extends AdvancedRobot {
         }
     }
 
-
-
-    private void driveKiteEscape(double threatBearing, double distance) {
-        // A diagonal-away dodge for opponents that can chase into our orbit.  Pure away
-        // movement gives low lateral velocity to head-on/linear guns, while pure
-        // perpendicular movement can leave the range collapsed.  Score candidate lanes for
-        // both separation and crossing speed, with a strong separation bias.
-        double away = threatBearing + Math.PI;
-        double best = away + moveDirection * 0.55;
-        double bestScore = -1.0e9;
-        for (int sideTry = 0; sideTry < 2; sideTry++) {
-            int side = sideTry == 0 ? moveDirection : -moveDirection;
-            for (int i = -6; i <= 6; i++) {
-                double a = away + side * 0.52 + i * 0.10;
-                double px = projectX(getX(), a, 230.0);
-                double py = projectY(getY(), a, 230.0);
-                if (!insideBattlefield(px, py, 28.0)) {
-                    continue;
-                }
-                double margin = Math.min(Math.min(px, getBattleFieldWidth() - px),
-                        Math.min(py, getBattleFieldHeight() - py));
-                double separation = Math.cos(Utils.normalRelativeAngle(a - away));
-                double lateral = Math.abs(Math.sin(Utils.normalRelativeAngle(a - threatBearing)));
-                double sideBias = side == moveDirection ? 55.0 : 0.0;
-                double score = 1.75 * margin + 260.0 * separation + 95.0 * lateral + sideBias;
-                if (score > bestScore) {
-                    bestScore = score;
-                    best = a;
-                }
-            }
-        }
-        if (bestScore < -1.0e8) {
-            driveAwayFrom(threatBearing, distance);
-        } else {
-            setMaxVelocity(8.0);
-            driveAlongAngle(best, distance);
-        }
-    }
 
     private void driveSampleWallsEscape(double threatBearing, double distance) {
         // Dedicated dodge for sample.Walls.  Its gun is essentially head-on and its
