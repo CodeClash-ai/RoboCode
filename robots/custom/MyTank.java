@@ -281,7 +281,7 @@ public class MyTank extends AdvancedRobot {
             juggernautScans = Math.max(1, juggernautScans - 1);
         }
         if (wallsPoetSignatureRaw(e)) {
-            wallsPoetScans = Math.min(120, wallsPoetScans + 6);
+            wallsPoetScans = Math.min(160, wallsPoetScans + 8);
         } else if (wallsPoetScans > 0) {
             // Once the high-power wall/stop-go profile appears, keep the Wallspoet caps for
             // the rest of the round.  Round-1 losses came from late parked/wall-transition
@@ -347,6 +347,13 @@ public class MyTank extends AdvancedRobot {
                 // through the old bullet line in round-1 loss traces.  Keep one lateral
                 // dodge side through the shot and only change side on wall pressure.
                 driveSampleWallsEscape(absBearing, getEnergy() < 38.0 ? 545.0 : 445.0);
+                return;
+            }
+            if (wallsPoetEnemy()) {
+                // Wallspoetas is stationary/straight enough that a generic orbit reversal can
+                // re-cross the same p3 line.  Cross first on every detected shot, widening as
+                // reserve drops.
+                drivePerpendicularEscape(absBearing, getEnergy() < 36.0 ? 440.0 : 330.0);
                 return;
             }
             reverseDirection();
@@ -473,6 +480,13 @@ public class MyTank extends AdvancedRobot {
             } else {
                 driveAwayFrom(absBearing, 300.0);
             }
+            return;
+        }
+        if (wallsPoetEnemy() && getEnergy() < 38.0 && e.getDistance() < 390.0) {
+            // Wallspoetas remaining losses are late p3 hits in wall/corner chases.
+            // Reopen the lane before the generic close/wall logic can settle into a
+            // predictable parallel orbit.
+            drivePerpendicularEscape(absBearing, getEnergy() < 20.0 ? 470.0 : 420.0);
             return;
         }
         if (fixedHeadingHighPowerShooter() && e.getDistance() < 260.0) {
@@ -791,11 +805,11 @@ public class MyTank extends AdvancedRobot {
             // wide into long, low-damage self-depletion rounds.
             preferredDistance = 340.0;
         } else if (wallsPoetEnemy()) {
-            // WallsPoet is a high-power wall/stop-go bot.  It hits hard enough that the
-            // old close 335px DroidPoet pressure band lost many survival points, but
-            // going very wide would lengthen already-hard shots.  Hold a mid band and
-            // open it once our energy reserve drops.
-            preferredDistance = getEnergy() < 28.0 ? 500.0 : (getEnergy() < 55.0 ? 450.0 : 390.0);
+            // Wallspoetas is a high-power wall/stop-go bot.  Round-0 losses came from
+            // drifting to ~500px, lowering power to pinpricks, then being clipped by old
+            // p3 bullets while the enemy still had 20-70 energy.  Hold a slightly closer
+            // healthy/mid band for faster averaged shots, but still open in true reserve.
+            preferredDistance = getEnergy() < 20.0 ? 485.0 : (getEnergy() < 46.0 ? 425.0 : 370.0);
         } else if (dangerousWallEnemy()) {
             preferredDistance = 335.0;
         } else if (!maximbotEnemy() && straightEnemyScans > 16 && harmlessLowFireEnemy() && wallEnemyScans <= 4) {
@@ -1352,20 +1366,22 @@ public class MyTank extends AdvancedRobot {
             }
         }
         if (wallsPoetEnemy()) {
-            // Current pez__wallspoet traces: opponent is wall-bound/stop-go, fires almost
-            // all power-3 bullets, and offline shot replay shows much faster low/medium
-            // bullets have far less future-position error than power-3.  Avoid the generic
-            // dangerous-wall max-power override that self-depletes while still missing.
-            if (e.getEnergy() < 8.5 && getEnergy() > 6.0 && distance < 560.0) {
-                power = Math.min(Math.max(power, lethalPower(e.getEnergy())), 1.45);
+            // Current pez__wallspoetas traces: averaged aim is good, but the old caps
+            // downshifted too early.  Losses show us firing 50-70 mostly sub-p1 bullets
+            // and self-disabling while the enemy still had tens of energy.  Keep medium
+            // kill pressure through the midgame, then use lethal/near-lethal finishers.
+            if (e.getEnergy() < 16.0 && getEnergy() > 8.0 && distance < 610.0) {
+                power = Math.min(Math.max(power, lethalPower(e.getEnergy())), 1.75);
             } else if (getEnergy() > 62.0) {
-                power = Math.min(Math.max(power, distance < 360 ? 1.75 : 1.35), 1.85);
-            } else if (getEnergy() > 34.0) {
-                power = Math.min(Math.max(power, distance < 330 ? 1.05 : 0.75), 1.20);
-            } else if (getEnergy() > 16.0) {
-                power = Math.min(power, distance < 300 ? 0.42 : 0.28);
+                power = Math.min(Math.max(power, distance < 420 ? 2.00 : 1.65), 2.10);
+            } else if (getEnergy() > 36.0) {
+                power = Math.min(Math.max(power, distance < 420 ? 1.35 : 1.10), 1.50);
+            } else if (getEnergy() > 22.0) {
+                power = Math.min(Math.max(power, distance < 420 ? 0.72 : 0.50), 0.85);
+            } else if (getEnergy() > 12.0) {
+                power = Math.min(power, e.getEnergy() < 8.0 ? lethalPower(e.getEnergy()) : 0.25);
             } else {
-                power = Math.min(power, getEnergy() < 8.0 ? 0.12 : 0.20);
+                power = Math.min(power, getEnergy() < 8.0 ? 0.10 : 0.16);
             }
         } else if (dangerousWallEnemy() && crazyEnemyScans <= 4 && !activeStopGoShooter() && !dominatorEnemy()) {
             // DroidPoet-style active wall runners are dangerous, but round-1
@@ -1840,7 +1856,7 @@ public class MyTank extends AdvancedRobot {
             // it is actually in lethal/near-lethal range.
             fireAllowed = false;
         }
-        if (wallsPoetEnemy() && getEnergy() < 12.0 && e.getEnergy() > 10.0) {
+        if (wallsPoetEnemy() && getEnergy() < 12.0 && e.getEnergy() > 8.0) {
             // Wallspoet's p3 stream wins when we spend the last few energy points on
             // 0.1-0.2 bullets that cannot finish it.  Keep the reserve for movement unless
             // the enemy is already in capped-lethal range.
@@ -2180,7 +2196,8 @@ public class MyTank extends AdvancedRobot {
         // losses while the opponent survived on 10-18 energy.  The speed-average
         // guard keeps Ultron-style faster high-power dodgers in their cheaper
         // head-on conservation branch.
-        return stopGoEnemyScans > 8
+        return !wallsPoetEnemy()
+                && stopGoEnemyScans > 8
                 && enemyFireCount > 3
                 && enemyFirePowerSamples > 2
                 && enemyFirePowerAvg > 2.25
@@ -2619,20 +2636,16 @@ public class MyTank extends AdvancedRobot {
         // near-zero average body turn, and repeated power-3 fire.  Keep the predicate
         // broad enough to engage early, but require the high-power fire + wall/stop-go
         // combination so prior harmless wall farmers and Crazy/SpinBot are unaffected.
-        return wallEnemyScans > 4
-                && enemyFireCount > 1
+        return wallEnemyScans > 3
+                && enemyFireCount > 0
                 && enemyFirePowerSamples > 0
-                && enemyFirePowerAvg > 2.55
-                && stopGoEnemyScans > 4
-                && enemySpeedAvg > 1.2
-                && enemySpeedAvg < 5.2
-                && Math.abs(enemyTurnRateAvg) < 0.030
+                && enemyFirePowerAvg > 2.45
+                && stopGoEnemyScans > 2
+                && enemySpeedAvg > 1.0
+                && enemySpeedAvg < 5.6
+                && Math.abs(enemyTurnRateAvg) < 0.035
                 && crazyEnemyScans <= 4
-                && !spinBotEnemy()
-                && !fixedHeadingHighPowerShooter()
-                && !fixedHeadingStopGoEnemy()
-                && !fixedHeadingLineEnemy()
-                && !juggernautEnemy();
+                && !spinBotEnemy();
     }
 
     private boolean dangerousWallEnemy() {
@@ -2766,7 +2779,12 @@ public class MyTank extends AdvancedRobot {
             // style clean edge runs can need less damping; the exception above and
             // the linear virtual-gun override still let fast straight low-fire runs
             // use fuller prediction when there have not been recent stops.
-            if (shrekerEnemy()) {
+            if (wallsPoetEnemy()) {
+                // Wallspoetas alternates wall stops with max-speed bursts; the normal
+                // averaged predictor won offline replay, but cap velocity a little less
+                // than generic stop/go damping so shots do not lag behind resumed wall runs.
+                velocity = limit(-3.0, 0.40 * velocity + 0.55 * enemyVelocityAvg, 3.0);
+            } else if (shrekerEnemy()) {
                 velocity = limit(-2.0, 0.30 * velocity + 0.40 * enemyVelocityAvg, 2.0);
             } else if (npcSniperEnemy()) {
                 // NPCSniper traces prefer a little more velocity carry than old
@@ -2898,6 +2916,13 @@ public class MyTank extends AdvancedRobot {
         if (shrekerEnemy()) {
             reverseDirection();
             drivePerpendicularEscape(lastEnemyAbsBearing, getEnergy() < 42.0 ? 430.0 : 310.0);
+            return;
+        }
+        if (wallsPoetEnemy()) {
+            // Wallspoetas fires almost exclusively p3; after a hit, immediately cross and
+            // reopen instead of the generic short reversal that can return to the wall lane.
+            reverseDirection();
+            drivePerpendicularEscape(lastEnemyAbsBearing, getEnergy() < 38.0 ? 500.0 : 390.0);
             return;
         }
         if (sampleWallsEnemy()) {

@@ -810,3 +810,9 @@ Round 2 (gpt-5-5 current edit, Walls follow-up):
   - kept the replay-best `GUN_LINEAR` and healthy medium-power caps; this is a survival/movement/reserve tweak, not a gun change.
 - Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
 
+
+Round 1 (gpt-5-5 current edit against `pez__wallspoetas`):
+- `/logs/rounds/0` is a Wallspoet variant (`pez__wallspoetas`) with persistent wall/stop-go movement, near-zero turns, and mostly power-3 fire. We won aggregate (`25711` vs `9744`) but survival was only 199/250 with 46 opponent wins and 5 ties. Losses were long rounds: our bot fired 50-70 mostly sub-p1 bullets after an early downshift, often dying with Wallspoetas still at 20-70 energy; offline replay still favors `GUN_AVERAGED` strongly (avg mean ~67px vs wallavg ~82, linear/circular ~89, head ~103).
+- Retuned the existing Wallspoet branch in `robots/custom/MyTank.java` for this harder variant: raw detection engages earlier and avoids being blocked by fixed-heading/Juggernaut predicates; sticky counter is stronger; detected p3 fire now gets a dedicated perpendicular escape before any generic reverse; low-energy close range also reopens; `onHitByBullet` uses a larger Wallspoetas escape.
+- Adjusted Wallspoet range/power: slightly closer healthy/mid orbit (370/425/485) for faster averaged shots, stronger midgame bullets (roughly p1.1-1.5 instead of early p0.3 pinpricks), capped lethal/near-lethal finishers below 16 enemy energy, and stricter reserve no-fire below 12 energy unless Wallspoetas is near death. Added a small Wallspoetas averaged-predictor velocity carry (cap 3.0) to avoid lagging behind resumed wall bursts.
+- Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
