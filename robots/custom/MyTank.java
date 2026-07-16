@@ -362,7 +362,7 @@ public class MyTank extends AdvancedRobot {
                 // Maximbot fires medium/high bullets while moving in arcs.  Do not only
                 // reverse along the same close curve; step across its shot line, especially
                 // because the rare loss traces were close-range exchanges.
-                drivePerpendicularEscape(absBearing, getEnergy() < 36.0 ? 330.0 : 270.0);
+                drivePerpendicularEscape(absBearing, getEnergy() < 42.0 ? 420.0 : 335.0);
                 return;
             }
             if (shrekerEnemy()) {
@@ -488,11 +488,11 @@ public class MyTank extends AdvancedRobot {
             drivePerpendicularEscape(absBearing, 380.0);
             return;
         }
-        if (maximbotEnemy() && e.getDistance() < (getEnergy() < 32.0 ? 310.0 : 255.0)) {
+        if (maximbotEnemy() && e.getDistance() < (getEnergy() < 36.0 ? 385.0 : 320.0)) {
             // The only recorded Maximbot losses were close, high-power exchanges.  Keep
             // enough room for lateral circular-gun shots instead of letting its simple gun
             // trade at 100-170px.
-            drivePerpendicularEscape(absBearing, getEnergy() < 32.0 ? 360.0 : 300.0);
+            drivePerpendicularEscape(absBearing, getEnergy() < 36.0 ? 455.0 : 380.0);
             return;
         }
         if (shrekerEnemy() && getEnergy() < 24.0 && e.getDistance() < 240.0) {
@@ -588,7 +588,7 @@ public class MyTank extends AdvancedRobot {
             // Current Maximbot is very hittable by circular aim, but its medium/high gun
             // leaks damage at knife range.  Use a compact circular-shot band while healthy
             // and widen modestly before reserve mode.
-            preferredDistance = getEnergy() < 24.0 ? 430.0 : (getEnergy() < 45.0 ? 370.0 : 320.0);
+            preferredDistance = getEnergy() < 24.0 ? 485.0 : (getEnergy() < 50.0 ? 430.0 : 375.0);
         } else if (pikachuEnemy()) {
             // kcanida__pikachu fires a stream of tiny bullets while making short stop/turn
             // dodges.  The old generic stop-go logic hugged ~220px and spent power-2/3
@@ -1216,12 +1216,12 @@ public class MyTank extends AdvancedRobot {
             // medium shots and lethal finishers in the few long close exchanges.
             if (e.getEnergy() < 9.5 && getEnergy() > 6.0) {
                 power = Math.min(Math.max(power, lethalPower(e.getEnergy())), 1.65);
-            } else if (getEnergy() > 58.0 && distance < 700.0) {
-                power = Math.min(Math.max(power, distance < 420.0 ? 2.65 : 2.25), 2.75);
-            } else if (getEnergy() > 34.0) {
-                power = Math.min(Math.max(power, distance < 360.0 ? 1.65 : 1.30), 1.85);
+            } else if (getEnergy() > 62.0 && distance < 760.0) {
+                power = Math.min(Math.max(power, distance < 420.0 ? 2.15 : 1.85), 2.20);
+            } else if (getEnergy() > 38.0) {
+                power = Math.min(Math.max(power, distance < 380.0 ? 1.35 : 1.05), 1.50);
             } else if (getEnergy() > 18.0) {
-                power = Math.min(power, distance < 330.0 ? 0.70 : 0.48);
+                power = Math.min(power, distance < 360.0 ? 0.55 : 0.38);
             } else {
                 power = Math.min(power, getEnergy() < 8.0 ? 0.14 : 0.25);
             }
@@ -2829,6 +2829,14 @@ public class MyTank extends AdvancedRobot {
         if (shrekerEnemy()) {
             reverseDirection();
             drivePerpendicularEscape(lastEnemyAbsBearing, getEnergy() < 42.0 ? 430.0 : 310.0);
+            return;
+        }
+        if (maximbotEnemy()) {
+            // Maximbot's only winning traces are close medium/high-power exchanges.
+            // After an actual hit, immediately reopen the range instead of resuming
+            // the compact circular-shot orbit that is fine while we are unharmed.
+            reverseDirection();
+            drivePerpendicularEscape(lastEnemyAbsBearing, getEnergy() < 42.0 ? 470.0 : 360.0);
             return;
         }
         if (turningHighPowerEnemy()) {

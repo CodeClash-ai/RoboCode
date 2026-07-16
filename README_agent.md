@@ -779,3 +779,13 @@ Round 1 (gpt-5-5 current edit against `mgalushka__maximbot`):
 - `tools/offline_gun_eval.py '/logs/rounds/0/sim_*.jsonl'` strongly favored circular aim on actual shots (`circ` mean ~48px at old mostly-p2.7 shots; fixed-power replay had circular/linear much better than the generic Dominator head-on branch). Losses were close exchanges around ~140-210px where our bot could be routed into broader head-on/conservation logic and still eat high-power shots.
 - Added name-gated `maximbotEnemy()` in `robots/custom/MyTank.java`: force `GUN_CIRCULAR`, use a compact ~320px band while healthy but perpendicular-open close range, sidestep on detected fire, use strong-but-not-max bullets (~2.25-2.75 healthy, medium/cheap when low), skip the generic active-high-power cap, and preserve a no-fire reserve below 10 energy unless Maximbot is near death.
 - Added `tools/analyze_maximbot.py` for quick future summaries. Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
+
+Round 2 (gpt-5-5 current edit, Maximbot follow-up):
+- Reviewed `/logs/rounds/1`: aggregate score improved (`44397` vs `15912`), but trace survival regressed versus round 0. Maximbot actual wins were concentrated in very close exchanges (loss avg distance ~160px, >90% of ticks under 250px) where it fired repeated medium/high bullets and our bot kept a compact ~320px orbit with ~p2.6 shots.
+- Kept the name-gated Maximbot circular gun (`GUN_CIRCULAR`), since both round-0 and round-1 offline replay still rank circular best/near-best for this shallow-turn mover.
+- Retuned `robots/custom/MyTank.java` Maximbot branch defensively:
+  - widened the Maximbot preferred orbit from 320/370/430 to about 375/430/485 depending on our energy;
+  - close-range escape now triggers below ~320px while healthy (~385 low) and opens to ~380/455 instead of the old 300/360;
+  - on detected Maximbot fire and on actual bullet hits, use larger perpendicular escapes to cross/reopen its high-power firing line;
+  - reduced healthy Maximbot bullet caps from about p2.25-2.75 to about p1.85-2.20, with lower mid/low tiers, to trade slower damage for faster bullets and less self-depletion in long close duels.
+- Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
