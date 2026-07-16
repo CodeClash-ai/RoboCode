@@ -375,6 +375,15 @@ public class MyTank extends AdvancedRobot {
                 driveSampleWallsEscape(absBearing, getEnergy() < 34.0 ? 640.0 : 535.0);
                 return;
             }
+            if (smallPoetEnemy() && (e.getDistance() < 360.0 || getEnergy() < 56.0)) {
+                // SmallPoet's p3 gun hurts most in close/mid late exchanges.  Do not
+                // flip-flop on every early shot (that regressed Wallspoetas), but once
+                // it has pulled us inside the danger band or our reserve is no longer
+                // huge, take a long lateral/away crossing similar to the successful
+                // sample.Walls dodge.
+                driveSampleWallsEscape(absBearing, getEnergy() < 32.0 ? 575.0 : 455.0);
+                return;
+            }
             reverseDirection();
             if (gntestStopDuel() && getEnergy() < 50.0) {
                 // In the current GNTest loss traces the slow/parked phase becomes a
@@ -638,7 +647,13 @@ public class MyTank extends AdvancedRobot {
         // inward; too close we open out.  wallSmooth then bends the path away
         // from the battlefield edges before we commit to it.
         double preferredDistance;
-        if (haikuWallsEnemy()) {
+        if (smallPoetEnemy()) {
+            // SmallPoet is less purely perimeter-running than HaikuWalls, so do not go
+            // all the way to 600+px, but keep a wider lane than the generic Wallspoet
+            // 390px band.  Loss traces were decided by p3 hits after we dipped into
+            // ~150-220px scrambles.
+            preferredDistance = getEnergy() < 24.0 ? 555.0 : (getEnergy() < 52.0 ? 500.0 : 430.0);
+        } else if (haikuWallsEnemy()) {
             // Stay well outside the close wall-gun band.  HaikuWalls drains itself with
             // power-3 shots; our priority is surviving those bullets while linear p1-ish
             // shots collect damage, not chasing max-power bullet bonus.
@@ -888,7 +903,7 @@ public class MyTank extends AdvancedRobot {
         // to long bullet flight, while its own gun almost never connects.  Once
         // virtual guns report a hard-to-hit mover, tighten the orbit a bit to
         // shorten flight time and improve hit/kill speed without going to ram range.
-        if (!haikuWallsEnemy() && !waveSurfingEnemy() && !dangerousWallEnemy() && !activeStopGoShooter() && !heavyStopGoShooter()
+        if (!smallPoetEnemy() && !haikuWallsEnemy() && !waveSurfingEnemy() && !dangerousWallEnemy() && !activeStopGoShooter() && !heavyStopGoShooter()
                 && virtualSamples > 28 && bestGunError() > 72.0 && stationaryScans <= 5 && slowEnemyScans <= 12) {
             preferredDistance = 355.0;
         }
@@ -1006,6 +1021,23 @@ public class MyTank extends AdvancedRobot {
         boolean finishingFixedHighPower = fixedHeadingHighPowerShooter() && e.getEnergy() < 17.0 && distance < 460.0 && getEnergy() > 6.0;
         boolean finishingFixedMedium = fixedHeadingMediumShooter() && e.getEnergy() < 17.0 && distance < 540.0 && getEnergy() > 6.0;
         boolean hardToHitMover = virtualSamples > 28 && bestGunError() > 72.0 && stationaryScans <= 5 && slowEnemyScans <= 12;
+        if (smallPoetEnemy()) {
+            // SmallPoet spends p3 constantly and our existing Wallspoet cap still lost
+            // many live rounds by trading too close / too long.  Use faster medium-low
+            // bullets, keep a capped lethal finisher, and preserve reserve earlier than
+            // generic Wallspoet.
+            if (e.getEnergy() < 18.0 && getEnergy() > 9.0 && distance < 620.0) {
+                power = Math.min(Math.max(power, lethalPower(e.getEnergy())), e.getEnergy() < 10.0 ? 1.75 : 2.05);
+            } else if (getEnergy() > 62.0) {
+                power = Math.min(Math.max(power, distance < 380.0 ? 1.55 : 1.25), 1.65);
+            } else if (getEnergy() > 36.0) {
+                power = Math.min(Math.max(power, distance < 340.0 ? 0.95 : 0.70), 1.05);
+            } else if (getEnergy() > 18.0) {
+                power = Math.min(power, distance < 320.0 ? 0.35 : 0.24);
+            } else {
+                power = Math.min(power, getEnergy() < 8.0 ? 0.10 : 0.16);
+            }
+        }
         if (haikuWallsEnemy()) {
             // P3 shots were self-depleting and slow against this fast perimeter target.
             // Offline trace replay shows faster low-power linear bullets cut future-position
@@ -1553,6 +1585,20 @@ public class MyTank extends AdvancedRobot {
                 power = Math.min(power, getEnergy() < 8.0 ? 0.12 : 0.20);
             }
         }
+        if (smallPoetEnemy()) {
+            // Re-apply after broad wall/slow branches that may raise power back toward p3.
+            if (e.getEnergy() < 18.0 && getEnergy() > 9.0 && distance < 620.0) {
+                power = Math.min(power, Math.min(Math.max(lethalPower(e.getEnergy()), 0.35), e.getEnergy() < 10.0 ? 1.75 : 2.05));
+            } else if (getEnergy() > 62.0) {
+                power = Math.min(power, distance < 380.0 ? 1.55 : 1.25);
+            } else if (getEnergy() > 36.0) {
+                power = Math.min(power, distance < 340.0 ? 0.95 : 0.70);
+            } else if (getEnergy() > 18.0) {
+                power = Math.min(power, distance < 320.0 ? 0.35 : 0.24);
+            } else {
+                power = Math.min(power, getEnergy() < 8.0 ? 0.10 : 0.16);
+            }
+        }
         if (haikuWallsEnemy()) {
             // Re-apply after broad wall/slow branches that may raise power back toward p3.
             if (e.getEnergy() < 18.0 && getEnergy() > 9.0 && distance < 650.0) {
@@ -1680,6 +1726,8 @@ public class MyTank extends AdvancedRobot {
             // waves show a clear margin so we do not overfit a short turning phase.
             gun = (virtualSamples > 28 && virtualGunError[GUN_AVERAGED] + 6.0 < virtualGunError[GUN_CIRCULAR])
                     ? GUN_AVERAGED : GUN_CIRCULAR;
+        } else if (smallPoetEnemy()) {
+            gun = GUN_AVERAGED;
         } else if (haikuWallsEnemy()) {
             // HaikuWalls runs the full rectangle perimeter; linear lead is far ahead of
             // head-on/averaged/wall-damped in the recorded traces.
@@ -2013,6 +2061,15 @@ public class MyTank extends AdvancedRobot {
             // unless it is already close enough for a capped finisher.
             fireAllowed = false;
         }
+        if (smallPoetEnemy()) {
+            tolerance = Math.min(tolerance, Math.atan2(13.0, distance));
+            if ((getEnergy() < 22.0 && e.getEnergy() > 22.0) || (getEnergy() < 13.0 && e.getEnergy() > 10.0)) {
+                // Preserve movement reserve in the exact loss mode: our low-energy
+                // pinpricks cannot erase a 20+ energy p3 wall bot before another heavy
+                // bullet lands.
+                fireAllowed = false;
+            }
+        }
         if (haikuWallsEnemy()) {
             tolerance = Math.min(tolerance, Math.atan2(12.0, distance));
             if ((getEnergy() < 24.0 && e.getEnergy() > 20.0) || (getEnergy() < 14.0 && e.getEnergy() > 9.0)) {
@@ -2073,6 +2130,14 @@ public class MyTank extends AdvancedRobot {
         return best;
     }
 
+
+    private boolean smallPoetEnemy() {
+        // Current opponent pez__smallpoet: a PEZ wall/stop-go poet variant that
+        // fires almost exclusively power-3.  It resembles Wallspoet but is a little
+        // more mobile/straight-running; name-gate so older wall-poet tuning remains
+        // intact for its historical matchups.
+        return enemyName != null && enemyName.contains("pez__smallpoet");
+    }
 
     private boolean haikuWallsEnemy() {
         // Current opponent pez__haikuwalls: a PEZ Walls-family perimeter runner that
@@ -2943,7 +3008,13 @@ public class MyTank extends AdvancedRobot {
             double drift = limit(-0.80, driftScale * velocity, 0.80);
             return projectClamped(enemyX, enemyY, heading, drift, bulletSpeed, 70);
         }
-        if (gunType == GUN_AVERAGED && pikachuEnemy()) {
+        if (gunType == GUN_AVERAGED && smallPoetEnemy()) {
+            // Round-0 replay for SmallPoet preferred a little more current/EMA carry
+            // than the very damped Wallspoet predictor, but still far less than full
+            // linear/circular lead through its wall stops and reversals.
+            velocity = limit(-2.8, 0.35 * velocity + 0.50 * enemyVelocityAvg, 2.8);
+            turnRate = 0.0;
+        } else if (gunType == GUN_AVERAGED && pikachuEnemy()) {
             // Pikachu alternates stop/turn bursts; replay of round-0 traces preferred an
             // almost-head-on damped predictor over full averaged/linear/circular lead,
             // especially with fast cheap bullets.
@@ -3097,6 +3168,11 @@ public class MyTank extends AdvancedRobot {
         if (shrekerEnemy()) {
             reverseDirection();
             drivePerpendicularEscape(lastEnemyAbsBearing, getEnergy() < 42.0 ? 430.0 : 310.0);
+            return;
+        }
+        if (smallPoetEnemy()) {
+            reverseDirection();
+            driveSampleWallsEscape(lastEnemyAbsBearing, getEnergy() < 34.0 ? 610.0 : 500.0);
             return;
         }
         if (haikuWallsEnemy()) {
