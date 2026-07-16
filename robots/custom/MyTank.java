@@ -421,6 +421,14 @@ public class MyTank extends AdvancedRobot {
                 drivePerpendicularEscape(absBearing, getEnergy() < 24.0 ? 430.0 : 350.0);
                 return;
             }
+            if (wildeEnemy() && getEnergy() < 46.0) {
+                // alexjamesmacpherson__wilde wins mainly when we spend ourselves down in
+                // long weak/medium-fire wall/stop-go duels.  Its bullets are only about
+                // power 1.3 but arrive steadily; once our reserve is no longer huge, cross
+                // the firing line instead of just toggling the same orbit lane.
+                drivePerpendicularEscape(absBearing, getEnergy() < 22.0 ? 470.0 : 385.0);
+                return;
+            }
             if (gntestStopDuel() && getEnergy() < 50.0) {
                 // In the current GNTest loss traces the slow/parked phase becomes a
                 // long medium-bullet duel.  Cross its simple firing line when our
@@ -713,6 +721,12 @@ public class MyTank extends AdvancedRobot {
         double preferredDistance;
         if (poetEnemy()) {
             preferredDistance = getEnergy() < 28.0 ? 420.0 : (getEnergy() < 48.0 ? 350.0 : 285.0);
+        } else if (wildeEnemy()) {
+            // Current Wilde matchup: medium/fast wall/stop-go movement and frequent
+            // weak/medium shots.  We were losing by self-depletion, not by close-range
+            // ramming, so hold a medium-wide band that keeps bullet flight reasonable
+            // while giving our fire-tick dodges room.
+            preferredDistance = getEnergy() < 22.0 ? 515.0 : (getEnergy() < 46.0 ? 475.0 : 425.0);
         } else if (dodgeBot2Enemy()) {
             // DodgeBot2 is a full-speed evasive mover with a modest p1-p1.6 gun.  Our
             // round-0 losses happened mostly in close, long self-depletion chases.  Hold
@@ -991,7 +1005,7 @@ public class MyTank extends AdvancedRobot {
         // to long bullet flight, while its own gun almost never connects.  Once
         // virtual guns report a hard-to-hit mover, tighten the orbit a bit to
         // shorten flight time and improve hit/kill speed without going to ram range.
-        if (!poetEnemy() && !dodgeBot2Enemy() && !wallspoetHaikuEnemy() && !smallPoetEnemy() && !haikuWallsEnemy() && !waveSurfingEnemy() && !dangerousWallEnemy() && !activeStopGoShooter() && !heavyStopGoShooter()
+        if (!poetEnemy() && !wildeEnemy() && !dodgeBot2Enemy() && !wallspoetHaikuEnemy() && !smallPoetEnemy() && !haikuWallsEnemy() && !waveSurfingEnemy() && !dangerousWallEnemy() && !activeStopGoShooter() && !heavyStopGoShooter()
                 && virtualSamples > 28 && bestGunError() > 72.0 && stationaryScans <= 5 && slowEnemyScans <= 12) {
             preferredDistance = 355.0;
         }
@@ -1109,6 +1123,23 @@ public class MyTank extends AdvancedRobot {
         boolean finishingFixedHighPower = fixedHeadingHighPowerShooter() && e.getEnergy() < 17.0 && distance < 460.0 && getEnergy() > 6.0;
         boolean finishingFixedMedium = fixedHeadingMediumShooter() && e.getEnergy() < 17.0 && distance < 540.0 && getEnergy() > 6.0;
         boolean hardToHitMover = virtualSamples > 28 && bestGunError() > 72.0 && stationaryScans <= 5 && slowEnemyScans <= 12;
+        if (wildeEnemy()) {
+            // Wilde is a low/medium-power wall/stop-go shooter.  Round-0 losses show our
+            // old generic wall/dangerous-wall code firing too many p1.5-p3 bullets until
+            // disabled while Wilde still had a large reserve.  Use fast, efficient averaged
+            // bullets and keep enough energy for survival; strengthen only bounded finishers.
+            if (e.getEnergy() < 12.0 && getEnergy() > 7.0 && distance < 620.0) {
+                power = Math.min(Math.max(power, lethalPower(e.getEnergy())), 1.85);
+            } else if (getEnergy() > 66.0) {
+                power = Math.min(Math.max(power, distance < 390.0 ? 1.35 : 1.10), 1.40);
+            } else if (getEnergy() > 42.0) {
+                power = Math.min(Math.max(power, distance < 360.0 ? 0.88 : 0.68), 0.95);
+            } else if (getEnergy() > 22.0) {
+                power = Math.min(power, distance < 330.0 ? 0.38 : 0.26);
+            } else {
+                power = Math.min(power, getEnergy() < 10.0 ? 0.10 : 0.16);
+            }
+        }
         if (dodgeBot2Enemy()) {
             // Name-gated for the current close matchup.  Offline replay of the traces says
             // pure head-on is best and faster low/medium bullets reduce future-position
@@ -1860,6 +1891,20 @@ public class MyTank extends AdvancedRobot {
                 power = Math.min(power, getEnergy() < 8.0 ? 0.12 : 0.22);
             }
         }
+        if (wildeEnemy()) {
+            // Re-apply after broad slow/wall/dangerous-wall branches that can raise power.
+            if (e.getEnergy() < 12.0 && getEnergy() > 7.0 && distance < 620.0) {
+                power = Math.min(power, Math.min(Math.max(lethalPower(e.getEnergy()), 0.35), 1.85));
+            } else if (getEnergy() > 66.0) {
+                power = Math.min(power, distance < 390.0 ? 1.35 : 1.10);
+            } else if (getEnergy() > 42.0) {
+                power = Math.min(power, distance < 360.0 ? 0.88 : 0.68);
+            } else if (getEnergy() > 22.0) {
+                power = Math.min(power, distance < 330.0 ? 0.38 : 0.26);
+            } else {
+                power = Math.min(power, getEnergy() < 10.0 ? 0.10 : 0.16);
+            }
+        }
         if (dodgeBot2Enemy()) {
             // Re-apply after broad head-on/slow/wall branches that may have raised power.
             if (e.getEnergy() < 18.0 && getEnergy() > 8.0 && distance < 420.0) {
@@ -1949,6 +1994,10 @@ public class MyTank extends AdvancedRobot {
             gun = GUN_HEAD_ON;
         } else if (poetEnemy()) {
             gun = GUN_CIRCULAR;
+        } else if (wildeEnemy()) {
+            // Trace replay for alexjamesmacpherson__wilde favors normal/wall-damped averaged
+            // prediction; full linear/circular over-lead its stops and border reversals.
+            gun = GUN_AVERAGED;
         } else if (dodgeBot2Enemy()) {
             // Trace replay strongly favors head-on for DodgeBot2; linear/circular/avg
             // over-lead its dodge/reversal movement.  Force it instead of letting noisy
@@ -2272,6 +2321,15 @@ public class MyTank extends AdvancedRobot {
             tolerance = Math.min(tolerance, Math.atan2(weakFixedAxisOscillator() ? 34.0 : 18.0, distance));
         }
         boolean fireAllowed = true;
+        if (wildeEnemy()) {
+            tolerance = Math.min(tolerance, Math.atan2(14.0, distance));
+            if ((getEnergy() < 18.0 && e.getEnergy() > 14.0) || (getEnergy() < 10.0 && e.getEnergy() > 6.0)) {
+                // Last-reserve pinpricks were the dominant losing mode: Wilde's own gun is
+                // weak enough that banking energy for movement/survival is better unless a
+                // near-lethal shot is plausible.
+                fireAllowed = false;
+            }
+        }
         if (dodgeBot2Enemy()) {
             tolerance = Math.min(tolerance, Math.atan2(13.0, distance));
             if ((getEnergy() < 14.0 && e.getEnergy() > 18.0) || (getEnergy() < 8.0 && e.getEnergy() > 8.0)) {
@@ -2406,6 +2464,13 @@ public class MyTank extends AdvancedRobot {
         return best;
     }
 
+
+    private boolean wildeEnemy() {
+        // Current opponent alexjamesmacpherson__wilde: medium/fast wall-heavy stop/go mover
+        // with frequent weak/medium fire.  Our generic dangerous-wall/slow-target pressure
+        // loses by self-depletion; use a name-gated conservative averaged-gun profile.
+        return enemyName != null && enemyName.contains("alexjamesmacpherson__wilde");
+    }
 
     private boolean poetEnemy() {
         // Current opponent pez__poet: fast, continuously turning PEZ bot with frequent
@@ -3319,7 +3384,13 @@ public class MyTank extends AdvancedRobot {
             double drift = limit(-0.80, driftScale * velocity, 0.80);
             return projectClamped(enemyX, enemyY, heading, drift, bulletSpeed, 70);
         }
-        if (gunType == GUN_AVERAGED && mb2Enemy()) {
+        if (gunType == GUN_AVERAGED && wildeEnemy()) {
+            // Offline replay ranks the damped wall/averaged family best for Wilde.  Carry
+            // less velocity than the generic averaged gun so stops/wall reversals are not
+            // over-led, but more than pure wallavg during its continued medium-speed rolls.
+            velocity = limit(-2.6, 0.32 * velocity + 0.48 * enemyVelocityAvg, 2.6);
+            turnRate = 0.0;
+        } else if (gunType == GUN_AVERAGED && mb2Enemy()) {
             // MB2 mixes stops, shallow turns, and medium-speed legs.  Round-1 shot-time
             // replay showed the original wallavg damping under-led its continued rolls;
             // carrying more current/EMA velocity sharply reduced future-position error
@@ -3507,6 +3578,11 @@ public class MyTank extends AdvancedRobot {
         if (smallPoetEnemy()) {
             reverseDirection();
             driveSampleWallsEscape(lastEnemyAbsBearing, getEnergy() < 34.0 ? 610.0 : 500.0);
+            return;
+        }
+        if (wildeEnemy()) {
+            reverseDirection();
+            drivePerpendicularEscape(lastEnemyAbsBearing, getEnergy() < 26.0 ? 520.0 : 410.0);
             return;
         }
         if (dodgeBot2Enemy()) {

@@ -965,3 +965,13 @@ Round 2 (gpt-5-5 current edit, WallspoetHaiku follow-up):
   - expanded WallspoetHaiku near-lethal finishers: enemy energy <18 can now use capped ~2.55 (or ~1.95 below 10) when we have >9 energy and range <650;
   - relaxed the no-fire reserve guard so it no longer blocks that <18-energy finisher band (still preserves energy when we are <24 and the enemy is >24, or <14 and enemy >18).
 - Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
+
+Round 1 (gpt-5-5 current edit against `alexjamesmacpherson__wilde`):
+- `/logs/rounds/0` is the first recorded losing aggregate for this branch: `alexjamesmacpherson__wilde.MyTank` beat us `14578` vs `12340`; traced live outcomes were about 69 wins / 176 losses / 5 draws. Wilde is a medium/fast wall-heavy stop/go mover (avg speed ~4.4, ~46% wall-near, ~19% stopped) firing frequent weak/medium bullets (energy-drop avg ~1.34). Our bot often self-depleted to 0 after 70-100 shots while Wilde still had a large reserve.
+- `tools/offline_gun_eval.py '/logs/rounds/0/sim_*.jsonl'` favors the damped averaged/wallavg family (`wallavg`/`avg` clearly ahead of head/linear/circular), and lower-power/faster bullets are important because rounds are long and p2/p3 misses drain us.
+- Added a narrow name-gated `wildeEnemy()` profile in `robots/custom/MyTank.java`:
+  - force `GUN_AVERAGED` with a Wilde-specific damped predictor (`0.32*current + 0.48*EMA`, no turn, capped at 2.6);
+  - hold a medium-wide 425/475/515 preferred range and exclude Wilde from the generic hard-to-hit close-orbit override;
+  - cap bullet power aggressively (roughly p1.1-1.35 while high energy, p0.68-0.95 mid, p0.26-0.38 reserve) with bounded lethal finishers under 12 enemy energy;
+  - once our energy is lower, dodge across its fire line on detected shots / actual bullet hits and stop last-reserve pinpricks when Wilde is still healthy.
+- Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`. Next teammate: compare `/logs/rounds/1` to see if this conservative profile improves survival/aggregate or became too timid; if bullet damage collapses while survival does not improve, raise healthy/mid caps toward p1.5/p1.1 or tighten range slightly (~390/440).
