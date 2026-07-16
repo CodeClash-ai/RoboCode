@@ -331,6 +331,14 @@ public class MyTank extends AdvancedRobot {
                 driveStationaryHeavyEscape(absBearing, getEnergy() < 38.0 ? 430.0 : 365.0);
                 return;
             }
+            if (leachPmcEnemy() && stationaryScans > 5 && enemyDrop > 2.20) {
+                // Current pez__leachpmc target is stationary but immediately fires power-3.
+                // Do not use the old close stationary-farm stop/short dodge; open a wider
+                // diagonal lane from the first detected shot so its simple p3 gun stops
+                // landing while our exact head-on p3 shots finish it.
+                driveStationaryHeavyEscape(absBearing, getEnergy() < 35.0 ? 520.0 : 470.0);
+                return;
+            }
             if (stationaryScans > 5 && enemyDrop > 2.20) {
                 // sample.TrackFire-style opponents sit still but fire repeated power-3
                 // bullets at our current bearing.  The generic response reversed orbit
@@ -567,7 +575,7 @@ public class MyTank extends AdvancedRobot {
             driveAwayFrom(absBearing, 225.0);
             return;
         }
-        if (stationaryScans > 10 && enemyFireCount == 0) {
+        if (stationaryScans > 10 && enemyFireCount == 0 && !leachPmcEnemy()) {
             if (!insideBattlefield(getX(), getY(), WALL_MARGIN + 25.0)) {
                 driveToward(getBattleFieldWidth() / 2.0, getBattleFieldHeight() / 2.0, 120.0);
                 setMaxVelocity(6.0);
@@ -669,6 +677,11 @@ public class MyTank extends AdvancedRobot {
             // range: logs show our hits are reliable here, and opening too far can
             // reduce damage before the opponent's parked power-3 trades arrive.
             preferredDistance = 300.0;
+        } else if (leachPmcEnemy() && stationaryScans > 5) {
+            // LeachPMC is stationary like TrackFire but starts as a p3 shooter before our
+            // enemy-fire counter has settled.  Hold an even wider band to keep lateral
+            // speed high against its head-on p3 stream; exact p3 shots still land.
+            preferredDistance = getEnergy() < 35.0 ? 535.0 : 490.0;
         } else if (stationaryHeavyShooter()) {
             // TrackFire is stationary like NagiSphere, but its repeated power-3 head-on
             // bullets punished the old close 330px farming band when orbit reversals
@@ -1901,6 +1914,12 @@ public class MyTank extends AdvancedRobot {
         return best;
     }
 
+
+    private boolean leachPmcEnemy() {
+        // Current /logs/rounds/0 opponent: stationary power-3 shooter.  Name-gated so the
+        // old SittingDuck/infinitylock stationary no-fire farm mode remains intact.
+        return enemyName != null && enemyName.contains("pez__leachpmc");
+    }
 
     private boolean sampleWallsEnemy() {
         // Current hidden opponent in /logs/rounds/0 is robo_code__walls.MyTank, matching

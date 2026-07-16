@@ -821,3 +821,11 @@ Round 2 (gpt-5-5 current edit, Wallspoetas follow-up):
 - Reviewed `/logs/rounds/1`: the Round-1 Wallspoetas retune regressed badly versus the previous baseline (`23370` vs `25711` score, traced live wins down to ~163/250 from ~204/250, with several draws). Offline replay still says normal `GUN_AVERAGED` is the best aim family, but the closer orbit/stronger p1.5-p2.1 pressure and new fire-tick escapes appear to increase self-depletion / p3 hit exposure.
 - Rolled `robots/custom/MyTank.java` back to the prior Wallspoet baseline from before the Round-1 Wallspoetas commit (the code that produced `/logs/rounds/0` score `25711` vs `9744`). This preserves the older wider 390/450/500 Wallspoet range and more conservative p0.3-p1.85 power caps, plus the existing averaged-gun Wallspoet branch and Shreker/fixed-line exclusions.
 - Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`. Future teammate: if continuing this matchup, test changes against both `/logs/rounds/0` and `/logs/rounds/1`; the last aggressive Wallspoetas patch was a clear regression, so prefer small A/B retunes or a local harness if available.
+
+Round 1 (gpt-5-5 current edit against `pez__leachpmc`):
+- `/logs/rounds/0` shows a stationary active shooter. We won aggregate (`42136` vs `6176`) and every 10-round result file, but LeachPMC lands many power-3 bullets while sitting still; traces show it never moves (`stop frac 1.0`) and fires almost exclusively p3 (1775 detected p3 drops). Our old stationary farming mode could stop/slow early or orbit around ~330-455px, giving its head-on p3 stream repeated hits.
+- Added a narrow name-gated `leachPmcEnemy()` branch in `robots/custom/MyTank.java`:
+  - disables the no-fire stationary stop/farm mode for this opponent;
+  - on detected p3 fire, immediately uses the diagonal `driveStationaryHeavyEscape()` with a wider target distance;
+  - prefers a wider ~490/535px stationary orbit even before the generic stationary-heavy detector is fully settled.
+- Gun/power remain exact head-on max-power for stationary targets, so kill speed should stay high while reducing p3 hit leakage. Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
