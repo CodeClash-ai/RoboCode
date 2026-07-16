@@ -43,6 +43,7 @@ public class MyTank extends AdvancedRobot {
     private int trackerApproachScans = 0;
     private int npcSniperScans = 0;
     private int dominatorScans = 0;
+    private int shrekerScans = 0;
     private int tannerWallScans = 0;
     private int waveSurfScans = 0;
     private int juggernautScans = 0;
@@ -227,6 +228,15 @@ public class MyTank extends AdvancedRobot {
         } else {
             dominatorScans = Math.max(0, dominatorScans - 1);
         }
+        if (shrekerSignatureRaw()) {
+            // Current alexbay218__shreker profile: low-turn stop/go mover that spends
+            // repeated power-3 bullets.  It is closest to M9/MarkRobo geometrically, but
+            // the power-3 stream punishes our old max/slow-target fallback in long games.
+            // Keep a sticky confirmation once the p3 stop/go pattern appears.
+            shrekerScans = Math.min(100, shrekerScans + 6);
+        } else {
+            shrekerScans = Math.max(0, shrekerScans - 1);
+        }
 
         // NPCSniper can briefly leave the wall/straight signature late in long
         // rounds, exactly when we most need its low-energy conservation caps.
@@ -315,6 +325,14 @@ public class MyTank extends AdvancedRobot {
                 drivePerpendicularEscape(absBearing, 230.0);
                 return;
             }
+            if (shrekerEnemy()) {
+                // Shreker fires mostly power-3 from stop/go/straight positions.  A simple
+                // orbit reversal left us eating long p3 streams in the losing traces; cross
+                // the firing line on every detected shot, with a larger step once reserve
+                // is no longer huge.
+                drivePerpendicularEscape(absBearing, getEnergy() < 42.0 ? 340.0 : 270.0);
+                return;
+            }
             if (mediumStopGoDuelist() && getEnergy() < 44.0) {
                 // MarkRobo-style medium stop/go duelists can win only after long
                 // exchanges.  When our reserve is getting low, sidestep on their
@@ -331,7 +349,7 @@ public class MyTank extends AdvancedRobot {
                 drivePerpendicularEscape(absBearing, getEnergy() < 38.0 ? 285.0 : 245.0);
                 return;
             }
-            if (dominatorEnemy()) {
+        if (dominatorEnemy()) {
                 // DominatorX fires medium bullets often; when reserve is no longer huge,
                 // cross the shot line instead of only reversing along the same orbit.
                 drivePerpendicularEscape(absBearing, getEnergy() < 42.0 ? 310.0 : 250.0);
@@ -420,6 +438,10 @@ public class MyTank extends AdvancedRobot {
             // Late losses against the current power-3 turner were decided by one more
             // heavy hit while we were low.  Reopen range before resuming the orbit.
             drivePerpendicularEscape(absBearing, 380.0);
+            return;
+        }
+        if (shrekerEnemy() && getEnergy() < 38.0 && e.getDistance() < 360.0) {
+            drivePerpendicularEscape(absBearing, 410.0);
             return;
         }
         if (m9WallStopGoEnemy() && getEnergy() < 30.0 && e.getDistance() < 310.0) {
@@ -517,6 +539,11 @@ public class MyTank extends AdvancedRobot {
             // before its random spinning gun can leak stray hits.  Keep the wider
             // cold-start range for awkward spawn/wall approaches.
             preferredDistance = (virtualSamples > 10 && virtualGunError[GUN_CIRCULAR] < 55.0) ? 305.0 : 340.0;
+        } else if (shrekerEnemy()) {
+            // Shreker's gun is a real p3 threat, but replay shows close-ish damped/head-on
+            // shots hit far better than long max-power chases.  Stay moderate while healthy
+            // and open range as our reserve falls.
+            preferredDistance = getEnergy() < 18.0 ? 535.0 : (getEnergy() < 38.0 ? 455.0 : 345.0);
         } else if (dominatorEnemy()) {
             // DominatorX is an active medium-power mixed straight/turn mover.  Replay of
             // round-0 traces favored head-on/wall-damped over full lead; stay moderately
@@ -853,6 +880,22 @@ public class MyTank extends AdvancedRobot {
             // The approach is highly predictable; max-power linear shots shorten
             // the round and reduce the time available for close-range Tracker fire.
             power = Math.max(power, distance < 640 ? 3.0 : 2.55);
+        }
+        if (shrekerEnemy()) {
+            // Losses were self-depletion against repeated p3 fire.  Use fast medium shots
+            // while healthy (head/wall-damped replay error improves at lower power), then
+            // sharply conserve.  If Shreker is nearly dead, spend only a small lethal shot.
+            if (e.getEnergy() < 9.0 && getEnergy() > 5.5) {
+                power = Math.min(Math.max(power, lethalPower(e.getEnergy())), 1.65);
+            } else if (getEnergy() > 62.0) {
+                power = Math.min(Math.max(power, distance < 380 ? 1.85 : 1.55), 1.95);
+            } else if (getEnergy() > 38.0) {
+                power = Math.min(Math.max(power, distance < 360 ? 1.20 : 0.95), 1.35);
+            } else if (getEnergy() > 18.0) {
+                power = Math.min(power, distance < 330 ? 0.45 : 0.28);
+            } else {
+                power = Math.min(power, getEnergy() < 8.0 ? 0.12 : 0.20);
+            }
         }
         if (dominatorEnemy()) {
             // DominatorX losses are self-depletion medium-power duels.  Round-1 traces
@@ -1258,6 +1301,13 @@ public class MyTank extends AdvancedRobot {
             // advantage from round 1 remains intact.
             gun = (virtualSamples > 20 && virtualGunError[GUN_AVERAGED] + 6.0 < virtualGunError[GUN_CIRCULAR])
                     ? GUN_AVERAGED : GUN_CIRCULAR;
+        } else if (shrekerEnemy()) {
+            // Offline replay on alexbay218__shreker favors pure head-on, with the damped
+            // wall/stop-go averaged gun second; full linear/circular badly over-lead its
+            // stops and wall bounces.  Use head-on once virtual waves agree, otherwise the
+            // damped averaged fallback during early wall/stop bursts.
+            gun = (virtualSamples > 18 && virtualGunError[GUN_AVERAGED] + 4.0 < virtualGunError[GUN_HEAD_ON])
+                    ? GUN_AVERAGED : GUN_HEAD_ON;
         } else if (dominatorEnemy()) {
             // Round-0 DominatorX replay ranks head-on best; full linear/circular over-lead
             // its stop/reverse/wall bounces, and averaged still carries too much drift.
@@ -1453,6 +1503,9 @@ public class MyTank extends AdvancedRobot {
         if (waveSurfingEnemy()) {
             tolerance = Math.min(tolerance, Math.atan2(13.0, distance));
         }
+        if (shrekerEnemy()) {
+            tolerance = Math.min(tolerance, Math.atan2(14.0, distance));
+        }
         if (dominatorEnemy()) {
             tolerance = Math.min(tolerance, Math.atan2(15.0, distance));
         }
@@ -1493,6 +1546,9 @@ public class MyTank extends AdvancedRobot {
             // down to 0.2 energy, became disabled, and handed the opponent survival points
             // despite it scoring no bullet damage.  If it is not nearly dead, bank the
             // remaining energy and try to win/draw on survival instead of self-killing.
+            fireAllowed = false;
+        }
+        if (shrekerEnemy() && getEnergy() < 10.0 && e.getEnergy() > 10.0) {
             fireAllowed = false;
         }
         if (dominatorEnemy() && getEnergy() < 9.0 && e.getEnergy() > 12.0) {
@@ -1564,6 +1620,31 @@ public class MyTank extends AdvancedRobot {
         return crazyEnemyScans > 3;
     }
 
+    private boolean shrekerEnemy() {
+        return shrekerScans > 0 || shrekerSignatureRaw();
+    }
+
+    private boolean shrekerSignatureRaw() {
+        // alexbay218__shreker in /logs/rounds/0: low-turn stop/go/straight mover that
+        // fires many power-3 bullets.  It is not the medium-speed turning p3 bots
+        // (Juggernaut/Jeujdapeu) and not the very slow p2 wall M9; damped/head-on plus
+        // medium-power conservation is safer than generic max-power slow-target farming.
+        return enemyFireCount > 2
+                && enemyFirePowerSamples > 1
+                && enemyFirePowerAvg > 2.35
+                && enemySpeedAvg > 1.1
+                && enemySpeedAvg < 3.8
+                && (stopGoEnemyScans > 5 || straightEnemyScans > 8 || wallEnemyScans > 5)
+                && enemyAbsTurnRateAvg < 0.045
+                && crazyEnemyScans <= 4
+                && !stationaryShooter()
+                && !spinBotEnemy()
+                && !fixedHeadingHighPowerShooter()
+                && !fixedHeadingMediumShooter()
+                && !fixedHeadingStopGoEnemy()
+                && !fixedHeadingLineEnemy();
+    }
+
     private boolean dominatorEnemy() {
         return dominatorScans > 0 || dominatorSignatureRaw();
     }
@@ -1613,6 +1694,7 @@ public class MyTank extends AdvancedRobot {
                 && enemyAbsTurnRateAvg < 0.095
                 && crazyEnemyScans <= 4
                 && !spinBotEnemy()
+                && !shrekerEnemy()
                 && !fixedHeadingStopGoEnemy()
                 && !fixedHeadingLineEnemy()
                 && !fixedHeadingMediumShooter()
@@ -1962,6 +2044,7 @@ public class MyTank extends AdvancedRobot {
                 && !fixedHeadingLineEnemy()
                 && !fastWallCruiser()
                 && !straightStopGoLinearEnemy()
+                && !shrekerEnemy()
                 && crazyEnemyScans <= 4;
     }
 
@@ -2033,6 +2116,7 @@ public class MyTank extends AdvancedRobot {
                 && !fixedHeadingStopGoEnemy()
                 && !fixedHeadingLineEnemy()
                 && !heavyStopGoShooter()
+                && !shrekerEnemy()
                 && !fastWallCruiser();
     }
 
@@ -2054,6 +2138,7 @@ public class MyTank extends AdvancedRobot {
                 && !fixedHeadingStopGoEnemy()
                 && !fixedHeadingLineEnemy()
                 && !heavyStopGoShooter()
+                && !shrekerEnemy()
                 && !fastWallCruiser()
                 && (virtualSamples < 18 || virtualGunError[GUN_AVERAGED] < 70.0 || bestGunError() < 66.0);
     }
@@ -2258,6 +2343,7 @@ public class MyTank extends AdvancedRobot {
         if (gunType == GUN_AVERAGED && !quadWallEnemy() && (!dangerousWallEnemy() || npcSniperEnemy())
                 && (npcSniperEnemy()
                         || velociRobotEnemy()
+                        || shrekerEnemy()
                         || ((wallEnemyScans > 4 || (stopGoEnemyScans > 8
                                 && (harmlessLowFireEnemy() || activeStopGoEnemy() || heavyStopGoShooter() || mediumStopGoShooter())))
                             && !(stopGoEnemyScans <= 8 && straightEnemyScans > 12 && harmlessLowFireEnemy()
@@ -2270,7 +2356,9 @@ public class MyTank extends AdvancedRobot {
             // style clean edge runs can need less damping; the exception above and
             // the linear virtual-gun override still let fast straight low-fire runs
             // use fuller prediction when there have not been recent stops.
-            if (npcSniperEnemy()) {
+            if (shrekerEnemy()) {
+                velocity = limit(-2.0, 0.30 * velocity + 0.40 * enemyVelocityAvg, 2.0);
+            } else if (npcSniperEnemy()) {
                 // NPCSniper traces prefer a little more velocity carry than old
                 // wallavg, but far less than full averaged/linear prediction.
                 velocity = limit(-2.6, 0.30 * velocity + 0.45 * enemyVelocityAvg, 2.6);
@@ -2389,6 +2477,11 @@ public class MyTank extends AdvancedRobot {
     }
 
     public void onHitByBullet(HitByBulletEvent e) {
+        if (shrekerEnemy()) {
+            reverseDirection();
+            drivePerpendicularEscape(lastEnemyAbsBearing, getEnergy() < 42.0 ? 430.0 : 310.0);
+            return;
+        }
         if (turningHighPowerEnemy()) {
             // Jeujdapeu-style p3 turners only win/draw after a late bullet connects.
             // Keep crossing/opening the line after a hit instead of resuming the generic

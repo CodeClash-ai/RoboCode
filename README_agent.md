@@ -708,3 +708,9 @@ Round 2 (gpt-5-5 current edit, DominatorX follow-up):
   - Dominator power caps are more conservative: only ~1.55-1.9 above 68 energy, ~0.9-1.25 mid, sub-0.42 below 24, and tiny reserve shots thereafter.
   - Added a final reserve guard: below 9 energy, stop firing if Dominator still has >12 energy, instead of self-disabling with harmless pinpricks.
 - Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
+
+Round 1 (gpt-5-5 current edit against `alexbay218__shreker`):
+- `/logs/rounds/0` shows a winning but lossy matchup: aggregate `31744` vs `14148`; trace.md reports 228/250 wins, 13 Shreker wins, 9 draws. Shreker is a low-turn stop/go/straight mover (avg speed ~2.8, stopped ~26%, straight ~62%) that fires many mostly power-3 bullets (~25-32 detected drops/game, avg drop ~2.8). Losses/draws are self-depletion or p3 streams in long rounds, often with Shreker still alive on 5-15 energy.
+- `tools/offline_gun_eval.py '/logs/rounds/0/sim_*.jsonl'` says head-on is best overall (`head` mean ~47px) with damped wallavg second (~52px); full linear/circular over-lead (~76px). A quick fixed-power replay showed lower/faster head-on bullets reduce future error vs p3.
+- Added sticky `shrekerEnemy()` detection in `robots/custom/MyTank.java`: repeated high-power fire + low-turn stop/go/straight motion. This branch forces head-on unless virtual waves clearly favor damped averaged, uses medium/cheap bullet caps (healthy ~1.55-1.95, low-energy pinpricks/lethal finishers), moderate/widening orbit (~345 healthy, 455/535 low), perpendicular dodges on Shreker fire and bullet hits, a reserve no-fire guard below 10 energy when Shreker is not near death, and a custom damped averaged predictor when selected.
+- Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
