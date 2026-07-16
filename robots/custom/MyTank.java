@@ -376,13 +376,22 @@ public class MyTank extends AdvancedRobot {
                 drivePerpendicularEscape(absBearing, getEnergy() < 26.0 ? 330.0 : 255.0);
                 return;
             }
-            if ((fixedHeadingMediumShooter() || activeHighPowerShooter()) && getEnergy() < 42.0) {
+            if (!robrrratEnemy() && (fixedHeadingMediumShooter() || activeHighPowerShooter()) && getEnergy() < 42.0) {
                 // Chilibot/Ultron-style shooters become dangerous once our reserve is
                 // low: simply flipping the orbit can still leave us on the same bullet
                 // line for medium/high-power head-on shots.  On the fire tick, spend a
                 // short movement command on a clean perpendicular escape before the
                 // normal range controller resumes on the following scans.
                 drivePerpendicularEscape(absBearing, 230.0);
+                return;
+            }
+            if (robrrratEnemy()) {
+                // sacdalance__robrrrat is a mixed fast/stop mover with a very high-power,
+                // fairly accurate gun.  The remaining round-0 live losses were energy
+                // depletion after eating p3 streams, often while we kept a close orbit.
+                // Cross its fire line immediately and reopen range before resuming the
+                // averaged-gun exchange.
+                drivePerpendicularEscape(absBearing, getEnergy() < 38.0 ? 455.0 : 350.0);
                 return;
             }
             if (maximbotEnemy()) {
@@ -622,6 +631,12 @@ public class MyTank extends AdvancedRobot {
             // and spent max-power shots; widen the lane so fire-tick reversals have time
             // to clear its head-on bullets while still keeping linear shots reasonable.
             preferredDistance = getEnergy() < 24.0 ? 560.0 : (getEnergy() < 48.0 ? 520.0 : 475.0);
+        } else if (robrrratEnemy()) {
+            // Current sacdalance__robrrrat fires mostly power-3 and hit the old close
+            // ~285-330px exchange hard enough to steal a few live wins.  Stay at a
+            // moderate/wide averaged-gun band: still short enough for p2-ish bullets,
+            // but with more lateral time against its simple high-power aim.
+            preferredDistance = getEnergy() < 22.0 ? 520.0 : (getEnergy() < 45.0 ? 470.0 : 395.0);
         } else if (maximbotEnemy()) {
             // Current Maximbot is very hittable by circular aim, but its medium/high gun
             // leaks damage at knife range.  Use a compact circular-shot band while healthy
@@ -991,6 +1006,23 @@ public class MyTank extends AdvancedRobot {
                 power = Math.min(power, 0.15);
             } else {
                 power = Math.min(power, 0.10);
+            }
+        }
+        if (robrrratEnemy()) {
+            // Robrrrat is hittable by averaged/circular aim, but p3 misses plus its own
+            // p3 stream caused all observed losses.  Use faster medium bullets while
+            // healthy and preserve a movement reserve in long rounds; use a capped
+            // lethal/near-lethal shot only when the enemy is already low.
+            if (e.getEnergy() < 9.0 && getEnergy() > 6.0 && distance < 560.0) {
+                power = Math.min(Math.max(power, lethalPower(e.getEnergy())), 1.65);
+            } else if (getEnergy() > 62.0) {
+                power = Math.min(Math.max(power, distance < 430.0 ? 2.25 : 1.95), 2.35);
+            } else if (getEnergy() > 38.0) {
+                power = Math.min(Math.max(power, distance < 380.0 ? 1.40 : 1.10), 1.55);
+            } else if (getEnergy() > 20.0) {
+                power = Math.min(power, distance < 340.0 ? 0.65 : 0.45);
+            } else {
+                power = Math.min(power, getEnergy() < 9.0 ? 0.12 : 0.22);
             }
         }
         // If all virtual guns are missing badly (as with wave-surfing GF-style
@@ -1507,6 +1539,21 @@ public class MyTank extends AdvancedRobot {
                 power = Math.min(power, 0.10);
             }
         }
+        if (robrrratEnemy()) {
+            // Re-apply after broad slow/stop-go/high-power branches that may have raised
+            // power with Math.max().
+            if (e.getEnergy() < 9.0 && getEnergy() > 6.0 && distance < 560.0) {
+                power = Math.min(power, Math.min(Math.max(lethalPower(e.getEnergy()), 0.35), 1.65));
+            } else if (getEnergy() > 62.0) {
+                power = Math.min(power, distance < 430.0 ? 2.25 : 1.95);
+            } else if (getEnergy() > 38.0) {
+                power = Math.min(power, distance < 380.0 ? 1.40 : 1.10);
+            } else if (getEnergy() > 20.0) {
+                power = Math.min(power, distance < 340.0 ? 0.65 : 0.45);
+            } else {
+                power = Math.min(power, getEnergy() < 9.0 ? 0.12 : 0.22);
+            }
+        }
         if (hardToHitMover) {
             if (getEnergy() < 12) {
                 power = Math.min(power, 0.15);
@@ -1580,6 +1627,11 @@ public class MyTank extends AdvancedRobot {
         int gun = chooseGun();
         if (stationaryScans > 5) {
             gun = GUN_HEAD_ON;
+        } else if (robrrratEnemy()) {
+            // Offline replay for sacdalance__robrrrat slightly favors the normal averaged
+            // predictor over circular and clearly over head-on/linear.  Force it so broad
+            // active-high-power/crazy classifiers cannot steal the gun.
+            gun = GUN_AVERAGED;
         } else if (sampleWallsEnemy()) {
             // sample.Walls drives long straight cardinal legs around the border; offline
             // replay on the current traces ranks full linear lead ahead of averaged/wallavg.
@@ -1904,6 +1956,11 @@ public class MyTank extends AdvancedRobot {
             // circular bullets cannot finish it before another medium/high shot lands.
             fireAllowed = false;
         }
+        if (robrrratEnemy() && getEnergy() < 12.0 && e.getEnergy() > 11.0) {
+            // Last-reserve pinpricks cannot out-damage a remaining p3 shooter; keep moving
+            // unless it is already close enough for a capped finisher.
+            fireAllowed = false;
+        }
         if (sampleWallsEnemy() && getEnergy() < 14.0 && e.getEnergy() > 12.0) {
             // The current Walls opponent's simple gun is accurate; if it still has a large
             // stack, last-reserve 0.1-0.2 bullets only self-disable us before enough damage
@@ -1954,6 +2011,13 @@ public class MyTank extends AdvancedRobot {
         return best;
     }
 
+
+    private boolean robrrratEnemy() {
+        // Current /logs/rounds/0 opponent: sacdalance__robrrrat, a mixed fast/stop mover
+        // with frequent mostly power-3 fire.  Name-gate the conservative averaged-gun
+        // branch to avoid disturbing the many historical generic high-power special cases.
+        return enemyName != null && enemyName.contains("sacdalance__robrrrat");
+    }
 
     private boolean crawlerEnemy() {
         return enemyName != null && enemyName.contains("txeverson__crawler");
@@ -2970,6 +3034,11 @@ public class MyTank extends AdvancedRobot {
             // lateral side and take a long crossing escape before resuming the wide orbit.
             reverseDirection();
             driveSampleWallsEscape(lastEnemyAbsBearing, getEnergy() < 38.0 ? 575.0 : 470.0);
+            return;
+        }
+        if (robrrratEnemy()) {
+            reverseDirection();
+            drivePerpendicularEscape(lastEnemyAbsBearing, getEnergy() < 38.0 ? 500.0 : 380.0);
             return;
         }
         if (maximbotEnemy()) {
