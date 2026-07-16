@@ -684,6 +684,14 @@ public class MyTank extends AdvancedRobot {
             driveAwayFrom(absBearing, getEnergy() < 34.0 ? 575.0 : 390.0);
             return;
         }
+        if (superWallsEnemy() && e.getDistance() < (getEnergy() < 38.0 ? 390.0 : 300.0)) {
+            // Round-1 SuperWalls specialization won decisively, but the remaining losses
+            // split between long wall chases and occasional close/corner collapses (several
+            // traces dipped under 90px while it still had power-3 shots in flight).  Reopen a
+            // direct gap immediately rather than waiting for the next detected-fire dodge.
+            driveAwayFrom(absBearing, getEnergy() < 38.0 ? 485.0 : 390.0);
+            return;
+        }
         if (m9WallStopGoEnemy() && getEnergy() < 30.0 && e.getDistance() < 310.0) {
             // Avoid low-energy point-blank wall scrambles against the current power-2
             // stop/go shooter; resume the normal close band after a safe gap is open.
@@ -1301,7 +1309,7 @@ public class MyTank extends AdvancedRobot {
             // much smaller future-position error than p2/p3, while the opponent spends energy
             // on p3 shots.  Preserve reserve and use capped lethal finishers only when close.
             if (e.getEnergy() < 18.0 && getEnergy() > 9.0 && distance < 650.0) {
-                power = Math.min(Math.max(power, lethalPower(e.getEnergy())), e.getEnergy() < 10.0 ? 1.65 : 2.05);
+                power = Math.min(Math.max(power, lethalPower(e.getEnergy())), e.getEnergy() < 10.0 ? 1.85 : 2.35);
             } else if (getEnergy() > 62.0) {
                 power = Math.min(Math.max(power, distance < 430.0 ? 1.10 : 0.85), 1.15);
             } else if (getEnergy() > 34.0) {
@@ -1947,7 +1955,7 @@ public class MyTank extends AdvancedRobot {
         if (superWallsEnemy()) {
             // Re-apply after broad wall/slow/dangerous-wall branches that can raise power.
             if (e.getEnergy() < 18.0 && getEnergy() > 9.0 && distance < 650.0) {
-                power = Math.min(power, Math.min(Math.max(lethalPower(e.getEnergy()), 0.35), e.getEnergy() < 10.0 ? 1.65 : 2.05));
+                power = Math.min(power, Math.min(Math.max(lethalPower(e.getEnergy()), 0.35), e.getEnergy() < 10.0 ? 1.85 : 2.35));
             } else if (getEnergy() > 62.0) {
                 power = Math.min(power, distance < 430.0 ? 1.10 : 0.85);
             } else if (getEnergy() > 34.0) {
@@ -2547,7 +2555,10 @@ public class MyTank extends AdvancedRobot {
         }
         if (superWallsEnemy()) {
             tolerance = Math.min(tolerance, Math.atan2(12.0, distance));
-            if ((getEnergy() < 24.0 && e.getEnergy() > 20.0) || (getEnergy() < 14.0 && e.getEnergy() > 9.0)) {
+            if ((getEnergy() < 24.0 && e.getEnergy() > 24.0) || (getEnergy() < 14.0 && e.getEnergy() > 18.0)) {
+                // Preserve reserve against a healthy p3 wall runner, but do not block the
+                // expanded <18-energy finisher band.  Several round-1 losses left SuperWalls
+                // around 10-16 energy while our old guard suppressed useful closing shots.
                 fireAllowed = false;
             }
         }
