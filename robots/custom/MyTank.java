@@ -1010,8 +1010,8 @@ public class MyTank extends AdvancedRobot {
             // P3 shots were self-depleting and slow against this fast perimeter target.
             // Offline trace replay shows faster low-power linear bullets cut future-position
             // error dramatically, while the opponent spends its own energy on p3 misses.
-            if (e.getEnergy() < 8.0 && getEnergy() > 5.0 && distance < 620.0) {
-                power = Math.min(Math.max(power, lethalPower(e.getEnergy())), 1.25);
+            if (e.getEnergy() < 18.0 && getEnergy() > 9.0 && distance < 650.0) {
+                power = Math.min(Math.max(power, lethalPower(e.getEnergy())), e.getEnergy() < 10.0 ? 1.85 : 2.15);
             } else if (getEnergy() > 62.0) {
                 power = Math.min(Math.max(power, distance < 430.0 ? 1.15 : 0.90), 1.20);
             } else if (getEnergy() > 34.0) {
@@ -1555,8 +1555,8 @@ public class MyTank extends AdvancedRobot {
         }
         if (haikuWallsEnemy()) {
             // Re-apply after broad wall/slow branches that may raise power back toward p3.
-            if (e.getEnergy() < 8.0 && getEnergy() > 5.0 && distance < 620.0) {
-                power = Math.min(power, Math.min(Math.max(lethalPower(e.getEnergy()), 0.25), 1.25));
+            if (e.getEnergy() < 18.0 && getEnergy() > 9.0 && distance < 650.0) {
+                power = Math.min(power, Math.min(Math.max(lethalPower(e.getEnergy()), 0.35), e.getEnergy() < 10.0 ? 1.85 : 2.15));
             } else if (getEnergy() > 62.0) {
                 power = Math.min(power, distance < 430.0 ? 1.15 : 0.90);
             } else if (getEnergy() > 34.0) {
@@ -2015,9 +2015,11 @@ public class MyTank extends AdvancedRobot {
         }
         if (haikuWallsEnemy()) {
             tolerance = Math.min(tolerance, Math.atan2(12.0, distance));
-            if (getEnergy() < 14.0 && e.getEnergy() > 9.0) {
-                // If the p3 wall runner still has a stack, last-reserve 0.1 bullets cannot
+            if ((getEnergy() < 24.0 && e.getEnergy() > 20.0) || (getEnergy() < 14.0 && e.getEnergy() > 9.0)) {
+                // If the p3 wall runner still has a stack, reserve bullets cannot
                 // out-damage it before one more hit; bank energy for movement/survival.
+                // Round-1 loss traces showed many late 0.2-0.6 shots into enemies with
+                // 20+ energy; preserving that reserve should outlast more p3 misses.
                 fireAllowed = false;
             }
         }

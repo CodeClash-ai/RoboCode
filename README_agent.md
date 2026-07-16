@@ -872,3 +872,11 @@ Round 1 (gpt-5-5 current edit against `pez__haikuwalls`):
   - widens preferred orbit to ~525-625 and uses the sample-walls perpendicular/away escape on each detected shot and bullet hit;
   - tightens fire tolerance for this matchup.
 - Recompiled successfully: `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
+
+Round 2 (gpt-5-5 current edit, HaikuWalls follow-up):
+- Reviewed `/logs/rounds/1`: the round-1 name-gated `pez__haikuwalls` branch flipped the matchup from losing to winning (`20478` vs `10879`, ~226/250 live wins), but remaining 24 losses are long power-3 wall-runner duels. Loss traces usually have us low on energy while HaikuWalls still has 20-50 energy; our bot then fires many 0.2-0.6 reserve bullets that cannot finish before a p3 hit lands. Some losses also had HaikuWalls under ~10-18 energy where a stronger finisher would likely help.
+- Kept the proven HaikuWalls `GUN_LINEAR`, wide sample-walls escape movement, and low/medium healthy caps. Tiny endgame retune in `robots/custom/MyTank.java`:
+  - expanded HaikuWalls capped-lethal finisher from enemy energy <8 to <18 (cap ~2.15, ~1.85 below 10) while we have >9 energy and range <650;
+  - added a stricter no-fire reserve guard below 24 energy when HaikuWalls still has >20 energy, preserving movement energy instead of donating weak pinpricks in hopeless long chases;
+  - existing <14 energy / enemy >9 no-fire guard remains.
+- Added `tools/analyze_haiku.py` for quick HaikuWalls trace summaries. Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
