@@ -234,8 +234,14 @@ public class MyTank extends AdvancedRobot {
             // the power-3 stream punishes our old max/slow-target fallback in long games.
             // Keep a sticky confirmation once the p3 stop/go pattern appears.
             shrekerScans = Math.min(100, shrekerScans + 6);
-        } else {
-            shrekerScans = Math.max(0, shrekerScans - 1);
+        } else if (shrekerScans > 0) {
+            // Round-1 follow-up traces showed the raw signature can disappear late when
+            // Shreker parks/stops or after our own hits perturb the energy-drop average.
+            // Then generic slow/wall branches re-enable power-3 shots in exactly the
+            // low-energy endgame where we lose/draw.  The raw signature is narrow
+            // (several high-power enemy shots plus low-turn stop/go motion), so once it
+            // has appeared in a round, keep this conservation profile permanently.
+            shrekerScans = Math.max(1, shrekerScans - 1);
         }
 
         // NPCSniper can briefly leave the wall/straight signature late in long
@@ -440,8 +446,11 @@ public class MyTank extends AdvancedRobot {
             drivePerpendicularEscape(absBearing, 380.0);
             return;
         }
-        if (shrekerEnemy() && getEnergy() < 38.0 && e.getDistance() < 360.0) {
-            drivePerpendicularEscape(absBearing, 410.0);
+        if (shrekerEnemy() && getEnergy() < 24.0 && e.getDistance() < 240.0) {
+            // Only force a direct reopen from true knife range.  The wider old 360px guard
+            // pushed us out past 500px in endgames, where our head-on pinpricks arrived too
+            // late and Shreker's existing p3 bullets decided the round.
+            drivePerpendicularEscape(absBearing, 285.0);
             return;
         }
         if (m9WallStopGoEnemy() && getEnergy() < 30.0 && e.getDistance() < 310.0) {
@@ -540,10 +549,11 @@ public class MyTank extends AdvancedRobot {
             // cold-start range for awkward spawn/wall approaches.
             preferredDistance = (virtualSamples > 10 && virtualGunError[GUN_CIRCULAR] < 55.0) ? 305.0 : 340.0;
         } else if (shrekerEnemy()) {
-            // Shreker's gun is a real p3 threat, but replay shows close-ish damped/head-on
-            // shots hit far better than long max-power chases.  Stay moderate while healthy
-            // and open range as our reserve falls.
-            preferredDistance = getEnergy() < 18.0 ? 535.0 : (getEnergy() < 38.0 ? 455.0 : 345.0);
+            // Shreker's gun is a real p3 threat.  Round-1 follow-up losses show the old
+            // 455/535px reserve orbit made final head-on shots slow and inaccurate while
+            // already-fired p3 bullets caught us.  Stay in a compact band for short bullet
+            // flight, widening only slightly in the last reserve.
+            preferredDistance = getEnergy() < 14.0 ? 420.0 : (getEnergy() < 34.0 ? 360.0 : 330.0);
         } else if (dominatorEnemy()) {
             // DominatorX is an active medium-power mixed straight/turn mover.  Replay of
             // round-0 traces favored head-on/wall-damped over full lead; stay moderately
@@ -884,8 +894,12 @@ public class MyTank extends AdvancedRobot {
         if (shrekerEnemy()) {
             // Losses were self-depletion against repeated p3 fire.  Use fast medium shots
             // while healthy (head/wall-damped replay error improves at lower power), then
-            // sharply conserve.  If Shreker is nearly dead, spend only a small lethal shot.
-            if (e.getEnergy() < 9.0 && getEnergy() > 5.5) {
+            // sharply conserve.  Follow-up losses often had Shreker under ~16 energy while
+            // we kept firing pinpricks and an old p3 bullet decided the round; if we still
+            // have a real reserve, spend a capped lethal/near-lethal shot to end it now.
+            if (e.getEnergy() < 18.0 && getEnergy() > 10.0 && distance < 620.0) {
+                power = Math.min(Math.max(power, lethalPower(e.getEnergy())), 2.55);
+            } else if (e.getEnergy() < 9.0 && getEnergy() > 5.5) {
                 power = Math.min(Math.max(power, lethalPower(e.getEnergy())), 1.65);
             } else if (getEnergy() > 62.0) {
                 power = Math.min(Math.max(power, distance < 380 ? 1.85 : 1.55), 1.95);
@@ -1549,6 +1563,12 @@ public class MyTank extends AdvancedRobot {
             fireAllowed = false;
         }
         if (shrekerEnemy() && getEnergy() < 10.0 && e.getEnergy() > 10.0) {
+            fireAllowed = false;
+        }
+        if (shrekerEnemy() && getEnergy() < 22.0 && e.getEnergy() > 18.0) {
+            // If Shreker still has a substantial stack, tiny reserve bullets mostly just
+            // self-disable us before enough damage lands.  Preserve energy for dodging until
+            // it is actually in lethal/near-lethal range.
             fireAllowed = false;
         }
         if (dominatorEnemy() && getEnergy() < 9.0 && e.getEnergy() > 12.0) {

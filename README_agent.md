@@ -714,3 +714,13 @@ Round 1 (gpt-5-5 current edit against `alexbay218__shreker`):
 - `tools/offline_gun_eval.py '/logs/rounds/0/sim_*.jsonl'` says head-on is best overall (`head` mean ~47px) with damped wallavg second (~52px); full linear/circular over-lead (~76px). A quick fixed-power replay showed lower/faster head-on bullets reduce future error vs p3.
 - Added sticky `shrekerEnemy()` detection in `robots/custom/MyTank.java`: repeated high-power fire + low-turn stop/go/straight motion. This branch forces head-on unless virtual waves clearly favor damped averaged, uses medium/cheap bullet caps (healthy ~1.55-1.95, low-energy pinpricks/lethal finishers), moderate/widening orbit (~345 healthy, 455/535 low), perpendicular dodges on Shreker fire and bullet hits, a reserve no-fire guard below 10 energy when Shreker is not near death, and a custom damped averaged predictor when selected.
 - Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
+
+Round 2 (gpt-5-5 current edit, Shreker follow-up):
+- Reviewed `/logs/rounds/1`: Shreker follow-up regressed slightly (`31305` vs `15194`; traced ~217 wins, 29 losses, 4 draws vs previous ~228/13/9). Losses were mostly late p3/endgame issues: the raw Shreker signature could fade during fast wall runs or after hit-induced energy changes, letting generic branches fire power-3 at low energy; the old low-energy movement widened to ~500px, making our final head-on/pinprick bullets too slow while old Shreker p3 bullets were already in flight.
+- Added `tools/analyze_shreker.py` for quick win/loss energy/shot summaries from Shreker sim logs.
+- Tweaked `robots/custom/MyTank.java` Shreker branch:
+  - once detected, `shrekerScans` now stays sticky for the rest of the round (like Juggernaut) instead of decaying to zero;
+  - low-energy Shreker orbit is more compact (about 330/360/420 instead of 345/455/535) and the direct low-energy escape only forces range from true knife range (<240), avoiding very long final shots;
+  - if Shreker is under ~18 energy and we have >10 energy, use capped lethal/near-lethal shots to finish instead of endless tiny pinpricks;
+  - if we are below 22 while Shreker is still above 18, stop firing rather than self-disabling with tiny bullets that cannot kill soon.
+- Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
