@@ -396,6 +396,14 @@ public class MyTank extends AdvancedRobot {
                 driveSampleWallsEscape(absBearing, getEnergy() < 34.0 ? 650.0 : 535.0);
                 return;
             }
+            if (superWallsEnemy()) {
+                // mgalushka__superwalls is a p3 wall/perimeter shooter.  Round-0 losses were
+                // mostly bullet-damage trades, not inability to survive; make every detected
+                // shot trigger a wide sample-walls-style lane crossing instead of the generic
+                // dangerous-wall orbit reversal.
+                driveSampleWallsEscape(absBearing, getEnergy() < 34.0 ? 675.0 : 555.0);
+                return;
+            }
             if (haikuWallsEnemy()) {
                 // HaikuWalls fires a stream of power-3 head-on-ish shots from the border.
                 // Treat every detected shot as a reason to make a long perpendicular/away
@@ -805,6 +813,11 @@ public class MyTank extends AdvancedRobot {
             // 390px band.  Loss traces were decided by p3 hits after we dipped into
             // ~150-220px scrambles.
             preferredDistance = getEnergy() < 24.0 ? 555.0 : (getEnergy() < 52.0 ? 500.0 : 430.0);
+        } else if (superWallsEnemy()) {
+            // SuperWalls fires mostly max-power while wall-bound.  Hold a HaikuWalls-like
+            // wide lane to make those slow p3 shots miss; use normal averaged aiming below
+            // rather than the old damped wall predictor so our fast bullets still connect.
+            preferredDistance = getEnergy() < 24.0 ? 640.0 : (getEnergy() < 50.0 ? 595.0 : 535.0);
         } else if (haikuWallsEnemy()) {
             // Stay well outside the close wall-gun band.  HaikuWalls drains itself with
             // power-3 shots; our priority is surviving those bullets while linear p1-ish
@@ -1281,6 +1294,22 @@ public class MyTank extends AdvancedRobot {
                 power = Math.min(power, distance < 320.0 ? 0.35 : 0.24);
             } else {
                 power = Math.min(power, getEnergy() < 8.0 ? 0.10 : 0.16);
+            }
+        }
+        if (superWallsEnemy()) {
+            // Offline replay for SuperWalls shows faster sub/low-power averaged bullets have
+            // much smaller future-position error than p2/p3, while the opponent spends energy
+            // on p3 shots.  Preserve reserve and use capped lethal finishers only when close.
+            if (e.getEnergy() < 18.0 && getEnergy() > 9.0 && distance < 650.0) {
+                power = Math.min(Math.max(power, lethalPower(e.getEnergy())), e.getEnergy() < 10.0 ? 1.65 : 2.05);
+            } else if (getEnergy() > 62.0) {
+                power = Math.min(Math.max(power, distance < 430.0 ? 1.10 : 0.85), 1.15);
+            } else if (getEnergy() > 34.0) {
+                power = Math.min(Math.max(power, distance < 380.0 ? 0.68 : 0.48), 0.72);
+            } else if (getEnergy() > 16.0) {
+                power = Math.min(power, distance < 340.0 ? 0.30 : 0.20);
+            } else {
+                power = Math.min(power, getEnergy() < 8.0 ? 0.10 : 0.15);
             }
         }
         if (haikuWallsEnemy()) {
@@ -1915,6 +1944,20 @@ public class MyTank extends AdvancedRobot {
                 power = Math.min(power, getEnergy() < 8.0 ? 0.10 : 0.16);
             }
         }
+        if (superWallsEnemy()) {
+            // Re-apply after broad wall/slow/dangerous-wall branches that can raise power.
+            if (e.getEnergy() < 18.0 && getEnergy() > 9.0 && distance < 650.0) {
+                power = Math.min(power, Math.min(Math.max(lethalPower(e.getEnergy()), 0.35), e.getEnergy() < 10.0 ? 1.65 : 2.05));
+            } else if (getEnergy() > 62.0) {
+                power = Math.min(power, distance < 430.0 ? 1.10 : 0.85);
+            } else if (getEnergy() > 34.0) {
+                power = Math.min(power, distance < 380.0 ? 0.68 : 0.48);
+            } else if (getEnergy() > 16.0) {
+                power = Math.min(power, distance < 340.0 ? 0.30 : 0.20);
+            } else {
+                power = Math.min(power, getEnergy() < 8.0 ? 0.10 : 0.15);
+            }
+        }
         if (haikuWallsEnemy()) {
             // Re-apply after broad wall/slow branches that may raise power back toward p3.
             if (e.getEnergy() < 18.0 && getEnergy() > 9.0 && distance < 650.0) {
@@ -2108,6 +2151,10 @@ public class MyTank extends AdvancedRobot {
             // linear/circular over-lead stops and reversals.
             gun = GUN_AVERAGED;
         } else if (smallPoetEnemy()) {
+            gun = GUN_AVERAGED;
+        } else if (superWallsEnemy()) {
+            // Shot replay for SuperWalls favors the normal averaged predictor over linear
+            // and the damped wallavg predictor; force it so broad wall branches do not steal.
             gun = GUN_AVERAGED;
         } else if (haikuWallsEnemy()) {
             // HaikuWalls runs the full rectangle perimeter; linear lead is far ahead of
@@ -2498,6 +2545,12 @@ public class MyTank extends AdvancedRobot {
                 fireAllowed = false;
             }
         }
+        if (superWallsEnemy()) {
+            tolerance = Math.min(tolerance, Math.atan2(12.0, distance));
+            if ((getEnergy() < 24.0 && e.getEnergy() > 20.0) || (getEnergy() < 14.0 && e.getEnergy() > 9.0)) {
+                fireAllowed = false;
+            }
+        }
         if (haikuWallsEnemy()) {
             tolerance = Math.min(tolerance, Math.atan2(12.0, distance));
             if ((getEnergy() < 24.0 && e.getEnergy() > 20.0) || (getEnergy() < 14.0 && e.getEnergy() > 9.0)) {
@@ -2776,6 +2829,13 @@ public class MyTank extends AdvancedRobot {
         // Current /logs/rounds/0 opponent: stationary power-3 shooter.  Name-gated so the
         // old SittingDuck/infinitylock stationary no-fire farm mode remains intact.
         return enemyName != null && enemyName.contains("pez__leachpmc");
+    }
+
+    private boolean superWallsEnemy() {
+        // Current opponent mgalushka__superwalls: wall/perimeter mover with frequent
+        // max-power fire.  It beat the generic wall-poet/dangerous-wall blend by landing
+        // far more bullet damage than we did; use a specific wide/cheap/averaged profile.
+        return enemyName != null && enemyName.contains("mgalushka__superwalls");
     }
 
     private boolean sampleWallsEnemy() {
@@ -3658,7 +3718,7 @@ public class MyTank extends AdvancedRobot {
             // especially with fast cheap bullets.
             velocity = limit(-1.2, 0.20 * velocity + 0.20 * enemyVelocityAvg, 1.2);
             turnRate = 0.0;
-        } else if (gunType == GUN_AVERAGED && !quadWallEnemy() && (!dangerousWallEnemy() || npcSniperEnemy())
+        } else if (gunType == GUN_AVERAGED && !superWallsEnemy() && !quadWallEnemy() && (!dangerousWallEnemy() || npcSniperEnemy())
                 && (npcSniperEnemy()
                         || velociRobotEnemy()
                         || shrekerEnemy()
@@ -3852,6 +3912,11 @@ public class MyTank extends AdvancedRobot {
             // name-gated wide averaged-gun orbit.
             reverseDirection();
             driveSampleWallsEscape(lastEnemyAbsBearing, getEnergy() < 34.0 ? 680.0 : 560.0);
+            return;
+        }
+        if (superWallsEnemy()) {
+            reverseDirection();
+            driveSampleWallsEscape(lastEnemyAbsBearing, getEnergy() < 34.0 ? 700.0 : 575.0);
             return;
         }
         if (haikuWallsEnemy()) {
