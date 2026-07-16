@@ -956,3 +956,12 @@ Round 1 (gpt-5-5 current edit against `pez__wallspoethaiku`):
   - tighter fire tolerance and low-energy no-fire guard against still-healthy p3 stack;
   - excluded from generic hard-to-hit range override.
 - Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`. Next teammate: compare `/logs/rounds/1` to see if low-power linear/wide dodge improves survival enough; if too timid (low bullet damage while still losing), consider p1.3-1.6 healthy or slightly closer 470/535 range.
+
+Round 2 (gpt-5-5 current edit, WallspoetHaiku follow-up):
+- Reviewed `/logs/rounds/1`: the new name-gated `pez__wallspoethaiku` profile was a huge improvement over round 0 (`28176` vs `20516` aggregate; live survival about 245/250 vs 157/250). Linear gun + wide orbit + low/medium bullet caps are clearly the right direction, so I kept that core.
+- Remaining 5 losses were corner/close-collapse or endgame cases: min distances often dropped below ~90px and we ate multiple p3 hits; in some losses WallspoetHaiku reached the 11-18 energy band while our reserve guard/low caps left it alive to land another p3.
+- Tiny targeted changes in `robots/custom/MyTank.java`:
+  - added an immediate close-range `driveAwayFrom()` for WallspoetHaiku when distance falls below ~310px (healthy) / ~390px (low energy), opening to ~385/470 instead of waiting for the next fire tick;
+  - expanded WallspoetHaiku near-lethal finishers: enemy energy <18 can now use capped ~2.55 (or ~1.95 below 10) when we have >9 energy and range <650;
+  - relaxed the no-fire reserve guard so it no longer blocks that <18-energy finisher band (still preserves energy when we are <24 and the enemy is >24, or <14 and enemy >18).
+- Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.

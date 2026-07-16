@@ -621,6 +621,14 @@ public class MyTank extends AdvancedRobot {
             drivePerpendicularEscape(absBearing, 285.0);
             return;
         }
+        if (wallspoetHaikuEnemy() && e.getDistance() < (getEnergy() < 38.0 ? 390.0 : 310.0)) {
+            // Round-1 follow-up still had a few losses, and they were the traces where the
+            // wide orbit collapsed into ~50-110px wall/corner scrambles while the p3 wall
+            // runner kept firing.  Do not wait for the next energy-drop dodge; immediately
+            // reopen a direct gap, especially once our reserve is low.
+            driveAwayFrom(absBearing, getEnergy() < 38.0 ? 470.0 : 385.0);
+            return;
+        }
         if (m9WallStopGoEnemy() && getEnergy() < 30.0 && e.getDistance() < 310.0) {
             // Avoid low-energy point-blank wall scrambles against the current power-2
             // stop/go shooter; resume the normal close band after a safe gap is open.
@@ -1144,7 +1152,10 @@ public class MyTank extends AdvancedRobot {
             // error.  Let the opponent spend itself; use cheap/medium linear pressure plus
             // bounded finishers instead of the old p2+ average that self-depleted losses.
             if (e.getEnergy() < 18.0 && getEnergy() > 9.0 && distance < 650.0) {
-                power = Math.min(Math.max(power, lethalPower(e.getEnergy())), e.getEnergy() < 10.0 ? 1.80 : 2.20);
+                // Round-1 losses sometimes had us sitting on 14-20 energy while Haiku was
+                // already below ~18.  A slightly stronger bounded finisher is worth the small
+                // extra spend; otherwise the old p0.2/no-fire reserve let another p3 arrive.
+                power = Math.min(Math.max(power, lethalPower(e.getEnergy())), e.getEnergy() < 10.0 ? 1.95 : 2.55);
             } else if (getEnergy() > 62.0) {
                 power = Math.min(Math.max(power, distance < 430.0 ? 1.15 : 0.90), 1.25);
             } else if (getEnergy() > 34.0) {
@@ -1762,7 +1773,7 @@ public class MyTank extends AdvancedRobot {
         if (wallspoetHaikuEnemy()) {
             // Re-apply after broad wall/slow branches that may raise power back toward p3.
             if (e.getEnergy() < 18.0 && getEnergy() > 9.0 && distance < 650.0) {
-                power = Math.min(power, Math.min(Math.max(lethalPower(e.getEnergy()), 0.35), e.getEnergy() < 10.0 ? 1.80 : 2.20));
+                power = Math.min(power, Math.min(Math.max(lethalPower(e.getEnergy()), 0.35), e.getEnergy() < 10.0 ? 1.95 : 2.55));
             } else if (getEnergy() > 62.0) {
                 power = Math.min(power, distance < 430.0 ? 1.15 : 0.90);
             } else if (getEnergy() > 34.0) {
@@ -2319,9 +2330,10 @@ public class MyTank extends AdvancedRobot {
         }
         if (wallspoetHaikuEnemy()) {
             tolerance = Math.min(tolerance, Math.atan2(12.0, distance));
-            if ((getEnergy() < 24.0 && e.getEnergy() > 20.0) || (getEnergy() < 14.0 && e.getEnergy() > 12.0)) {
-                // Last-reserve pinpricks did not finish the p3 wall runner in loss traces;
-                // keep movement energy unless it is already in the finisher band.
+            if ((getEnergy() < 24.0 && e.getEnergy() > 24.0) || (getEnergy() < 14.0 && e.getEnergy() > 18.0)) {
+                // Last-reserve pinpricks did not finish a healthy p3 wall runner in loss
+                // traces; keep movement energy unless it is already near the expanded
+                // finisher band.  Do not block shots against 18-and-under enemies.
                 fireAllowed = false;
             }
         }
