@@ -1290,9 +1290,13 @@ public class MyTank extends AdvancedRobot {
         if (poetEnemy()) {
             // Circular prediction is strong here and our energy reserve is usually large.
             // Keep decisive p3 pressure at normal ranges, but downshift before rare long
-            // p3 exchanges can self-deplete us, with bounded finishers under 18 energy.
+            // p3 exchanges can self-deplete us.  Round-1 traces were a perfect survival
+            // sweep with ~90 end energy, so when we still have a healthy reserve use a
+            // true p3 near-lethal finisher under 18 enemy energy instead of leaving Poet
+            // alive for another self-damaging shot cycle.
             if (e.getEnergy() < 18.0 && getEnergy() > 7.0 && distance < 620.0) {
-                power = Math.min(Math.max(power, lethalPower(e.getEnergy())), e.getEnergy() < 9.0 ? 1.80 : 2.60);
+                double finisherCap = getEnergy() > 28.0 ? 3.0 : (e.getEnergy() < 9.0 ? 1.80 : 2.60);
+                power = Math.min(Math.max(power, lethalPower(e.getEnergy())), finisherCap);
             } else if (getEnergy() > 55.0 && distance < 700.0) {
                 power = Math.max(power, distance < 560.0 ? 3.0 : 2.45);
             } else if (getEnergy() > 28.0) {
