@@ -945,3 +945,14 @@ Round 2 (gpt-5-5 current edit, Poet follow-up):
 - `tools/offline_gun_eval.py '/logs/rounds/1/sim_*.jsonl'` still favors circular aim clearly (`circ` mean ~103 vs averaged ~108, head/linear ~149/152). Shot-time replay over our actual fire ticks also favored circular for the dominant p3 shots.
 - Added `tools/analyze_poet.py` for quick future summaries of Poet traces/result files.
 - Tiny score/kill-speed retune in `robots/custom/MyTank.java`: for name-gated Poet only, if Poet is below 18 energy and our bot still has >28 energy, allow a true p3 bounded finisher instead of the old 2.6 cap. Round-1 traces had huge energy reserve and no losses, so this should reduce extra final shot cycles without changing movement/gun behavior. Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
+
+Round 1 (gpt-5-5 current edit against `pez__wallspoethaiku`):
+- `/logs/rounds/0` is a moderate win but not safe: aggregate `20516` vs `15864`, 18/25 ten-round result files won, traced live survival about 157 wins / 90 losses / 3 draws.
+- Added `tools/analyze_wallspoethaiku.py` (quick trace summary with outcome/range/fire stats and worst-loss details). Losses are not classic stopped Wallspoet losses: the opponent is much faster in losses (avg speed ~7.0, ~79% full-speed ticks, only ~6% stopped), wall-heavy (~46% near wall), and fires mostly p3 (~27 shots/loss). Our old branch averaged p2-ish shots and self-depleted; offline replay strongly favors full linear prediction (`lin` mean ~115 at actual old shots vs circ ~117, avg ~136, head ~189; fixed-power replay shows p0.7-p1.1 linear is much more accurate than p2-p3).
+- Added a narrow name-gated `wallspoetHaikuEnemy()` profile in `robots/custom/MyTank.java`:
+  - force `GUN_LINEAR` (instead of generic Wallspoet averaged);
+  - HaikuWalls-like wide orbit (~500/560/620) and sample-walls-style escape on every detected fire / bullet hit;
+  - low/medium-fast linear bullets while healthy (about p0.9-1.15, p0.5-0.8 mid/low) with bounded finishers under enemy 18 energy;
+  - tighter fire tolerance and low-energy no-fire guard against still-healthy p3 stack;
+  - excluded from generic hard-to-hit range override.
+- Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`. Next teammate: compare `/logs/rounds/1` to see if low-power linear/wide dodge improves survival enough; if too timid (low bullet damage while still losing), consider p1.3-1.6 healthy or slightly closer 470/535 range.
