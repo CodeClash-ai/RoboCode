@@ -835,3 +835,9 @@ Round 2 (gpt-5-5 current edit, LeachPMC follow-up):
 - Added a narrow LeachPMC close-overlap escape in `robots/custom/MyTank.java`: below ~105px it immediately drives straight forward/back along the current body axis in the direction that increases separation, rather than trying to rotate to a perfect absolute escape angle while collision events cancel movement. `onHitRobot` uses the same emergency escape for LeachPMC.
 - For LeachPMC close stationary targets, prefer separation-biased `driveAwayFrom()` instead of the perpendicular fallback that pinned the round-1 draw. Slightly relaxed LeachPMC wide orbit from 490/535 to 455/505 to recover some normal-range kill speed while keeping wider-than-generic p3 dodging.
 - Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
+
+Round 1 (gpt-5-5 current edit against `txeverson__crawler`):
+- `/logs/rounds/0` was already a 250/250 live sweep with aggregate `42967` vs `5732`; our bot averaged ~84 min energy and ~101 end energy, so the matchup is very safe.
+- Trace/offline replay shows Crawler is a predictable medium-speed circular mover: avg speed ~4.74, low stop fraction (~3%), avg enemy fire drop ~p2.0, and `tools/offline_gun_eval.py '/logs/rounds/0/sim_*.jsonl'` strongly favors circular aim (`circ` mean ~35px, `avg` ~36px, head-on ~74px, linear ~155px). Our old code still won, but mostly through generic/cold-start behavior and many p3 shots; name-gating lets us use the exact circular gun immediately.
+- Added a narrow `crawlerEnemy()` name gate in `robots/custom/MyTank.java` for `txeverson__crawler`: forces `GUN_CIRCULAR`, uses a slightly tighter 285px healthy orbit (335 reserve), and keeps max-power pressure while energy is healthy to improve score/kill speed. Low-energy caps are only defensive for unexpected outlier rounds.
+- Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.

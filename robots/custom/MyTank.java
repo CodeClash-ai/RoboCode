@@ -638,6 +638,12 @@ public class MyTank extends AdvancedRobot {
             // head-on bullets, but keep extra room once our reserve is low so we do not
             // get trapped in late wall/corner scrambles while trying to finish.
             preferredDistance = getEnergy() < 26.0 ? 430.0 : 295.0;
+        } else if (crawlerEnemy()) {
+            // Current txeverson__crawler is a predictable medium-speed circular mover.
+            // We have a large survival surplus in round 0, so tighten slightly versus
+            // the generic SpinBot band to shorten exact circular bullet flight and cut
+            // down the number of p2 shots it can fire.
+            preferredDistance = getEnergy() < 45.0 ? 335.0 : 285.0;
         } else if (spinBotEnemy()) {
             // SpinBot follows a compact, very predictable circle.  Round 1 showed
             // the circular/max-power specialization is very safe (large end-energy
@@ -1015,6 +1021,19 @@ public class MyTank extends AdvancedRobot {
             // Keep pressure high while the slightly wider orbit reduces rare
             // point-blank ram/leakage in long field-crossing runs.
             power = Math.max(power, distance < 620 ? 3.0 : 2.65);
+        }
+        if (crawlerEnemy()) {
+            // Name-gated current round: offline replay of round-0 traces strongly favors
+            // circular aim (about half the mean error of head-on and far better than linear).
+            // Spend max power while healthy to end rounds faster; retain a small reserve cap
+            // only for unexpected long/endgame cases.
+            if (getEnergy() > 22.0 && distance < 780.0) {
+                power = Math.max(power, distance < 700.0 ? 3.0 : 2.65);
+            } else if (getEnergy() > 10.0) {
+                power = Math.min(Math.max(power, 1.35), 2.0);
+            } else {
+                power = Math.min(power, 0.45);
+            }
         }
         if (spinBotEnemy()) {
             // Circular prediction is essentially exact for SpinBot; max-power
@@ -1586,6 +1605,8 @@ public class MyTank extends AdvancedRobot {
             // damped averaged/head-on family wins, especially with sub-power-1 bullets.
             gun = (virtualSamples > 18 && virtualGunError[GUN_HEAD_ON] + 2.5 < virtualGunError[GUN_AVERAGED])
                     ? GUN_HEAD_ON : GUN_AVERAGED;
+        } else if (crawlerEnemy()) {
+            gun = GUN_CIRCULAR;
         } else if (spinBotEnemy()) {
             // Pure circular is normally exact for sample.SpinBot, but near walls the
             // damped averaged predictor can occasionally score better.  Let virtual
@@ -1931,6 +1952,10 @@ public class MyTank extends AdvancedRobot {
     }
 
 
+    private boolean crawlerEnemy() {
+        return enemyName != null && enemyName.contains("txeverson__crawler");
+    }
+
     private boolean leachPmcEnemy() {
         // Current /logs/rounds/0 opponent: stationary power-3 shooter.  Name-gated so the
         // old SittingDuck/infinitylock stationary no-fire farm mode remains intact.
@@ -1994,6 +2019,7 @@ public class MyTank extends AdvancedRobot {
         // specialized high-pressure branches.  The fire-count guard is deliberately loose
         // because our own small bullet hits also look like enemy energy drops here.
         return !pikachuEnemy()
+                && !crawlerEnemy()
                 && virtualSamples > 10
                 && bestGunError() > 78.0
                 && enemyFireCount <= 16
