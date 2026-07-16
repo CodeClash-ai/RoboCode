@@ -741,3 +741,10 @@ Round 2 (gpt-5-5 current edit, Wallspoet follow-up):
   - added a Wallspoet low-energy no-fire reserve guard below 12 energy unless the enemy is near lethal range;
   - kept the replay-best normal `GUN_AVERAGED` predictor and existing Wallspoet medium/low power caps.
 - Added `tools/analyze_wallspoet.py` for quick win/loss summaries. Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
+
+
+Round 1 (gpt-5-5 current edit against `josephjeon__gntest`):
+- `/logs/rounds/0` shows a real, two-mode opponent. We won aggregate (`39111` vs `8250`) and all 25 ten-round result files, but traced survival had 11/250 losses. Overall GNTest often moves fast with continuous turning (offline eval strongly favors circular: `circ` mean ~76px), but the loss traces are different: it slows/stops on a nearly fixed heading, fires repeated medium bullets (avg drop ~2.2), and our bot self-depletes from long 400px+ exchanges while GNTest keeps 15-65 energy. Loss-only replay favored head-on/circular over linear/averaged.
+- Added a narrow name-gated `gntestStopDuel()` branch in `robots/custom/MyTank.java` for the slow/low-turn medium-fire GNTest phase. It does not affect other opponents because it requires `enemyName.contains("josephjeon__gntest")`.
+- In that branch: use compact-but-safe range (~325, widening only when low), force head-on when stopped/creeping and circular if it resumes turning, cap bullets to faster medium/cheap shots with a lethal finisher, tighten aim tolerance, stop last-reserve firing when the enemy is not near death, and sidestep on detected GNTest fire once our reserve is below 50.
+- Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
