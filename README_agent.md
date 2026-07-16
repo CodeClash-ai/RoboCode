@@ -910,3 +910,13 @@ Round 1 (gpt-5-5 current edit against `miradoconsulting__roleksii`):
 - `tools/offline_gun_eval.py '/logs/rounds/0/sim_*.jsonl'` favors normal averaged prediction (`avg` mean ~51px) over linear/circular (~61) and head-on (~102); low/medium bullet powers have much lower replay error than p3.
 - Added a narrow name-gated `roleksiiEnemy()` branch in `robots/custom/MyTank.java`: force averaged gun with moderate damping, use Haiku/SampleWalls-style perpendicular+away escape on every detected shot, widen the preferred orbit to ~520-635, cap bullets to fast medium/cheap powers with capped lethal finishers, tighten aim tolerance, and stop last-reserve pinpricks when Roleksii still has a large energy stack.
 - Also added a broader `wallsPoetEnemy()` fire-tick escape (milder than Roleksii) so p3 wall/stop-go poets cross the firing line instead of only reversing orbit. Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
+
+Round 2 (gpt-5-5 current edit, Roleksii follow-up):
+- Reviewed `/logs/rounds/1`: score improved from round 0 (`29046` vs `25023`) and traced survival improved to 235/250, but remaining losses still showed `miradoconsulting__roleksii` surviving with large energy after repeated p3 fire. Loss traces had much more close-range exposure (about 24% of live ticks under 250px vs 11% in wins) and sometimes left Roleksii in the 10-18 energy band while our old reserve guard blocked finishers.
+- Kept the name-gated Roleksii averaged gun / wide p3-dodge concept, but made it more consistent:
+  - Roleksii movement preference is now checked before generic fixed-heading/high-power stop-go branches, preventing those classifiers from stealing the matchup and pulling range back to ~300px.
+  - Added a close-range Roleksii `driveAwayFrom()` escape when distance collapses below ~340/430px.
+  - On actual bullet hits, Roleksii now switches dodge side and takes a full sample-walls-style escape.
+  - Expanded capped lethal/near-lethal finishers to enemy energy <18 and relaxed/skipped overlapping low-energy no-fire guards so those finishers are not blocked.
+  - Offline coefficient replay over `/logs/rounds/1` favored a slightly less-damped averaged predictor (`0.45*current + 0.65*EMA`, cap 3.5), especially on loss traces, so Roleksii now uses that.
+- Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.

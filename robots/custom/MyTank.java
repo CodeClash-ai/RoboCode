@@ -504,6 +504,15 @@ public class MyTank extends AdvancedRobot {
             }
         }
 
+        if (roleksiiEnemy() && e.getDistance() < (getEnergy() < 40.0 ? 430.0 : 340.0)) {
+            // Roleksii loss traces had far more sub-250px exposure than wins.  The wide
+            // fire-tick dodge can still curve along the wall; when the range has already
+            // collapsed, prioritize opening separation before resuming the normal wide
+            // averaged-gun orbit.
+            driveAwayFrom(absBearing, getEnergy() < 40.0 ? 470.0 : 410.0);
+            return;
+        }
+
         if (stationaryHeavyShooter() && e.getDistance() < 430.0) {
             // TrackFire follow-up traces showed that a pure perpendicular command can
             // alternate around the same point (~285px) and let a stationary power-3 gun
@@ -761,6 +770,12 @@ public class MyTank extends AdvancedRobot {
             // slow-bullet exchanges.  Keep enough range for dodging, but not so far
             // that our faster medium head-on bullets take forever.
             preferredDistance = getEnergy() < 18.0 ? 465.0 : (getEnergy() < 36.0 ? 420.0 : 365.0);
+        } else if (roleksiiEnemy()) {
+            // Current Roleksii matchup: do not let generic fixed-heading/high-power
+            // stop-go classifiers steal movement and pull us back to a 300-355px band.
+            // Round-1 losses had much more close-range exposure; keep the name-gated
+            // wide lane active as soon as the opponent name is known.
+            preferredDistance = getEnergy() < 24.0 ? 635.0 : (getEnergy() < 48.0 ? 585.0 : 520.0);
         } else if (fixedHeadingHighPowerShooter()) {
             // A fixed-heading high-power stop/go shooter is more dangerous than
             // Ian/Tarektank-style weak axis bots.  Keep a short but not point-blank
@@ -893,12 +908,6 @@ public class MyTank extends AdvancedRobot {
             // stay near its usual 320-350px exchange band instead of drifting
             // wide into long, low-damage self-depletion rounds.
             preferredDistance = 340.0;
-        } else if (roleksiiEnemy()) {
-            // Roleksii's p3 stream is much more dangerous than its movement is evasive.
-            // Hold a wider lane than generic Wallspoet so fire-tick escapes have time to
-            // clear the old bearing line, while still staying close enough for averaged
-            // p1-ish bullets to land.
-            preferredDistance = getEnergy() < 24.0 ? 635.0 : (getEnergy() < 48.0 ? 585.0 : 520.0);
         } else if (wallsPoetEnemy()) {
             // WallsPoet is a high-power wall/stop-go bot.  It hits hard enough that the
             // old close 335px DroidPoet pressure band lost many survival points, but
@@ -1543,8 +1552,11 @@ public class MyTank extends AdvancedRobot {
             // power greatly reduces future-position error; more importantly, we must not
             // spend energy into its repeated p3 hits.  Use fast medium/cheap bullets plus
             // capped lethal finishers while the movement branch focuses on dodging.
-            if (e.getEnergy() < 10.0 && getEnergy() > 6.0 && distance < 650.0) {
-                power = Math.min(Math.max(power, lethalPower(e.getEnergy())), 1.65);
+            if (e.getEnergy() < 18.0 && getEnergy() > 8.5 && distance < 650.0) {
+                // Remaining losses often left Roleksii alive in the 10-18 energy band while
+                // our old reserve guard refused to shoot.  Use a capped lethal/near-lethal
+                // fast shot here instead of endless pinpricks or no-fire stalling.
+                power = Math.min(Math.max(power, lethalPower(e.getEnergy())), e.getEnergy() < 10.0 ? 1.65 : 2.25);
             } else if (getEnergy() > 62.0) {
                 power = Math.min(Math.max(power, distance < 390 ? 1.55 : 1.25), 1.60);
             } else if (getEnergy() > 36.0) {
@@ -2126,11 +2138,14 @@ public class MyTank extends AdvancedRobot {
         }
         if (roleksiiEnemy()) {
             tolerance = Math.min(tolerance, Math.atan2(13.0, distance));
-            if ((getEnergy() < 24.0 && e.getEnergy() > 22.0) || (getEnergy() < 13.0 && e.getEnergy() > 10.0)) {
+            if ((getEnergy() < 24.0 && e.getEnergy() > 24.0) || (getEnergy() < 10.0 && e.getEnergy() > 18.0)) {
+                // Preserve reserve against a still-healthy p3 shooter, but do not block
+                // the new 10-18 energy finisher band that should convert several previous
+                // Roleksii losses/draws.
                 fireAllowed = false;
             }
         }
-        if (wallsPoetEnemy() && getEnergy() < 12.0 && e.getEnergy() > 10.0) {
+        if (!roleksiiEnemy() && wallsPoetEnemy() && getEnergy() < 12.0 && e.getEnergy() > 10.0) {
             // Wallspoet's p3 stream wins when we spend the last few energy points on
             // 0.1-0.2 bullets that cannot finish it.  Keep the reserve for movement unless
             // the enemy is already in capped-lethal range.
@@ -3121,9 +3136,9 @@ public class MyTank extends AdvancedRobot {
             turnRate = 0.0;
         } else if (gunType == GUN_AVERAGED && roleksiiEnemy()) {
             // Roleksii's wall/stop-go motion over-leads with full linear/circular but the
-            // old Wallspoet damping is too timid on continued rolls.  Use the same general
-            // averaged family that offline replay ranked best, with a moderate cap.
-            velocity = limit(-3.0, 0.42 * velocity + 0.55 * enemyVelocityAvg, 3.0);
+            // old Wallspoet damping is too timid on continued rolls.  Round-1 coefficient
+            // replay favored a little more current/EMA carry, especially in loss traces.
+            velocity = limit(-3.5, 0.45 * velocity + 0.65 * enemyVelocityAvg, 3.5);
             turnRate = 0.0;
         } else if (gunType == GUN_AVERAGED && smallPoetEnemy()) {
             // Round-0 replay for SmallPoet preferred a little more current/EMA carry
@@ -3290,6 +3305,14 @@ public class MyTank extends AdvancedRobot {
         if (smallPoetEnemy()) {
             reverseDirection();
             driveSampleWallsEscape(lastEnemyAbsBearing, getEnergy() < 34.0 ? 610.0 : 500.0);
+            return;
+        }
+        if (roleksiiEnemy()) {
+            // A hit means the previous wide fire-tick lane did not clear the p3 bullet.
+            // Switch side and make a full sample-walls-style crossing before resuming the
+            // name-gated wide averaged-gun orbit.
+            reverseDirection();
+            driveSampleWallsEscape(lastEnemyAbsBearing, getEnergy() < 34.0 ? 680.0 : 560.0);
             return;
         }
         if (haikuWallsEnemy()) {
