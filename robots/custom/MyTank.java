@@ -360,6 +360,14 @@ public class MyTank extends AdvancedRobot {
                 driveStationaryHeavyEscape(absBearing, getEnergy() < 40.0 ? 390.0 : 340.0);
                 return;
             }
+            if (propiAvancatEnemy() && (getEnergy() < 48.0 || e.getDistance() < 285.0)) {
+                // pmontp19__propiavancat is a fast turning/circular mover with a
+                // modest medium gun.  At normal reserve our circular pressure wins
+                // easily; when reserve falls or range collapses, step across the
+                // firing line instead of staying in the generic close Crazy orbit.
+                drivePerpendicularEscape(absBearing, getEnergy() < 24.0 ? 455.0 : 335.0);
+                return;
+            }
             if (poetEnemy() && (getEnergy() < 42.0 || e.getDistance() < 245.0)) {
                 drivePerpendicularEscape(absBearing, getEnergy() < 24.0 ? 430.0 : 315.0);
                 return;
@@ -584,6 +592,10 @@ public class MyTank extends AdvancedRobot {
             return;
         }
 
+        if (propiAvancatEnemy() && e.getDistance() < (getEnergy() < 36.0 ? 320.0 : 220.0)) {
+            driveAwayFrom(absBearing, getEnergy() < 36.0 ? 405.0 : 305.0);
+            return;
+        }
         if (megaborstenEnemy() && e.getDistance() < (getEnergy() < 38.0 ? 360.0 : 260.0)) {
             // Avoid the few losing traces where the wall chase compressed into a shorter
             // medium-power trade.  Reopen a direct gap before resuming the linear-gun lane.
@@ -774,7 +786,12 @@ public class MyTank extends AdvancedRobot {
         // inward; too close we open out.  wallSmooth then bends the path away
         // from the battlefield edges before we commit to it.
         double preferredDistance;
-        if (megaborstenEnemy()) {
+        if (propiAvancatEnemy()) {
+            // Current pmontp19__propiavancat traces are fast circular/turning; replay
+            // strongly favors circular aim.  Stay in a compact band for short p2.5/p3
+            // bullet flight while healthy, but open up before rare self-depletion rounds.
+            preferredDistance = getEnergy() < 24.0 ? 470.0 : (getEnergy() < 48.0 ? 390.0 : 310.0);
+        } else if (megaborstenEnemy()) {
             // denssle__megaborsten is a fast wall runner that our traces hit best with
             // low/medium-power linear bullets.  Hold a moderate-wide lane: wider than the
             // generic 300px fast-wall chase that leaked medium/p3 hits, but not so far that
@@ -1082,7 +1099,7 @@ public class MyTank extends AdvancedRobot {
         // to long bullet flight, while its own gun almost never connects.  Once
         // virtual guns report a hard-to-hit mover, tighten the orbit a bit to
         // shorten flight time and improve hit/kill speed without going to ram range.
-        if (!megaborstenEnemy() && !bt7274Enemy() && !poetEnemy() && !wildeEnemy() && !dodgeBot2Enemy() && !wallspoetHaikuEnemy() && !haikuPoetEnemy() && !smallPoetEnemy() && !haikuWallsEnemy() && !waveSurfingEnemy() && !dangerousWallEnemy() && !activeStopGoShooter() && !heavyStopGoShooter()
+        if (!propiAvancatEnemy() && !megaborstenEnemy() && !bt7274Enemy() && !poetEnemy() && !wildeEnemy() && !dodgeBot2Enemy() && !wallspoetHaikuEnemy() && !haikuPoetEnemy() && !smallPoetEnemy() && !haikuWallsEnemy() && !waveSurfingEnemy() && !dangerousWallEnemy() && !activeStopGoShooter() && !heavyStopGoShooter()
                 && virtualSamples > 28 && bestGunError() > 72.0 && stationaryScans <= 5 && slowEnemyScans <= 12) {
             preferredDistance = 355.0;
         }
@@ -1137,6 +1154,10 @@ public class MyTank extends AdvancedRobot {
     private void doGun(ScannedRobotEvent e, double absBearing, double enemyX, double enemyY) {
         double distance = e.getDistance();
         double turnRate = haveEnemyHeading ? Utils.normalRelativeAngle(e.getHeadingRadians() - lastEnemyHeading) : 0.0;
+        if (propiAvancatEnemy()) {
+            doPropiAvancatGun(e, absBearing, enemyX, enemyY, turnRate);
+            return;
+        }
         if (wildeEnemy()) {
             doWildeGun(e, absBearing, enemyX, enemyY, turnRate);
             return;
@@ -2603,6 +2624,40 @@ public class MyTank extends AdvancedRobot {
     }
 
 
+    private void doPropiAvancatGun(ScannedRobotEvent e, double absBearing, double enemyX, double enemyY, double turnRate) {
+        double distance = e.getDistance();
+        double power;
+        // Circular is by far the best gun family on the current traces.  The bot is
+        // not dangerous enough to justify tiny bullets while our reserve is high, but
+        // keep a real low-energy reserve for the rare long rounds that caused the only
+        // live losses in round 0.
+        if (e.getEnergy() < 18.0 && getEnergy() > 8.0 && distance < 650.0) {
+            power = Math.min(Math.max(lethalPower(e.getEnergy()), 0.45), e.getEnergy() < 9.0 ? 1.75 : 2.65);
+        } else if (getEnergy() > 58.0) {
+            power = distance < 640.0 ? 3.0 : 2.45;
+        } else if (getEnergy() > 34.0) {
+            power = distance < 430.0 ? 2.10 : 1.65;
+        } else if (getEnergy() > 18.0) {
+            power = distance < 360.0 ? 0.80 : 0.55;
+        } else {
+            power = getEnergy() < 9.0 ? 0.12 : 0.22;
+        }
+        boolean fireAllowed = true;
+        if ((getEnergy() < 18.0 && e.getEnergy() > 22.0) || (getEnergy() < 9.0 && e.getEnergy() > 9.0)) {
+            fireAllowed = false;
+        }
+        power = Math.min(power, Math.max(0.1, getEnergy() - 0.15));
+        double bulletSpeed = 20.0 - 3.0 * power;
+        double[] predicted = predictEnemy(enemyX, enemyY, e.getHeadingRadians(), e.getVelocity(), turnRate, bulletSpeed, GUN_CIRCULAR);
+        double gunTurn = Utils.normalRelativeAngle(Math.atan2(predicted[0] - getX(), predicted[1] - getY()) - getGunHeadingRadians());
+        setTurnGunRightRadians(gunTurn);
+        double tolerance = Math.min(Math.atan2(16.0, distance), Math.atan2(25.0, distance) + 0.026);
+        if (getGunHeat() == 0 && Math.abs(getGunTurnRemainingRadians()) < tolerance && getEnergy() > 0.25 && fireAllowed) {
+            setFire(power);
+        }
+    }
+
+
     private void doWildeGun(ScannedRobotEvent e, double absBearing, double enemyX, double enemyY, double turnRate) {
         double distance = e.getDistance();
         double power;
@@ -2741,6 +2796,14 @@ public class MyTank extends AdvancedRobot {
         return best;
     }
 
+
+    private boolean propiAvancatEnemy() {
+        // Current opponent pmontp19__propiavancat: fast max-speed turning/circular
+        // mover with modest medium fire.  Offline trace replay for /logs/rounds/0
+        // strongly favors circular prediction (circ mean ~61px vs linear ~87,
+        // averaged/head-on much worse).  Name-gate a compact circular pressure profile.
+        return enemyName != null && enemyName.contains("pmontp19__propiavancat");
+    }
 
     private boolean megaborstenEnemy() {
         // Current opponent denssle__megaborsten: high-speed wall/perimeter runner with
