@@ -1027,7 +1027,8 @@ public class MyTank extends AdvancedRobot {
             // bullets, keep a capped lethal finisher, and preserve reserve earlier than
             // generic Wallspoet.
             if (e.getEnergy() < 18.0 && getEnergy() > 9.0 && distance < 620.0) {
-                power = Math.min(Math.max(power, lethalPower(e.getEnergy())), e.getEnergy() < 10.0 ? 1.75 : 2.05);
+                power = Math.min(Math.max(power, lethalPower(e.getEnergy())),
+                        e.getEnergy() < 10.0 ? 2.05 : (e.getEnergy() < 14.0 ? 2.55 : 3.0));
             } else if (getEnergy() > 62.0) {
                 power = Math.min(Math.max(power, distance < 380.0 ? 1.55 : 1.25), 1.65);
             } else if (getEnergy() > 36.0) {
@@ -1588,7 +1589,8 @@ public class MyTank extends AdvancedRobot {
         if (smallPoetEnemy()) {
             // Re-apply after broad wall/slow branches that may raise power back toward p3.
             if (e.getEnergy() < 18.0 && getEnergy() > 9.0 && distance < 620.0) {
-                power = Math.min(power, Math.min(Math.max(lethalPower(e.getEnergy()), 0.35), e.getEnergy() < 10.0 ? 1.75 : 2.05));
+                power = Math.min(power, Math.min(Math.max(lethalPower(e.getEnergy()), 0.35),
+                        e.getEnergy() < 10.0 ? 2.05 : (e.getEnergy() < 14.0 ? 2.55 : 3.0)));
             } else if (getEnergy() > 62.0) {
                 power = Math.min(power, distance < 380.0 ? 1.55 : 1.25);
             } else if (getEnergy() > 36.0) {
@@ -2063,7 +2065,7 @@ public class MyTank extends AdvancedRobot {
         }
         if (smallPoetEnemy()) {
             tolerance = Math.min(tolerance, Math.atan2(13.0, distance));
-            if ((getEnergy() < 22.0 && e.getEnergy() > 22.0) || (getEnergy() < 13.0 && e.getEnergy() > 10.0)) {
+            if ((getEnergy() < 22.0 && e.getEnergy() > 22.0) || (getEnergy() < 13.0 && e.getEnergy() > 18.0)) {
                 // Preserve movement reserve in the exact loss mode: our low-energy
                 // pinpricks cannot erase a 20+ energy p3 wall bot before another heavy
                 // bullet lands.
