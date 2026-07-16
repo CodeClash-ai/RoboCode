@@ -365,6 +365,14 @@ public class MyTank extends AdvancedRobot {
                 drivePerpendicularEscape(absBearing, getEnergy() < 42.0 ? 420.0 : 335.0);
                 return;
             }
+            if (sampleWallsEnemy()) {
+                // robo_code__walls is sample.Walls-like: it runs the perimeter and fires
+                // accurate head-on/near-head-on power-2 bullets.  A mere orbit reversal can
+                // leave us parallel to the same firing line; on every detected shot, make a
+                // pronounced perpendicular crossing and keep the range open.
+                drivePerpendicularEscape(absBearing, getEnergy() < 38.0 ? 520.0 : 430.0);
+                return;
+            }
             if (shrekerEnemy()) {
                 // Shreker fires mostly power-3 from stop/go/straight positions.  A simple
                 // orbit reversal left us eating long p3 streams in the losing traces; cross
@@ -584,7 +592,13 @@ public class MyTank extends AdvancedRobot {
         // inward; too close we open out.  wallSmooth then bends the path away
         // from the battlefield edges before we commit to it.
         double preferredDistance;
-        if (maximbotEnemy()) {
+        if (sampleWallsEnemy()) {
+            // Current robo_code__walls opponent is a fast perimeter runner with a very
+            // accurate simple gun.  The old generic wall branch fought around ~335-400px
+            // and spent max-power shots; widen the lane so fire-tick reversals have time
+            // to clear its head-on bullets while still keeping linear shots reasonable.
+            preferredDistance = getEnergy() < 24.0 ? 535.0 : (getEnergy() < 48.0 ? 500.0 : 455.0);
+        } else if (maximbotEnemy()) {
             // Current Maximbot is very hittable by circular aim, but its medium/high gun
             // leaks damage at knife range.  Use a compact circular-shot band while healthy
             // and widen modestly before reserve mode.
@@ -924,6 +938,23 @@ public class MyTank extends AdvancedRobot {
         boolean finishingFixedHighPower = fixedHeadingHighPowerShooter() && e.getEnergy() < 17.0 && distance < 460.0 && getEnergy() > 6.0;
         boolean finishingFixedMedium = fixedHeadingMediumShooter() && e.getEnergy() < 17.0 && distance < 540.0 && getEnergy() > 6.0;
         boolean hardToHitMover = virtualSamples > 28 && bestGunError() > 72.0 && stationaryScans <= 5 && slowEnemyScans <= 12;
+        if (sampleWallsEnemy()) {
+            // Full linear prediction is the best replay model for sample.Walls-style
+            // perimeter motion, but power-3 bullets are slow and caused self-depletion in
+            // long chases.  Use faster medium bullets while healthy, then cheap reserve
+            // shots; finish with a capped lethal bullet when it is already low.
+            if (e.getEnergy() < 9.0 && getEnergy() > 5.5) {
+                power = Math.min(Math.max(power, lethalPower(e.getEnergy())), 1.65);
+            } else if (getEnergy() > 58.0) {
+                power = Math.min(Math.max(power, distance < 420 ? 2.10 : 1.85), 2.15);
+            } else if (getEnergy() > 34.0) {
+                power = Math.min(Math.max(power, distance < 380 ? 1.35 : 1.05), 1.45);
+            } else if (getEnergy() > 16.0) {
+                power = Math.min(power, distance < 350 ? 0.55 : 0.35);
+            } else {
+                power = Math.min(power, getEnergy() < 8.0 ? 0.15 : 0.25);
+            }
+        }
         // If all virtual guns are missing badly (as with wave-surfing GF-style
         // enemies), do not gamble the whole energy stack on repeated heavy
         // bullets.  Use tiny bullets at low energy: a hit gives more energy back
@@ -1409,6 +1440,22 @@ public class MyTank extends AdvancedRobot {
                 power = Math.min(power, getEnergy() < 8.0 ? 0.12 : 0.20);
             }
         }
+        if (sampleWallsEnemy()) {
+            // Re-apply after generic fast/dangerous-wall branches, which otherwise raise
+            // this name-gated Walls matchup back to p3.  Preserve lethal finishers, but cap
+            // long-chase pressure to faster medium/cheap bullets.
+            if (e.getEnergy() < 9.0 && getEnergy() > 5.5) {
+                power = Math.min(power, Math.min(Math.max(lethalPower(e.getEnergy()), 0.35), 1.65));
+            } else if (getEnergy() > 58.0) {
+                power = Math.min(power, distance < 420 ? 2.10 : 1.85);
+            } else if (getEnergy() > 34.0) {
+                power = Math.min(power, distance < 380 ? 1.35 : 1.05);
+            } else if (getEnergy() > 16.0) {
+                power = Math.min(power, distance < 350 ? 0.55 : 0.35);
+            } else {
+                power = Math.min(power, getEnergy() < 8.0 ? 0.15 : 0.25);
+            }
+        }
         if (hardToHitMover) {
             if (getEnergy() < 12) {
                 power = Math.min(power, 0.15);
@@ -1482,6 +1529,10 @@ public class MyTank extends AdvancedRobot {
         int gun = chooseGun();
         if (stationaryScans > 5) {
             gun = GUN_HEAD_ON;
+        } else if (sampleWallsEnemy()) {
+            // sample.Walls drives long straight cardinal legs around the border; offline
+            // replay on the current traces ranks full linear lead ahead of averaged/wallavg.
+            gun = GUN_LINEAR;
         } else if (maximbotEnemy()) {
             // Trace replay for mgalushka__maximbot strongly favors circular prediction
             // over the generic Dominator head-on branch.
@@ -1796,6 +1847,12 @@ public class MyTank extends AdvancedRobot {
             // circular bullets cannot finish it before another medium/high shot lands.
             fireAllowed = false;
         }
+        if (sampleWallsEnemy() && getEnergy() < 10.0 && e.getEnergy() > 12.0) {
+            // The current Walls opponent's simple gun is accurate; if it still has a large
+            // stack, last-reserve 0.1-0.2 bullets only self-disable us before enough damage
+            // can land.  Keep the energy for movement unless a capped lethal finish is near.
+            fireAllowed = false;
+        }
         if (dominatorEnemy() && getEnergy() < 9.0 && e.getEnergy() > 12.0) {
             // DominatorX can only convert many of the remaining losses after we self-disable
             // with harmless 0.1-0.2 bullets while it still has tens of energy.  Preserve the
@@ -1840,6 +1897,14 @@ public class MyTank extends AdvancedRobot {
         return best;
     }
 
+
+    private boolean sampleWallsEnemy() {
+        // Current hidden opponent in /logs/rounds/0 is robo_code__walls.MyTank, matching
+        // Robocode's sample.Walls behavior: fast cardinal perimeter movement and frequent
+        // power-2 head-on shots.  Name-gate this because the broad wall-runner detectors
+        // are heavily tuned for many other historical opponents.
+        return enemyName != null && enemyName.contains("robo_code__walls");
+    }
 
     private boolean maximbotEnemy() {
         // Current round opponent mgalushka__maximbot: medium/fast mover with shallow
@@ -2829,6 +2894,11 @@ public class MyTank extends AdvancedRobot {
         if (shrekerEnemy()) {
             reverseDirection();
             drivePerpendicularEscape(lastEnemyAbsBearing, getEnergy() < 42.0 ? 430.0 : 310.0);
+            return;
+        }
+        if (sampleWallsEnemy()) {
+            reverseDirection();
+            drivePerpendicularEscape(lastEnemyAbsBearing, getEnergy() < 38.0 ? 560.0 : 455.0);
             return;
         }
         if (maximbotEnemy()) {

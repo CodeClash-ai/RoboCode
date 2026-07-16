@@ -789,3 +789,14 @@ Round 2 (gpt-5-5 current edit, Maximbot follow-up):
   - on detected Maximbot fire and on actual bullet hits, use larger perpendicular escapes to cross/reopen its high-power firing line;
   - reduced healthy Maximbot bullet caps from about p2.25-2.75 to about p1.85-2.20, with lower mid/low tiers, to trade slower damage for faster bullets and less self-depletion in long close duels.
 - Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
+
+Round 1 (gpt-5-5 current edit against `robo_code__walls`):
+- `/logs/rounds/0` is a losing matchup: `results.json` has `robo_code__walls` 19326 vs us 12492, and only 2/25 ten-round result files put us first. Trace survival was roughly 53/250 live wins, 190 losses, 7 mutual-zero/draws.
+- Opponent is sample.Walls-like: ~97% of ticks near the wall, speed 8 most of the time with cardinal perimeter legs, and frequent accurate head-on/near-head-on power-2 shots (quick bullet heading parse: median angular error under 1 degree). Our old generic wall handling often used max-power shots and ~335-400px range, causing long self-depletion while its p2 gun landed.
+- `tools/offline_gun_eval.py '/logs/rounds/0/sim_*.jsonl'` favored full linear prediction (`lin` mean ~112px) over circular (~113), averaged (~125), wall-damped (~148), and head-on (~170), so the fix is **not** wall-damped aiming.
+- Added name-gated `sampleWallsEnemy()` for `robo_code__walls` in `robots/custom/MyTank.java`:
+  - force `GUN_LINEAR`;
+  - use wider orbit (~455 healthy, 500/535 lower energy) and large perpendicular escapes on every detected shot / bullet hit;
+  - cap bullet power after all generic wall branches to faster medium shots (about 1.85-2.1 high energy, 1.05-1.35 mid, cheap low, capped lethal finisher) instead of inheriting p3 dangerous-wall/fast-wall pressure;
+  - stop firing below 10 energy if Walls still has >12, preserving movement reserve rather than self-disabling with pinpricks.
+- Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`. No local hidden-opponent battle is available, so this is trace-analysis based.
