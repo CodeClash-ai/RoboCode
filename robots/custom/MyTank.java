@@ -375,6 +375,21 @@ public class MyTank extends AdvancedRobot {
                 driveSampleWallsEscape(absBearing, getEnergy() < 34.0 ? 640.0 : 535.0);
                 return;
             }
+            if (roleksiiEnemy()) {
+                // miradoconsulting__roleksii is a low-turn wall/stop-go p3 shooter.  The
+                // generic Wallspoet profile only reversed orbit on fire ticks, which left
+                // long stretches on the same bullet lane and lost many live rounds.  Make
+                // every detected p3 shot trigger a large perpendicular/away crossing.
+                driveSampleWallsEscape(absBearing, getEnergy() < 34.0 ? 660.0 : 540.0);
+                return;
+            }
+            if (!roleksiiEnemy() && wallsPoetEnemy()) {
+                // Broad safety for p3 wall/stop-go poets: cross the fire line instead of
+                // just toggling the orbit side.  Keep this slightly milder than the current
+                // name-gated Roleksii escape to avoid over-widening historical Wallspoet.
+                driveSampleWallsEscape(absBearing, getEnergy() < 34.0 ? 600.0 : 485.0);
+                return;
+            }
             if (smallPoetEnemy() && (e.getDistance() < 360.0 || getEnergy() < 56.0)) {
                 // SmallPoet's p3 gun hurts most in close/mid late exchanges.  Do not
                 // flip-flop on every early shot (that regressed Wallspoetas), but once
@@ -878,6 +893,12 @@ public class MyTank extends AdvancedRobot {
             // stay near its usual 320-350px exchange band instead of drifting
             // wide into long, low-damage self-depletion rounds.
             preferredDistance = 340.0;
+        } else if (roleksiiEnemy()) {
+            // Roleksii's p3 stream is much more dangerous than its movement is evasive.
+            // Hold a wider lane than generic Wallspoet so fire-tick escapes have time to
+            // clear the old bearing line, while still staying close enough for averaged
+            // p1-ish bullets to land.
+            preferredDistance = getEnergy() < 24.0 ? 635.0 : (getEnergy() < 48.0 ? 585.0 : 520.0);
         } else if (wallsPoetEnemy()) {
             // WallsPoet is a high-power wall/stop-go bot.  It hits hard enough that the
             // old close 335px DroidPoet pressure band lost many survival points, but
@@ -1517,7 +1538,23 @@ public class MyTank extends AdvancedRobot {
                 power = Math.min(power, getEnergy() < 9 ? 0.15 : 0.45);
             }
         }
-        if (wallsPoetEnemy()) {
+        if (roleksiiEnemy()) {
+            // Current matchup-specific cap.  Replay shows averaged aim is best and lower
+            // power greatly reduces future-position error; more importantly, we must not
+            // spend energy into its repeated p3 hits.  Use fast medium/cheap bullets plus
+            // capped lethal finishers while the movement branch focuses on dodging.
+            if (e.getEnergy() < 10.0 && getEnergy() > 6.0 && distance < 650.0) {
+                power = Math.min(Math.max(power, lethalPower(e.getEnergy())), 1.65);
+            } else if (getEnergy() > 62.0) {
+                power = Math.min(Math.max(power, distance < 390 ? 1.55 : 1.25), 1.60);
+            } else if (getEnergy() > 36.0) {
+                power = Math.min(Math.max(power, distance < 360 ? 0.95 : 0.70), 1.05);
+            } else if (getEnergy() > 18.0) {
+                power = Math.min(power, distance < 330 ? 0.38 : 0.25);
+            } else {
+                power = Math.min(power, getEnergy() < 8.0 ? 0.10 : 0.16);
+            }
+        } else if (wallsPoetEnemy()) {
             // Current pez__wallspoet traces: opponent is wall-bound/stop-go, fires almost
             // all power-3 bullets, and offline shot replay shows much faster low/medium
             // bullets have far less future-position error than power-3.  Avoid the generic
@@ -1809,6 +1846,8 @@ public class MyTank extends AdvancedRobot {
             // advantage from round 1 remains intact.
             gun = (virtualSamples > 20 && virtualGunError[GUN_AVERAGED] + 6.0 < virtualGunError[GUN_CIRCULAR])
                     ? GUN_AVERAGED : GUN_CIRCULAR;
+        } else if (roleksiiEnemy()) {
+            gun = GUN_AVERAGED;
         } else if (wallsPoetEnemy()) {
             // Wallspoet is also a repeated power-3 stop/go opponent, but unlike Shreker it
             // is persistently wall-bound.  Round-1 traces showed the older Shreker branch
@@ -2085,6 +2124,12 @@ public class MyTank extends AdvancedRobot {
             // it is actually in lethal/near-lethal range.
             fireAllowed = false;
         }
+        if (roleksiiEnemy()) {
+            tolerance = Math.min(tolerance, Math.atan2(13.0, distance));
+            if ((getEnergy() < 24.0 && e.getEnergy() > 22.0) || (getEnergy() < 13.0 && e.getEnergy() > 10.0)) {
+                fireAllowed = false;
+            }
+        }
         if (wallsPoetEnemy() && getEnergy() < 12.0 && e.getEnergy() > 10.0) {
             // Wallspoet's p3 stream wins when we spend the last few energy points on
             // 0.1-0.2 bullets that cannot finish it.  Keep the reserve for movement unless
@@ -2176,6 +2221,10 @@ public class MyTank extends AdvancedRobot {
         return best;
     }
 
+
+    private boolean roleksiiEnemy() {
+        return enemyName != null && enemyName.contains("miradoconsulting__roleksii");
+    }
 
     private boolean mb2Enemy() {
         // Current opponent gjgomez__mb2: medium-speed, non-wall mixed stop/turn mover
@@ -3069,6 +3118,12 @@ public class MyTank extends AdvancedRobot {
             // carrying more current/EMA velocity sharply reduced future-position error
             // while still avoiding full linear/circular over-lead through stops.
             velocity = limit(-3.5, 0.45 * velocity + 0.65 * enemyVelocityAvg, 3.5);
+            turnRate = 0.0;
+        } else if (gunType == GUN_AVERAGED && roleksiiEnemy()) {
+            // Roleksii's wall/stop-go motion over-leads with full linear/circular but the
+            // old Wallspoet damping is too timid on continued rolls.  Use the same general
+            // averaged family that offline replay ranked best, with a moderate cap.
+            velocity = limit(-3.0, 0.42 * velocity + 0.55 * enemyVelocityAvg, 3.0);
             turnRate = 0.0;
         } else if (gunType == GUN_AVERAGED && smallPoetEnemy()) {
             // Round-0 replay for SmallPoet preferred a little more current/EMA carry
