@@ -360,6 +360,10 @@ public class MyTank extends AdvancedRobot {
                 driveStationaryHeavyEscape(absBearing, getEnergy() < 40.0 ? 390.0 : 340.0);
                 return;
             }
+            if (poetEnemy() && (getEnergy() < 42.0 || e.getDistance() < 245.0)) {
+                drivePerpendicularEscape(absBearing, getEnergy() < 24.0 ? 430.0 : 315.0);
+                return;
+            }
             if (sampleWallsEnemy()) {
                 // sample.Walls fires accurate head-on/near-head-on bullets while racing
                 // around the border.  Reversing exactly on its fire tick made us cross back
@@ -691,7 +695,9 @@ public class MyTank extends AdvancedRobot {
         // inward; too close we open out.  wallSmooth then bends the path away
         // from the battlefield edges before we commit to it.
         double preferredDistance;
-        if (dodgeBot2Enemy()) {
+        if (poetEnemy()) {
+            preferredDistance = getEnergy() < 28.0 ? 420.0 : (getEnergy() < 48.0 ? 350.0 : 285.0);
+        } else if (dodgeBot2Enemy()) {
             // DodgeBot2 is a full-speed evasive mover with a modest p1-p1.6 gun.  Our
             // round-0 losses happened mostly in close, long self-depletion chases.  Hold
             // a little more room than the generic slow/wall/head-on branches (which can
@@ -964,7 +970,7 @@ public class MyTank extends AdvancedRobot {
         // to long bullet flight, while its own gun almost never connects.  Once
         // virtual guns report a hard-to-hit mover, tighten the orbit a bit to
         // shorten flight time and improve hit/kill speed without going to ram range.
-        if (!dodgeBot2Enemy() && !smallPoetEnemy() && !haikuWallsEnemy() && !waveSurfingEnemy() && !dangerousWallEnemy() && !activeStopGoShooter() && !heavyStopGoShooter()
+        if (!poetEnemy() && !dodgeBot2Enemy() && !smallPoetEnemy() && !haikuWallsEnemy() && !waveSurfingEnemy() && !dangerousWallEnemy() && !activeStopGoShooter() && !heavyStopGoShooter()
                 && virtualSamples > 28 && bestGunError() > 72.0 && stationaryScans <= 5 && slowEnemyScans <= 12) {
             preferredDistance = 355.0;
         }
@@ -1281,6 +1287,22 @@ public class MyTank extends AdvancedRobot {
                 power = Math.min(power, getEnergy() < 8.0 ? 0.12 : 0.20);
             }
         }
+        if (poetEnemy()) {
+            // Circular prediction is strong here and our energy reserve is usually large.
+            // Keep decisive p3 pressure at normal ranges, but downshift before rare long
+            // p3 exchanges can self-deplete us, with bounded finishers under 18 energy.
+            if (e.getEnergy() < 18.0 && getEnergy() > 7.0 && distance < 620.0) {
+                power = Math.min(Math.max(power, lethalPower(e.getEnergy())), e.getEnergy() < 9.0 ? 1.80 : 2.60);
+            } else if (getEnergy() > 55.0 && distance < 700.0) {
+                power = Math.max(power, distance < 560.0 ? 3.0 : 2.45);
+            } else if (getEnergy() > 28.0) {
+                power = Math.min(Math.max(power, distance < 430.0 ? 1.85 : 1.45), 2.10);
+            } else if (getEnergy() > 12.0) {
+                power = Math.min(power, distance < 360.0 ? 0.55 : 0.35);
+            } else {
+                power = Math.min(power, getEnergy() < 7.0 ? 0.12 : 0.22);
+            }
+        }
         if (dominatorEnemy()) {
             // DominatorX losses are self-depletion medium-power duels.  Round-1 traces
             // showed our first detector was too strict: several losing games still spent
@@ -1333,7 +1355,7 @@ public class MyTank extends AdvancedRobot {
                 power = Math.min(power, getEnergy() < 7 ? 0.15 : 0.35);
             }
         }
-        if (crazyEnemyScans > 3 && !velociRobotEnemy() && !spinBotEnemy()) {
+        if (crazyEnemyScans > 3 && !poetEnemy() && !velociRobotEnemy() && !spinBotEnemy()) {
             // High-speed continuous turners are easier to hit with faster,
             // moderate-power circular shots.  For this round's meow opponent the
             // circular virtual gun settles far below the old sample.Crazy errors;
@@ -1866,6 +1888,8 @@ public class MyTank extends AdvancedRobot {
         int gun = chooseGun();
         if (stationaryScans > 5) {
             gun = GUN_HEAD_ON;
+        } else if (poetEnemy()) {
+            gun = GUN_CIRCULAR;
         } else if (dodgeBot2Enemy()) {
             // Trace replay strongly favors head-on for DodgeBot2; linear/circular/avg
             // over-lead its dodge/reversal movement.  Force it instead of letting noisy
@@ -2310,6 +2334,13 @@ public class MyTank extends AdvancedRobot {
         return best;
     }
 
+
+    private boolean poetEnemy() {
+        // Current opponent pez__poet: fast, continuously turning PEZ bot with frequent
+        // power-3 fire. Trace replay strongly favors circular aim; name-gate this profile
+        // so generic wall/hard-to-hit safety overrides do not widen into slow chases.
+        return enemyName != null && enemyName.contains("pez__poet");
+    }
 
     private boolean dodgeBot2Enemy() {
         // Current round opponent: logancsc__dodgebot2.  It is a strong evasive mover with
@@ -3371,6 +3402,11 @@ public class MyTank extends AdvancedRobot {
     }
 
     public void onHitByBullet(HitByBulletEvent e) {
+        if (poetEnemy()) {
+            reverseDirection();
+            drivePerpendicularEscape(lastEnemyAbsBearing, getEnergy() < 32.0 ? 455.0 : 330.0);
+            return;
+        }
         if (pikachuEnemy()) {
             // Even p0.1 hits matter because the old bot died by spending itself to zero.
             // Keep moving perpendicular/away after every hit instead of a short generic
