@@ -368,6 +368,13 @@ public class MyTank extends AdvancedRobot {
                 driveSampleWallsEscape(absBearing, getEnergy() < 38.0 ? 545.0 : 445.0);
                 return;
             }
+            if (haikuWallsEnemy()) {
+                // HaikuWalls fires a stream of power-3 head-on-ish shots from the border.
+                // Treat every detected shot as a reason to make a long perpendicular/away
+                // crossing; simply reversing the normal orbit left us in its firing lane.
+                driveSampleWallsEscape(absBearing, getEnergy() < 34.0 ? 640.0 : 535.0);
+                return;
+            }
             reverseDirection();
             if (gntestStopDuel() && getEnergy() < 50.0) {
                 // In the current GNTest loss traces the slow/parked phase becomes a
@@ -631,7 +638,12 @@ public class MyTank extends AdvancedRobot {
         // inward; too close we open out.  wallSmooth then bends the path away
         // from the battlefield edges before we commit to it.
         double preferredDistance;
-        if (sampleWallsEnemy()) {
+        if (haikuWallsEnemy()) {
+            // Stay well outside the close wall-gun band.  HaikuWalls drains itself with
+            // power-3 shots; our priority is surviving those bullets while linear p1-ish
+            // shots collect damage, not chasing max-power bullet bonus.
+            preferredDistance = getEnergy() < 24.0 ? 625.0 : (getEnergy() < 48.0 ? 585.0 : 525.0);
+        } else if (sampleWallsEnemy()) {
             // Current robo_code__walls opponent is a fast perimeter runner with a very
             // accurate simple gun.  The old generic wall branch fought around ~335-400px
             // and spent max-power shots; widen the lane so fire-tick reversals have time
@@ -876,7 +888,7 @@ public class MyTank extends AdvancedRobot {
         // to long bullet flight, while its own gun almost never connects.  Once
         // virtual guns report a hard-to-hit mover, tighten the orbit a bit to
         // shorten flight time and improve hit/kill speed without going to ram range.
-        if (!waveSurfingEnemy() && !dangerousWallEnemy() && !activeStopGoShooter() && !heavyStopGoShooter()
+        if (!haikuWallsEnemy() && !waveSurfingEnemy() && !dangerousWallEnemy() && !activeStopGoShooter() && !heavyStopGoShooter()
                 && virtualSamples > 28 && bestGunError() > 72.0 && stationaryScans <= 5 && slowEnemyScans <= 12) {
             preferredDistance = 355.0;
         }
@@ -994,6 +1006,22 @@ public class MyTank extends AdvancedRobot {
         boolean finishingFixedHighPower = fixedHeadingHighPowerShooter() && e.getEnergy() < 17.0 && distance < 460.0 && getEnergy() > 6.0;
         boolean finishingFixedMedium = fixedHeadingMediumShooter() && e.getEnergy() < 17.0 && distance < 540.0 && getEnergy() > 6.0;
         boolean hardToHitMover = virtualSamples > 28 && bestGunError() > 72.0 && stationaryScans <= 5 && slowEnemyScans <= 12;
+        if (haikuWallsEnemy()) {
+            // P3 shots were self-depleting and slow against this fast perimeter target.
+            // Offline trace replay shows faster low-power linear bullets cut future-position
+            // error dramatically, while the opponent spends its own energy on p3 misses.
+            if (e.getEnergy() < 8.0 && getEnergy() > 5.0 && distance < 620.0) {
+                power = Math.min(Math.max(power, lethalPower(e.getEnergy())), 1.25);
+            } else if (getEnergy() > 62.0) {
+                power = Math.min(Math.max(power, distance < 430.0 ? 1.15 : 0.90), 1.20);
+            } else if (getEnergy() > 34.0) {
+                power = Math.min(Math.max(power, distance < 380.0 ? 0.70 : 0.50), 0.75);
+            } else if (getEnergy() > 16.0) {
+                power = Math.min(power, distance < 340.0 ? 0.32 : 0.22);
+            } else {
+                power = Math.min(power, getEnergy() < 8.0 ? 0.10 : 0.16);
+            }
+        }
         if (sampleWallsEnemy()) {
             // Full linear prediction is the best replay model for sample.Walls-style
             // perimeter motion, but power-3 bullets are slow and caused self-depletion in
@@ -1525,6 +1553,20 @@ public class MyTank extends AdvancedRobot {
                 power = Math.min(power, getEnergy() < 8.0 ? 0.12 : 0.20);
             }
         }
+        if (haikuWallsEnemy()) {
+            // Re-apply after broad wall/slow branches that may raise power back toward p3.
+            if (e.getEnergy() < 8.0 && getEnergy() > 5.0 && distance < 620.0) {
+                power = Math.min(power, Math.min(Math.max(lethalPower(e.getEnergy()), 0.25), 1.25));
+            } else if (getEnergy() > 62.0) {
+                power = Math.min(power, distance < 430.0 ? 1.15 : 0.90);
+            } else if (getEnergy() > 34.0) {
+                power = Math.min(power, distance < 380.0 ? 0.70 : 0.50);
+            } else if (getEnergy() > 16.0) {
+                power = Math.min(power, distance < 340.0 ? 0.32 : 0.22);
+            } else {
+                power = Math.min(power, getEnergy() < 8.0 ? 0.10 : 0.16);
+            }
+        }
         if (sampleWallsEnemy()) {
             // Re-apply after generic fast/dangerous-wall branches, which otherwise raise
             // this name-gated Walls matchup back to p3.  Preserve lethal finishers, but cap
@@ -1638,6 +1680,10 @@ public class MyTank extends AdvancedRobot {
             // waves show a clear margin so we do not overfit a short turning phase.
             gun = (virtualSamples > 28 && virtualGunError[GUN_AVERAGED] + 6.0 < virtualGunError[GUN_CIRCULAR])
                     ? GUN_AVERAGED : GUN_CIRCULAR;
+        } else if (haikuWallsEnemy()) {
+            // HaikuWalls runs the full rectangle perimeter; linear lead is far ahead of
+            // head-on/averaged/wall-damped in the recorded traces.
+            gun = GUN_LINEAR;
         } else if (sampleWallsEnemy()) {
             // sample.Walls drives long straight cardinal legs around the border; offline
             // replay on the current traces ranks full linear lead ahead of averaged/wallavg.
@@ -1967,6 +2013,14 @@ public class MyTank extends AdvancedRobot {
             // unless it is already close enough for a capped finisher.
             fireAllowed = false;
         }
+        if (haikuWallsEnemy()) {
+            tolerance = Math.min(tolerance, Math.atan2(12.0, distance));
+            if (getEnergy() < 14.0 && e.getEnergy() > 9.0) {
+                // If the p3 wall runner still has a stack, last-reserve 0.1 bullets cannot
+                // out-damage it before one more hit; bank energy for movement/survival.
+                fireAllowed = false;
+            }
+        }
         if (sampleWallsEnemy() && getEnergy() < 14.0 && e.getEnergy() > 12.0) {
             // The current Walls opponent's simple gun is accurate; if it still has a large
             // stack, last-reserve 0.1-0.2 bullets only self-disable us before enough damage
@@ -2017,6 +2071,15 @@ public class MyTank extends AdvancedRobot {
         return best;
     }
 
+
+    private boolean haikuWallsEnemy() {
+        // Current opponent pez__haikuwalls: a PEZ Walls-family perimeter runner that
+        // spends almost every shot at power 3 while hugging the border.  Replay shows
+        // full linear prediction is far better than our damped wall guns, but p3 return
+        // fire punishes close/max-power chases.  Name-gate this narrow profile so the
+        // many previous wall/stop-go special cases keep their tuned behavior.
+        return enemyName != null && enemyName.contains("pez__haikuwalls");
+    }
 
     private boolean robrrratEnemy() {
         // Current /logs/rounds/0 opponent: sacdalance__robrrrat, a mixed fast/stop mover
@@ -3032,6 +3095,11 @@ public class MyTank extends AdvancedRobot {
         if (shrekerEnemy()) {
             reverseDirection();
             drivePerpendicularEscape(lastEnemyAbsBearing, getEnergy() < 42.0 ? 430.0 : 310.0);
+            return;
+        }
+        if (haikuWallsEnemy()) {
+            reverseDirection();
+            driveSampleWallsEscape(lastEnemyAbsBearing, getEnergy() < 34.0 ? 680.0 : 560.0);
             return;
         }
         if (sampleWallsEnemy()) {

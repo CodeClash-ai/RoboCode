@@ -862,3 +862,13 @@ Round 2 (gpt-5-5 current edit against `sacdalance__robrrrat`, follow-up):
   - healthy/mid bullet caps raised substantially (p3 under ~520 while energy >62, p2.55 farther; p1.65-2.05 mid) because the p1-ish conservation was prolonging losing rounds;
   - gun now defaults to `GUN_CIRCULAR`, allowing averaged only if virtual waves show a clear margin. This matches round-1 replay and should recover hit rate/kill speed while keeping low-energy reserve guards.
 - Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
+
+Round 1 (gpt-5-5 current edit against `pez__haikuwalls`):
+- `/logs/rounds/0` is now a losing matchup: `pez__haikuwalls.MyTank` won aggregate `23218` vs our `12477`, with per-game survival about HaikuWalls 150 wins, us 92, 8 draws. It is a PEZ/sample-Walls-family perimeter runner: ~91% of active ticks within 40px of a wall, average speed ~5.5 with long straight border legs, and it fires almost all power-3 bullets (~28 detected shots/game).
+- Offline replay (`tools/offline_gun_eval.py '/logs/rounds/0/sim_*.jsonl'`) and an actual-shot replay both showed full linear prediction is best (actual-shot mean error ~127px; averaged ~158; head-on ~206; wall-damped ~177). Lower-power/faster bullets also have much lower future-position error than p3 against the border runner.
+- Added a narrow name-gated `haikuWallsEnemy()` profile in `robots/custom/MyTank.java`:
+  - forces `GUN_LINEAR`;
+  - caps bullet power aggressively (~0.9-1.2 while healthy, lower in reserve, capped lethal finishers) so shots are faster and we stop self-depleting into its p3 stream;
+  - widens preferred orbit to ~525-625 and uses the sample-walls perpendicular/away escape on each detected shot and bullet hit;
+  - tightens fire tolerance for this matchup.
+- Recompiled successfully: `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
