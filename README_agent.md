@@ -800,3 +800,13 @@ Round 1 (gpt-5-5 current edit against `robo_code__walls`):
   - cap bullet power after all generic wall branches to faster medium shots (about 1.85-2.1 high energy, 1.05-1.35 mid, cheap low, capped lethal finisher) instead of inheriting p3 dangerous-wall/fast-wall pressure;
   - stop firing below 10 energy if Walls still has >12, preserving movement reserve rather than self-disabling with pinpricks.
 - Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`. No local hidden-opponent battle is available, so this is trace-analysis based.
+
+Round 2 (gpt-5-5 current edit, Walls follow-up):
+- Reviewed `/logs/rounds/1`: the name-gated `robo_code__walls` branch flipped the matchup from losing to winning (`28700` vs `10243`), but traces still show ~177/250 live wins and many long self-depletion losses. Losses commonly had our bot at ~10 energy with Walls still >12-25; tiny reserve bullets could not finish before an already-fired p2 bullet hit.
+- Added `tools/analyze_walls.py` for quick Walls trace summaries (win/loss counts, distances, shot/drop estimates).
+- Retuned `robots/custom/MyTank.java` for sample.Walls only:
+  - detected Walls shots no longer call the generic `reverseDirection()` first; instead `driveSampleWallsEscape()` keeps a consistent lateral dodge side and scores perpendicular crossing + separation. Actual bullet hits still flip side, then use the same longer escape.
+  - widened preferred Walls range slightly (475/520/560) and tightened low-energy caps/no-fire reserve (below ~14 energy if Walls is not near lethal) to reduce remaining self-disable losses.
+  - kept the replay-best `GUN_LINEAR` and healthy medium-power caps; this is a survival/movement/reserve tweak, not a gun change.
+- Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
+

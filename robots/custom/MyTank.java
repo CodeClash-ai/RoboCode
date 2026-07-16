@@ -341,6 +341,14 @@ public class MyTank extends AdvancedRobot {
                 driveStationaryHeavyEscape(absBearing, getEnergy() < 40.0 ? 390.0 : 340.0);
                 return;
             }
+            if (sampleWallsEnemy()) {
+                // sample.Walls fires accurate head-on/near-head-on bullets while racing
+                // around the border.  Reversing exactly on its fire tick made us cross back
+                // through the old bullet line in round-1 loss traces.  Keep one lateral
+                // dodge side through the shot and only change side on wall pressure.
+                driveSampleWallsEscape(absBearing, getEnergy() < 38.0 ? 545.0 : 445.0);
+                return;
+            }
             reverseDirection();
             if (gntestStopDuel() && getEnergy() < 50.0) {
                 // In the current GNTest loss traces the slow/parked phase becomes a
@@ -363,14 +371,6 @@ public class MyTank extends AdvancedRobot {
                 // reverse along the same close curve; step across its shot line, especially
                 // because the rare loss traces were close-range exchanges.
                 drivePerpendicularEscape(absBearing, getEnergy() < 42.0 ? 420.0 : 335.0);
-                return;
-            }
-            if (sampleWallsEnemy()) {
-                // robo_code__walls is sample.Walls-like: it runs the perimeter and fires
-                // accurate head-on/near-head-on power-2 bullets.  A mere orbit reversal can
-                // leave us parallel to the same firing line; on every detected shot, make a
-                // pronounced perpendicular crossing and keep the range open.
-                drivePerpendicularEscape(absBearing, getEnergy() < 38.0 ? 520.0 : 430.0);
                 return;
             }
             if (shrekerEnemy()) {
@@ -597,7 +597,7 @@ public class MyTank extends AdvancedRobot {
             // accurate simple gun.  The old generic wall branch fought around ~335-400px
             // and spent max-power shots; widen the lane so fire-tick reversals have time
             // to clear its head-on bullets while still keeping linear shots reasonable.
-            preferredDistance = getEnergy() < 24.0 ? 535.0 : (getEnergy() < 48.0 ? 500.0 : 455.0);
+            preferredDistance = getEnergy() < 24.0 ? 560.0 : (getEnergy() < 48.0 ? 520.0 : 475.0);
         } else if (maximbotEnemy()) {
             // Current Maximbot is very hittable by circular aim, but its medium/high gun
             // leaks damage at knife range.  Use a compact circular-shot band while healthy
@@ -949,10 +949,12 @@ public class MyTank extends AdvancedRobot {
                 power = Math.min(Math.max(power, distance < 420 ? 2.10 : 1.85), 2.15);
             } else if (getEnergy() > 34.0) {
                 power = Math.min(Math.max(power, distance < 380 ? 1.35 : 1.05), 1.45);
-            } else if (getEnergy() > 16.0) {
-                power = Math.min(power, distance < 350 ? 0.55 : 0.35);
+            } else if (getEnergy() > 18.0) {
+                power = Math.min(power, distance < 350 ? 0.42 : 0.28);
+            } else if (getEnergy() > 12.0) {
+                power = Math.min(power, 0.15);
             } else {
-                power = Math.min(power, getEnergy() < 8.0 ? 0.15 : 0.25);
+                power = Math.min(power, 0.10);
             }
         }
         // If all virtual guns are missing badly (as with wave-surfing GF-style
@@ -1450,10 +1452,12 @@ public class MyTank extends AdvancedRobot {
                 power = Math.min(power, distance < 420 ? 2.10 : 1.85);
             } else if (getEnergy() > 34.0) {
                 power = Math.min(power, distance < 380 ? 1.35 : 1.05);
-            } else if (getEnergy() > 16.0) {
-                power = Math.min(power, distance < 350 ? 0.55 : 0.35);
+            } else if (getEnergy() > 18.0) {
+                power = Math.min(power, distance < 350 ? 0.42 : 0.28);
+            } else if (getEnergy() > 12.0) {
+                power = Math.min(power, 0.15);
             } else {
-                power = Math.min(power, getEnergy() < 8.0 ? 0.15 : 0.25);
+                power = Math.min(power, 0.10);
             }
         }
         if (hardToHitMover) {
@@ -1847,7 +1851,7 @@ public class MyTank extends AdvancedRobot {
             // circular bullets cannot finish it before another medium/high shot lands.
             fireAllowed = false;
         }
-        if (sampleWallsEnemy() && getEnergy() < 10.0 && e.getEnergy() > 12.0) {
+        if (sampleWallsEnemy() && getEnergy() < 14.0 && e.getEnergy() > 12.0) {
             // The current Walls opponent's simple gun is accurate; if it still has a large
             // stack, last-reserve 0.1-0.2 bullets only self-disable us before enough damage
             // can land.  Keep the energy for movement unless a capped lethal finish is near.
@@ -2897,8 +2901,11 @@ public class MyTank extends AdvancedRobot {
             return;
         }
         if (sampleWallsEnemy()) {
+            // A hit usually means our previous dodge side/wall choice failed.  Do not
+            // immediately flip-flop every detected fire tick, but after an actual hit switch
+            // lateral side and take a long crossing escape before resuming the wide orbit.
             reverseDirection();
-            drivePerpendicularEscape(lastEnemyAbsBearing, getEnergy() < 38.0 ? 560.0 : 455.0);
+            driveSampleWallsEscape(lastEnemyAbsBearing, getEnergy() < 38.0 ? 575.0 : 470.0);
             return;
         }
         if (maximbotEnemy()) {
@@ -3031,6 +3038,43 @@ public class MyTank extends AdvancedRobot {
             setMaxVelocity(8.0);
             driveAlongAngle(best, distance);
         }
+    }
+
+
+    private void driveSampleWallsEscape(double threatBearing, double distance) {
+        // Dedicated dodge for sample.Walls.  Its gun is essentially head-on and its
+        // fire timing is regular; changing orbit direction on every energy drop can
+        // walk back into bullets that are already in flight.  Prefer the current
+        // moveDirection side, score for both perpendicular crossing and opening range,
+        // and only fall back to the opposite side if a wall blocks the chosen lane.
+        double best = threatBearing + moveDirection * Math.PI / 2.0;
+        double bestScore = -1.0e9;
+        for (int sideTry = 0; sideTry < 2; sideTry++) {
+            int side = sideTry == 0 ? moveDirection : -moveDirection;
+            for (int i = -5; i <= 5; i++) {
+                double a = threatBearing + side * Math.PI / 2.0 + i * 0.13;
+                double px = projectX(getX(), a, 210.0);
+                double py = projectY(getY(), a, 210.0);
+                if (!insideBattlefield(px, py, 26.0)) {
+                    continue;
+                }
+                double margin = Math.min(Math.min(px, getBattleFieldWidth() - px),
+                        Math.min(py, getBattleFieldHeight() - py));
+                double perpendicular = Math.cos(Utils.normalRelativeAngle(a - (threatBearing + side * Math.PI / 2.0)));
+                double separation = -Math.cos(Utils.normalRelativeAngle(a - threatBearing));
+                double sideBias = side == moveDirection ? 85.0 : 0.0;
+                double score = 1.55 * margin + 150.0 * perpendicular + 70.0 * separation + sideBias;
+                if (score > bestScore) {
+                    bestScore = score;
+                    best = a;
+                }
+            }
+        }
+        if (bestScore < -1.0e8) {
+            best = Math.atan2(getBattleFieldWidth() / 2.0 - getX(), getBattleFieldHeight() / 2.0 - getY());
+        }
+        setMaxVelocity(8.0);
+        driveAlongAngle(best, distance);
     }
 
     private void drivePerpendicularEscape(double threatBearing, double distance) {
