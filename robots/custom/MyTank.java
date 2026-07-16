@@ -322,6 +322,15 @@ public class MyTank extends AdvancedRobot {
                     ? enemyDrop
                     : 0.82 * enemyFirePowerAvg + 0.18 * enemyDrop;
             enemyFirePowerSamples++;
+            if (gntestEnemy() && stationaryScans > 4) {
+                // GNTest's losing traces include a stationary/parked phase that fires
+                // p2-p3 bullets.  The generic stationary-heavy dodge only reacted to
+                // >2.2 drops, so medium shots kept us on a stable orbit and landed in
+                // strings.  Cross the gun line on every detected GNTest shot while it is
+                // parked, before the broader TrackFire rule below.
+                driveStationaryHeavyEscape(absBearing, getEnergy() < 38.0 ? 430.0 : 365.0);
+                return;
+            }
             if (stationaryScans > 5 && enemyDrop > 2.20) {
                 // sample.TrackFire-style opponents sit still but fire repeated power-3
                 // bullets at our current bearing.  The generic response reversed orbit
@@ -601,6 +610,12 @@ public class MyTank extends AdvancedRobot {
             // widen only through power caps/low-energy safeguards instead of chasing
             // point-blank along the wall.
             preferredDistance = getEnergy() < 18.0 ? 430.0 : 305.0;
+        } else if (gntestEnemy() && stationaryScans > 4) {
+            // Name-gated current matchup: when GNTest parks and shoots, do not let
+            // stationaryShooter/TrackFire branches force p3 farming or very long
+            // slow-bullet exchanges.  Keep enough range for dodging, but not so far
+            // that our faster medium head-on bullets take forever.
+            preferredDistance = getEnergy() < 18.0 ? 465.0 : (getEnergy() < 36.0 ? 420.0 : 365.0);
         } else if (fixedHeadingHighPowerShooter()) {
             // A fixed-heading high-power stop/go shooter is more dangerous than
             // Ian/Tarektank-style weak axis bots.  Keep a short but not point-blank
@@ -829,6 +844,22 @@ public class MyTank extends AdvancedRobot {
         // kill reduces exposure.  Moving opponents keep the conservative ladder.
         if (stationaryScans > 5 && getEnergy() > 12) {
             power = 3.0;
+            if (gntestEnemy()) {
+                // Against the current GNTest parked shooter, p3 head-on trades lose
+                // too much energy to its accurate medium/high bullets.  Faster medium
+                // bullets both arrive sooner and reduce self-depletion in the loss mode.
+                if (e.getEnergy() < 11.0 && getEnergy() > 7.0 && distance < 620.0) {
+                    power = Math.min(Math.max(lethalPower(e.getEnergy()), 0.55), 1.85);
+                } else if (getEnergy() > 58.0) {
+                    power = Math.min(power, distance < 380 ? 1.95 : 1.65);
+                } else if (getEnergy() > 34.0) {
+                    power = Math.min(power, distance < 360 ? 1.25 : 0.95);
+                } else if (getEnergy() > 16.0) {
+                    power = Math.min(power, distance < 330 ? 0.48 : 0.32);
+                } else {
+                    power = Math.min(power, getEnergy() < 8.0 ? 0.12 : 0.20);
+                }
+            }
             if (stationaryHeavyShooter() && getEnergy() < 34.0 && e.getEnergy() < 18.0) {
                 // When low against a power-3 stationary shooter, avoid spending excess
                 // energy on overkill; a minimum lethal bullet is faster and preserves the
@@ -1287,6 +1318,23 @@ public class MyTank extends AdvancedRobot {
                 power = Math.min(power, getEnergy() < 8.0 ? 0.15 : 0.22);
             }
         }
+        if (gntestEnemy() && stationaryScans > 5) {
+            // Re-apply this after generic stop/go/fixed-heading branches, which may
+            // raise power with Math.max().  The parked GNTest phase is the current
+            // loss mode; never let it inherit p3 stationary farming or heavy slow-target
+            // boosts once its medium/high gun is confirmed.
+            if (e.getEnergy() < 11.0 && getEnergy() > 7.0 && distance < 620.0) {
+                power = Math.min(power, Math.min(Math.max(lethalPower(e.getEnergy()), 0.55), 1.85));
+            } else if (getEnergy() > 58.0) {
+                power = Math.min(power, distance < 380 ? 1.95 : 1.65);
+            } else if (getEnergy() > 34.0) {
+                power = Math.min(power, distance < 360 ? 1.25 : 0.95);
+            } else if (getEnergy() > 16.0) {
+                power = Math.min(power, distance < 330 ? 0.48 : 0.32);
+            } else {
+                power = Math.min(power, getEnergy() < 8.0 ? 0.12 : 0.20);
+            }
+        }
         if (hardToHitMover) {
             if (getEnergy() < 12) {
                 power = Math.min(power, 0.15);
@@ -1693,6 +1741,16 @@ public class MyTank extends AdvancedRobot {
     }
 
 
+    private boolean gntestEnemy() {
+        return enemyName != null && enemyName.contains("josephjeon__gntest")
+                && enemyFireCount > 2
+                && enemyFirePowerSamples > 1
+                && enemyFirePowerAvg > 1.35
+                && enemyFirePowerAvg <= 3.05
+                && !spinBotEnemy()
+                && crazyEnemyScans <= 4;
+    }
+
     private boolean gntestStopDuel() {
         // Narrow name-gated safety valve for the current josephjeon__gntest matchup.
         // GNTest has two distinct phases in the logs: a fast turning phase where our
@@ -1700,18 +1758,11 @@ public class MyTank extends AdvancedRobot {
         // stop/creep duel where the generic fixed-heading-medium profile over-spends.
         // Gate on the enemy name plus observed slow/low-turn medium-fire behavior so
         // prior fixed-heading/medium opponent tuning remains unchanged.
-        return enemyName != null && enemyName.contains("josephjeon__gntest")
-                && enemyFireCount > 4
-                && enemyFirePowerSamples > 2
-                && enemyFirePowerAvg > 1.55
-                && enemyFirePowerAvg <= 2.75
+        return gntestEnemy()
                 && stopGoEnemyScans > 8
                 && enemySpeedAvg < 3.05
                 && enemyAbsTurnRateAvg < 0.035
-                && stationaryScans <= 20
-                && !stationaryShooter()
-                && !spinBotEnemy()
-                && crazyEnemyScans <= 4;
+                && stationaryScans <= 45;
     }
 
     private boolean waveSurfingEnemy() {

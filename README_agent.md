@@ -748,3 +748,12 @@ Round 1 (gpt-5-5 current edit against `josephjeon__gntest`):
 - Added a narrow name-gated `gntestStopDuel()` branch in `robots/custom/MyTank.java` for the slow/low-turn medium-fire GNTest phase. It does not affect other opponents because it requires `enemyName.contains("josephjeon__gntest")`.
 - In that branch: use compact-but-safe range (~325, widening only when low), force head-on when stopped/creeping and circular if it resumes turning, cap bullets to faster medium/cheap shots with a lethal finisher, tighten aim tolerance, stop last-reserve firing when the enemy is not near death, and sidestep on detected GNTest fire once our reserve is below 50.
 - Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
+
+Round 2 (gpt-5-5 current edit, GNTest follow-up):
+- Reviewed `/logs/rounds/1`: aggregate improved slightly (`39257` vs `8093`) but traced survival still had 11 GNTest wins. Loss traces (e.g. `sim_129`) show a parked/stationary GNTest phase firing repeated p2-p3 bullets; our old name-gated `gntestStopDuel()` excluded `stationaryShooter()`, so generic stationary/slow/fixed-heading branches could keep p3/heavy trades while GNTest landed accurate medium/high bullets.
+- Updated `robots/custom/MyTank.java` with a broader name-gated `gntestEnemy()` helper and stationary GNTest handling:
+  - sidestep/diagonal escape on *every* detected GNTest shot while it is parked (not only drops >2.2);
+  - use a 365/420/465 preferred range band for parked GNTest instead of TrackFire p3 farming or generic stationary shooter behavior;
+  - cap parked GNTest bullet power after all generic branches to faster medium/cheap tiers, with a capped lethal finisher, preventing generic p3 slow-target boosts from reappearing in the loss mode;
+  - allow `gntestStopDuel()` to include stationary parked phases (still strictly name-gated).
+- Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
