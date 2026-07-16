@@ -790,7 +790,7 @@ public class MyTank extends AdvancedRobot {
             // Current pmontp19__propiavancat traces are fast circular/turning; replay
             // strongly favors circular aim.  Stay in a compact band for short p2.5/p3
             // bullet flight while healthy, but open up before rare self-depletion rounds.
-            preferredDistance = getEnergy() < 24.0 ? 470.0 : (getEnergy() < 48.0 ? 390.0 : 310.0);
+            preferredDistance = getEnergy() < 24.0 ? 470.0 : (getEnergy() < 48.0 ? 390.0 : 295.0);
         } else if (megaborstenEnemy()) {
             // denssle__megaborsten is a fast wall runner that our traces hit best with
             // low/medium-power linear bullets.  Hold a moderate-wide lane: wider than the
@@ -2631,7 +2631,15 @@ public class MyTank extends AdvancedRobot {
         // not dangerous enough to justify tiny bullets while our reserve is high, but
         // keep a real low-energy reserve for the rare long rounds that caused the only
         // live losses in round 0.
-        if (e.getEnergy() < 18.0 && getEnergy() > 8.0 && distance < 650.0) {
+        if (e.getEnergy() < 18.0 && getEnergy() > 28.0 && distance < 650.0) {
+            // We end PropiAvancat rounds with a large energy reserve.  Use a true
+            // max-power closer in the 10-18 energy band instead of the older 2.65
+            // cap so the circular gun does not need an extra final bullet cycle.
+            // Very low enemy energy still gets a faster minimum-lethal shot.
+            power = e.getEnergy() < 9.0
+                    ? Math.min(Math.max(lethalPower(e.getEnergy()), 0.45), 1.75)
+                    : 3.0;
+        } else if (e.getEnergy() < 18.0 && getEnergy() > 8.0 && distance < 650.0) {
             power = Math.min(Math.max(lethalPower(e.getEnergy()), 0.45), e.getEnergy() < 9.0 ? 1.75 : 2.65);
         } else if (getEnergy() > 58.0) {
             power = distance < 640.0 ? 3.0 : 2.45;
