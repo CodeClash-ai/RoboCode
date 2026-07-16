@@ -378,7 +378,7 @@ public class MyTank extends AdvancedRobot {
                 // fire ticks, which kept many loss traces close.  Use the sample-walls style
                 // lane change here: mostly perpendicular, but with an away component and a
                 // consistent side so the range actually opens while we cross the shot line.
-                driveSampleWallsEscape(absBearing, getEnergy() < 38.0 ? 620.0 : 520.0);
+                driveSampleWallsEscape(absBearing, getEnergy() < 38.0 ? 585.0 : 485.0);
                 return;
             }
             if (megaborstenEnemy()) {
@@ -752,10 +752,12 @@ public class MyTank extends AdvancedRobot {
             driveAwayFrom(absBearing, 285.0);
             return;
         }
-        if (berendBotjeEnemy() && e.getDistance() < (getEnergy() < 42.0 ? 450.0 : 365.0)) {
-            // Remaining losses are close-range p2/p3 streams.  Do not wait until knife
-            // range; keep opening direct separation until we are near the wider Berend lane.
-            driveAwayFrom(absBearing, getEnergy() < 42.0 ? 560.0 : 455.0);
+        if (berendBotjeEnemy() && e.getDistance() < (getEnergy() < 42.0 ? 390.0 : 320.0)) {
+            // BerendBotje punishes pure radial retreat: it chases back into the 130-220px
+            // band and its p2/p3 gun hits while our lateral velocity is small.  Use the
+            // same away+perpendicular lane change as fire-tick dodging, but only once range
+            // has actually collapsed so normal averaged-gun shots are not made too long.
+            driveSampleWallsEscape(absBearing, getEnergy() < 42.0 ? 535.0 : 455.0);
             return;
         }
         if (hunterEnemy() && e.getDistance() < (getEnergy() < 45.0 ? 370.0 : 300.0)) {
@@ -837,7 +839,7 @@ public class MyTank extends AdvancedRobot {
             // later pulled the orbit back to 355 and fire-tick dodges were mostly lateral.
             // BerendBotje lands repeated p2/p3 shots at that distance, so hold a genuinely
             // wider lane and let the averaged fast-bullet gun work from safer range.
-            preferredDistance = getEnergy() < 24.0 ? 585.0 : (getEnergy() < 48.0 ? 535.0 : 475.0);
+            preferredDistance = getEnergy() < 24.0 ? 540.0 : (getEnergy() < 48.0 ? 485.0 : 430.0);
         } else if (poetEnemy()) {
             preferredDistance = getEnergy() < 28.0 ? 420.0 : (getEnergy() < 48.0 ? 350.0 : 285.0);
         } else if (wildeEnemy()) {
@@ -2722,9 +2724,9 @@ public class MyTank extends AdvancedRobot {
             // the 10-22 band while keeping normal bullets fast/cheap.
             power = Math.min(Math.max(lethalPower(e.getEnergy()), 0.35), e.getEnergy() < 9.0 ? 1.65 : 2.55);
         } else if (getEnergy() > 70.0) {
-            power = distance < 390.0 ? 2.05 : 1.70;
+            power = distance < 390.0 ? 1.85 : 1.55;
         } else if (getEnergy() > 48.0) {
-            power = distance < 380.0 ? 1.35 : 1.05;
+            power = distance < 380.0 ? 1.20 : 0.92;
         } else if (getEnergy() > 24.0) {
             power = distance < 350.0 ? 0.55 : 0.38;
         } else if (getEnergy() > 12.0) {
@@ -4094,7 +4096,7 @@ public class MyTank extends AdvancedRobot {
     public void onHitByBullet(HitByBulletEvent e) {
         if (berendBotjeEnemy()) {
             reverseDirection();
-            driveSampleWallsEscape(lastEnemyAbsBearing, getEnergy() < 38.0 ? 650.0 : 540.0);
+            driveSampleWallsEscape(lastEnemyAbsBearing, getEnergy() < 38.0 ? 610.0 : 500.0);
             return;
         }
         if (poetEnemy()) {
@@ -4239,7 +4241,9 @@ public class MyTank extends AdvancedRobot {
             // along the current body axis away from the collision normal.
             emergencyStraightAwayFrom(robotBearing, 360.0);
         } else if (berendBotjeEnemy()) {
-            driveAwayFrom(robotBearing, 540.0);
+            // In actual collision/ram overlap, immediate radial separation is more important
+            // than the scan-time lateral lane change.
+            driveAwayFrom(robotBearing, 500.0);
         } else if (dodgeBot2Enemy()) {
             // Do not stay tangled with DodgeBot2: a few round-1 non-win traces ended with
             // both bots nearly overlapped while our reserve was too low for another long
