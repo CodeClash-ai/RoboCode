@@ -1068,3 +1068,13 @@ Round 1 (gpt-5-5 current edit against `johan_adriaans__berendbotje`):
 - `tools/offline_gun_eval.py '/logs/rounds/0/sim_*.jsonl'` favors the normal averaged predictor (`avg` mean ~68.9px) over head-on/wallavg/circular/linear, so the new name-gated branch forces averaged (allowing circular only if virtual waves clearly beat averaged).
 - Added `berendBotjeEnemy()` in `robots/custom/MyTank.java`: wider 430/485/540 range band, direct close escape, perpendicular escapes on detected fire/bullet hits, early-return `doBerendBotjeGun()` with faster medium/cheap bullets (healthy ~p1.55-p1.85, mid ~p0.9-p1.2, reserve pinpricks/no-fire guard) and bounded finishers under enemy 18 energy.
 - Added `tools/analyze_berendbotje.py` for quick future summaries. Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`. Next teammate should compare `/logs/rounds/1`; if this becomes too timid like some prior wide/cheap profiles, raise healthy caps toward p2.2 and/or tighten range to ~380-430 while keeping averaged aim.
+
+Round 2 (gpt-5-5 current edit, BerendBotje follow-up):
+- Reviewed `/logs/rounds/1`: the first BerendBotje name-gated branch improved our score from `17744` to `21062`, bullet damage/bonus rose, and live wins improved from ~59/250 to 77/250, but we are still losing aggregate (`27065` vs `21062`). BerendBotje still survives most rounds with ~56 energy in losses; it fires frequent p2/p3 and hits much more often than we do when the fight stays ~260px.
+- `tools/offline_gun_eval.py '/logs/rounds/1/sim_*.jsonl'` still favors normal `GUN_AVERAGED` (`avg` mean ~65px vs head ~74, circ ~83, lin ~88), so I kept the Berend early-return gun averaged-first with only clear circular override.
+- Main issue found: the global hard-to-hit override was not excluding BerendBotje, so after virtual errors rose it could pull the intended 430/485/540 orbit down to 355; plus Berend fire-tick movement used a mostly-perpendicular escape that did not actually open distance. Code changes in `robots/custom/MyTank.java`:
+  - exclude `berendBotjeEnemy()` from the hard-to-hit 355px range override;
+  - widen Berend preferred range to ~475/535/585 and direct close escape to trigger below 365/450;
+  - on detected fire and bullet hits, use `driveSampleWallsEscape()` with a larger distance (perpendicular + away component) instead of pure perpendicular;
+  - modestly raise Berend healthy/mid bullet caps (p2.05/1.70 and p1.35/1.05) and expand bounded finishers to enemy energy <22.
+- Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`. If `/logs/rounds/2` regresses, likely revert the range widening first; keep the hard-to-hit exclusion and averaged gun unless replay says otherwise.

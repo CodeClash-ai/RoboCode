@@ -373,10 +373,12 @@ public class MyTank extends AdvancedRobot {
                 return;
             }
             if (berendBotjeEnemy()) {
-                // BerendBotje lands enough medium/high bullets that merely reversing the
-                // close orbit loses survival.  Cross the shot line and reopen a wider lane
-                // on every detected fire tick while the cheap averaged gun preserves energy.
-                drivePerpendicularEscape(absBearing, getEnergy() < 34.0 ? 520.0 : 420.0);
+                // BerendBotje's gun is most dangerous when our orbit collapses into the
+                // 230-280px band.  The first specialization only stepped perpendicular on
+                // fire ticks, which kept many loss traces close.  Use the sample-walls style
+                // lane change here: mostly perpendicular, but with an away component and a
+                // consistent side so the range actually opens while we cross the shot line.
+                driveSampleWallsEscape(absBearing, getEnergy() < 38.0 ? 620.0 : 520.0);
                 return;
             }
             if (megaborstenEnemy()) {
@@ -750,10 +752,10 @@ public class MyTank extends AdvancedRobot {
             driveAwayFrom(absBearing, 285.0);
             return;
         }
-        if (berendBotjeEnemy() && e.getDistance() < (getEnergy() < 38.0 ? 360.0 : 285.0)) {
-            // Loss traces average much closer than our desired lane; open direct distance
-            // before resuming the orbit so its p2/p3 bullets are not point-blank.
-            driveAwayFrom(absBearing, getEnergy() < 38.0 ? 455.0 : 360.0);
+        if (berendBotjeEnemy() && e.getDistance() < (getEnergy() < 42.0 ? 450.0 : 365.0)) {
+            // Remaining losses are close-range p2/p3 streams.  Do not wait until knife
+            // range; keep opening direct separation until we are near the wider Berend lane.
+            driveAwayFrom(absBearing, getEnergy() < 42.0 ? 560.0 : 455.0);
             return;
         }
         if (hunterEnemy() && e.getDistance() < (getEnergy() < 45.0 ? 370.0 : 300.0)) {
@@ -831,10 +833,11 @@ public class MyTank extends AdvancedRobot {
             // generic Crazy 260px knife-range pull-in that donated most of its score.
             preferredDistance = getEnergy() < 24.0 ? 455.0 : (getEnergy() < 48.0 ? 405.0 : 355.0);
         } else if (berendBotjeEnemy()) {
-            // BerendBotje beat us by surviving close exchanges, not by avoiding all hits.
-            // Hold a wider lane than the generic 230-300px fast-mover orbit so its p2/p3
-            // shots have longer flight time, but do not go to extreme wall-poet ranges.
-            preferredDistance = getEnergy() < 24.0 ? 540.0 : (getEnergy() < 48.0 ? 485.0 : 430.0);
+            // Round-1 still averaged only ~265px because the generic hard-to-hit override
+            // later pulled the orbit back to 355 and fire-tick dodges were mostly lateral.
+            // BerendBotje lands repeated p2/p3 shots at that distance, so hold a genuinely
+            // wider lane and let the averaged fast-bullet gun work from safer range.
+            preferredDistance = getEnergy() < 24.0 ? 585.0 : (getEnergy() < 48.0 ? 535.0 : 475.0);
         } else if (poetEnemy()) {
             preferredDistance = getEnergy() < 28.0 ? 420.0 : (getEnergy() < 48.0 ? 350.0 : 285.0);
         } else if (wildeEnemy()) {
@@ -1131,7 +1134,7 @@ public class MyTank extends AdvancedRobot {
         // to long bullet flight, while its own gun almost never connects.  Once
         // virtual guns report a hard-to-hit mover, tighten the orbit a bit to
         // shorten flight time and improve hit/kill speed without going to ram range.
-        if (!propiAvancatEnemy() && !megaborstenEnemy() && !bt7274Enemy() && !poetEnemy() && !wildeEnemy() && !dodgeBot2Enemy() && !wallspoetHaikuEnemy() && !haikuPoetEnemy() && !smallPoetEnemy() && !haikuWallsEnemy() && !waveSurfingEnemy() && !dangerousWallEnemy() && !activeStopGoShooter() && !heavyStopGoShooter()
+        if (!propiAvancatEnemy() && !megaborstenEnemy() && !bt7274Enemy() && !berendBotjeEnemy() && !poetEnemy() && !wildeEnemy() && !dodgeBot2Enemy() && !wallspoetHaikuEnemy() && !haikuPoetEnemy() && !smallPoetEnemy() && !haikuWallsEnemy() && !waveSurfingEnemy() && !dangerousWallEnemy() && !activeStopGoShooter() && !heavyStopGoShooter()
                 && virtualSamples > 28 && bestGunError() > 72.0 && stationaryScans <= 5 && slowEnemyScans <= 12) {
             preferredDistance = 355.0;
         }
@@ -2713,14 +2716,17 @@ public class MyTank extends AdvancedRobot {
         // zero while BerendBotje kept a large reserve.  Offline replay favors the normal
         // averaged predictor; lower/faster bullets should reduce self-depletion and hit
         // sooner than the old p2-p3 stream.
-        if (e.getEnergy() < 18.0 && getEnergy() > 9.0 && distance < 620.0) {
-            power = Math.min(Math.max(lethalPower(e.getEnergy()), 0.35), e.getEnergy() < 9.0 ? 1.65 : 2.25);
-        } else if (getEnergy() > 68.0) {
-            power = distance < 360.0 ? 1.85 : 1.55;
-        } else if (getEnergy() > 44.0) {
-            power = distance < 340.0 ? 1.18 : 0.92;
+        if (e.getEnergy() < 22.0 && getEnergy() > 9.0 && distance < 650.0) {
+            // Round-1 losses often left BerendBotje with a huge stack, but wins still
+            // sometimes needed too many reserve shots.  Use a stronger bounded finisher in
+            // the 10-22 band while keeping normal bullets fast/cheap.
+            power = Math.min(Math.max(lethalPower(e.getEnergy()), 0.35), e.getEnergy() < 9.0 ? 1.65 : 2.55);
+        } else if (getEnergy() > 70.0) {
+            power = distance < 390.0 ? 2.05 : 1.70;
+        } else if (getEnergy() > 48.0) {
+            power = distance < 380.0 ? 1.35 : 1.05;
         } else if (getEnergy() > 24.0) {
-            power = distance < 320.0 ? 0.48 : 0.34;
+            power = distance < 350.0 ? 0.55 : 0.38;
         } else if (getEnergy() > 12.0) {
             power = distance < 300.0 ? 0.22 : 0.15;
         } else {
@@ -4088,7 +4094,7 @@ public class MyTank extends AdvancedRobot {
     public void onHitByBullet(HitByBulletEvent e) {
         if (berendBotjeEnemy()) {
             reverseDirection();
-            drivePerpendicularEscape(lastEnemyAbsBearing, getEnergy() < 34.0 ? 560.0 : 455.0);
+            driveSampleWallsEscape(lastEnemyAbsBearing, getEnergy() < 38.0 ? 650.0 : 540.0);
             return;
         }
         if (poetEnemy()) {
@@ -4233,7 +4239,7 @@ public class MyTank extends AdvancedRobot {
             // along the current body axis away from the collision normal.
             emergencyStraightAwayFrom(robotBearing, 360.0);
         } else if (berendBotjeEnemy()) {
-            driveAwayFrom(robotBearing, 430.0);
+            driveAwayFrom(robotBearing, 540.0);
         } else if (dodgeBot2Enemy()) {
             // Do not stay tangled with DodgeBot2: a few round-1 non-win traces ended with
             // both bots nearly overlapped while our reserve was too low for another long
