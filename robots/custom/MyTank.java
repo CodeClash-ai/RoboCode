@@ -743,6 +743,15 @@ public class MyTank extends AdvancedRobot {
             driveAwayFrom(absBearing, 285.0);
             return;
         }
+        if (hunterEnemy() && e.getDistance() < (getEnergy() < 45.0 ? 370.0 : 300.0)) {
+            // Current mcd8604__hunter is a compact circular p3 shooter.  We hit it
+            // easily with circular p3, but the generic Crazy/close branches sometimes
+            // dip into the low-200px band where its max-power shots leak score.  Reopen
+            // before true knife range while keeping bullet flight short enough for the
+            // exact circular gun.
+            driveAwayFrom(absBearing, getEnergy() < 45.0 ? 385.0 : 325.0);
+            return;
+        }
         if (straightEnemyScans > 2 && harmlessLowFireEnemy() && e.getDistance() < 310.0) {
             // Hugbot/simple harmless runners can cross our orbit at full speed before
             // the narrow rammer detector fully confirms.  Open the gap early and keep
@@ -803,6 +812,11 @@ public class MyTank extends AdvancedRobot {
             // to reduce close p3 leakage, but not so wide that averaged bullets take
             // forever against its evasive path.
             preferredDistance = getEnergy() < 24.0 ? 520.0 : (getEnergy() < 48.0 ? 470.0 : 425.0);
+        } else if (hunterEnemy()) {
+            // mcd8604__hunter is very hittable by circular prediction but fires mostly
+            // p3.  A medium compact orbit preserves our kill speed while avoiding the
+            // generic Crazy 260px knife-range pull-in that donated most of its score.
+            preferredDistance = getEnergy() < 24.0 ? 455.0 : (getEnergy() < 48.0 ? 405.0 : 355.0);
         } else if (poetEnemy()) {
             preferredDistance = getEnergy() < 28.0 ? 420.0 : (getEnergy() < 48.0 ? 350.0 : 285.0);
         } else if (wildeEnemy()) {
@@ -1168,6 +1182,10 @@ public class MyTank extends AdvancedRobot {
         }
         if (megaborstenEnemy()) {
             doMegaborstenGun(e, absBearing, enemyX, enemyY, turnRate);
+            return;
+        }
+        if (hunterEnemy()) {
+            doHunterGun(e, absBearing, enemyX, enemyY, turnRate);
             return;
         }
         double power;
@@ -2623,6 +2641,45 @@ public class MyTank extends AdvancedRobot {
         }
     }
 
+    private void doHunterGun(ScannedRobotEvent e, double absBearing, double enemyX, double enemyY, double turnRate) {
+        double distance = e.getDistance();
+        double power;
+        // Trace replay for mcd8604__hunter: circular prediction at high power has a
+        // very small median error, while linear over-leads its compact turn/stop loop.
+        // Keep max pressure while we have a reserve; only downshift if an unusually long
+        // round burns us below the safe-energy band.
+        if (e.getEnergy() < 18.0 && getEnergy() > 22.0 && distance < 680.0) {
+            power = Math.min(3.0, Math.max(1.2, lethalPower(e.getEnergy())));
+        } else if (getEnergy() > 32.0 && distance < 760.0) {
+            power = 3.0;
+        } else if (getEnergy() > 16.0) {
+            power = Math.min(2.0, Math.max(1.15, distance < 460.0 ? 1.85 : 1.35));
+        } else {
+            power = Math.min(0.65, getEnergy() < 8.0 ? 0.18 : 0.35);
+        }
+        power = Math.min(power, Math.max(0.1, getEnergy() - 0.15));
+        double bulletSpeed = 20.0 - 3.0 * power;
+
+        double[][] candidates = new double[GUN_COUNT][2];
+        candidates[GUN_HEAD_ON] = predictEnemy(enemyX, enemyY, e.getHeadingRadians(), e.getVelocity(), 0.0, bulletSpeed, GUN_HEAD_ON);
+        candidates[GUN_LINEAR] = predictEnemy(enemyX, enemyY, e.getHeadingRadians(), e.getVelocity(), 0.0, bulletSpeed, GUN_LINEAR);
+        candidates[GUN_CIRCULAR] = predictEnemy(enemyX, enemyY, e.getHeadingRadians(), e.getVelocity(), turnRate, bulletSpeed, GUN_CIRCULAR);
+        candidates[GUN_AVERAGED] = predictEnemy(enemyX, enemyY, e.getHeadingRadians(), e.getVelocity(), turnRate, bulletSpeed, GUN_AVERAGED);
+        candidates[GUN_GUESS_FACTOR] = predictGuessFactor(absBearing, distance, bulletSpeed);
+        candidates[GUN_DRIFT_HEAD_ON] = predictEnemy(enemyX, enemyY, e.getHeadingRadians(), e.getVelocity(), 0.0, bulletSpeed, GUN_DRIFT_HEAD_ON);
+        addVirtualWave(candidates, bulletSpeed, absBearing);
+
+        int gun = (virtualSamples > 18 && virtualGunError[GUN_AVERAGED] + 3.0 < virtualGunError[GUN_CIRCULAR])
+                ? GUN_AVERAGED : GUN_CIRCULAR;
+        double aim = Math.atan2(candidates[gun][0] - getX(), candidates[gun][1] - getY());
+        setTurnGunRightRadians(Utils.normalRelativeAngle(aim - getGunHeadingRadians()));
+
+        double tolerance = Math.min(Math.atan2(28.0, distance), Math.atan2(16.0, distance));
+        if (getGunHeat() == 0 && Math.abs(getGunTurnRemainingRadians()) < tolerance && getEnergy() > 0.25) {
+            setFire(power);
+        }
+    }
+
 
     private void doPropiAvancatGun(ScannedRobotEvent e, double absBearing, double enemyX, double enemyY, double turnRate) {
         double distance = e.getDistance();
@@ -2818,6 +2875,13 @@ public class MyTank extends AdvancedRobot {
         // mostly p1-p1.5 fire and occasional p3.  Name-gate a linear/fast-bullet profile
         // to reduce the generic fast-wall p2/p3 self-depletion losses.
         return enemyName != null && enemyName.contains("denssle__megaborsten");
+    }
+
+    private boolean hunterEnemy() {
+        // Current opponent mcd8604__hunter: compact speed-5.3 circular/turning mover
+        // firing mostly p3.  Generic handling already wins; this narrow profile keeps
+        // circular/max-pressure aim but avoids overly close Crazy-style orbits.
+        return enemyName != null && enemyName.contains("mcd8604__hunter");
     }
 
     private boolean bt7274Enemy() {
