@@ -852,3 +852,13 @@ Round 1 (gpt-5-5 current edit against `sacdalance__robrrrat`):
 - `tools/offline_gun_eval.py '/logs/rounds/0/sim_*.jsonl'` favored normal averaged/circular prediction (`avg`/`circ` mean ~83-84px) over linear/head-on (~117/122px). Losses were long energy-depletion rounds where our bot often died with Robrrrat still at 17-64 energy after eating p3 streams and/or spending too much on slow heavy shots.
 - Added a narrow name-gated `robrrratEnemy()` branch in `robots/custom/MyTank.java`: force `GUN_AVERAGED`, widen preferred orbit to ~395/470/520 by energy, sidestep/reopen on detected fire and bullet hits, and cap bullets to faster medium powers (~p2.0-2.35 healthy, low-power reserve, capped lethal finishers). Also disables last-reserve pinpricks below 12 energy unless Robrrrat is near death.
 - Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`. No local hidden opponent harness is available; this is trace-analysis based.
+
+Round 2 (gpt-5-5 current edit against `sacdalance__robrrrat`, follow-up):
+- Reviewed `/logs/rounds/1`: previous Robrrrat branch regressed badly vs round 0 (`36678` vs prior `39461`; traced live wins fell from ~245/250 to ~237/250). Losses were not safer long-distance survivals; they averaged closer range (~265px) and many low/medium shots (~p1.5) while Robrrrat kept firing mostly p3 and often survived with 40-80 energy.
+- Re-ran `tools/offline_gun_eval.py '/logs/rounds/1/sim_*.jsonl'`: after the round-1 behavior, circular prediction is clearly best on actual opportunities (`circ` mean ~65.6px vs averaged ~74.8, linear/wallavg ~90, head-on ~113). Round-0 was avg/circ about tied.
+- Added `tools/analyze_robrrrat.py` for quick win/loss summaries of Robrrrat traces.
+- Retuned `robots/custom/MyTank.java` Robrrrat handling as a partial rollback/aggressive fix:
+  - preferred distance back closer to the high-scoring baseline (~345 healthy, 420 mid, 500 low) instead of the wider 395/470/520 band, plus a knife-range perpendicular escape below ~235-285px;
+  - healthy/mid bullet caps raised substantially (p3 under ~520 while energy >62, p2.55 farther; p1.65-2.05 mid) because the p1-ish conservation was prolonging losing rounds;
+  - gun now defaults to `GUN_CIRCULAR`, allowing averaged only if virtual waves show a clear margin. This matches round-1 replay and should recover hit rate/kill speed while keeping low-energy reserve guards.
+- Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.

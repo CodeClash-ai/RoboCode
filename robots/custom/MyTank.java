@@ -529,6 +529,12 @@ public class MyTank extends AdvancedRobot {
             drivePerpendicularEscape(absBearing, 380.0);
             return;
         }
+        if (robrrratEnemy() && e.getDistance() < (getEnergy() < 36.0 ? 285.0 : 235.0)) {
+            // Robrrrat's remaining wins start as close p3 streams.  Keep the compact
+            // circular/high-power exchange, but do not allow true knife-range trading.
+            drivePerpendicularEscape(absBearing, getEnergy() < 36.0 ? 350.0 : 310.0);
+            return;
+        }
         if (maximbotEnemy() && e.getDistance() < (getEnergy() < 36.0 ? 385.0 : 320.0)) {
             // The only recorded Maximbot losses were close, high-power exchanges.  Keep
             // enough room for lateral circular-gun shots instead of letting its simple gun
@@ -632,11 +638,10 @@ public class MyTank extends AdvancedRobot {
             // to clear its head-on bullets while still keeping linear shots reasonable.
             preferredDistance = getEnergy() < 24.0 ? 560.0 : (getEnergy() < 48.0 ? 520.0 : 475.0);
         } else if (robrrratEnemy()) {
-            // Current sacdalance__robrrrat fires mostly power-3 and hit the old close
-            // ~285-330px exchange hard enough to steal a few live wins.  Stay at a
-            // moderate/wide averaged-gun band: still short enough for p2-ish bullets,
-            // but with more lateral time against its simple high-power aim.
-            preferredDistance = getEnergy() < 22.0 ? 520.0 : (getEnergy() < 45.0 ? 470.0 : 395.0);
+            // Round-1 Robrrrat conservation went too wide/weak and lost kill speed.
+            // Return to a compact high-pressure band while keeping a low-energy escape
+            // reserve for the rare long p3 exchanges.
+            preferredDistance = getEnergy() < 20.0 ? 500.0 : (getEnergy() < 42.0 ? 420.0 : 345.0);
         } else if (maximbotEnemy()) {
             // Current Maximbot is very hittable by circular aim, but its medium/high gun
             // leaks damage at knife range.  Use a compact circular-shot band while healthy
@@ -1009,16 +1014,15 @@ public class MyTank extends AdvancedRobot {
             }
         }
         if (robrrratEnemy()) {
-            // Robrrrat is hittable by averaged/circular aim, but p3 misses plus its own
-            // p3 stream caused all observed losses.  Use faster medium bullets while
-            // healthy and preserve a movement reserve in long rounds; use a capped
-            // lethal/near-lethal shot only when the enemy is already low.
+            // Robrrrat is hittable by circular/averaged aim.  The first conservative
+            // branch regressed by firing too many p1-ish bullets, so use decisive
+            // healthy pressure and preserve reserve only in genuinely low-energy rounds.
             if (e.getEnergy() < 9.0 && getEnergy() > 6.0 && distance < 560.0) {
                 power = Math.min(Math.max(power, lethalPower(e.getEnergy())), 1.65);
             } else if (getEnergy() > 62.0) {
-                power = Math.min(Math.max(power, distance < 430.0 ? 2.25 : 1.95), 2.35);
+                power = Math.min(Math.max(power, distance < 520.0 ? 3.0 : 2.55), 3.0);
             } else if (getEnergy() > 38.0) {
-                power = Math.min(Math.max(power, distance < 380.0 ? 1.40 : 1.10), 1.55);
+                power = Math.min(Math.max(power, distance < 430.0 ? 2.05 : 1.65), 2.15);
             } else if (getEnergy() > 20.0) {
                 power = Math.min(power, distance < 340.0 ? 0.65 : 0.45);
             } else {
@@ -1545,9 +1549,9 @@ public class MyTank extends AdvancedRobot {
             if (e.getEnergy() < 9.0 && getEnergy() > 6.0 && distance < 560.0) {
                 power = Math.min(power, Math.min(Math.max(lethalPower(e.getEnergy()), 0.35), 1.65));
             } else if (getEnergy() > 62.0) {
-                power = Math.min(power, distance < 430.0 ? 2.25 : 1.95);
+                power = Math.min(power, distance < 520.0 ? 3.0 : 2.55);
             } else if (getEnergy() > 38.0) {
-                power = Math.min(power, distance < 380.0 ? 1.40 : 1.10);
+                power = Math.min(power, distance < 430.0 ? 2.05 : 1.65);
             } else if (getEnergy() > 20.0) {
                 power = Math.min(power, distance < 340.0 ? 0.65 : 0.45);
             } else {
@@ -1628,10 +1632,12 @@ public class MyTank extends AdvancedRobot {
         if (stationaryScans > 5) {
             gun = GUN_HEAD_ON;
         } else if (robrrratEnemy()) {
-            // Offline replay for sacdalance__robrrrat slightly favors the normal averaged
-            // predictor over circular and clearly over head-on/linear.  Force it so broad
-            // active-high-power/crazy classifiers cannot steal the gun.
-            gun = GUN_AVERAGED;
+            // Round-1 traces after forcing averaged regressed badly; replay now shows
+            // circular prediction clearly ahead on our actual shot opportunities.  Use
+            // circular as the primary Robrrrat gun, but allow averaged only if virtual
+            // waves show a clear margin so we do not overfit a short turning phase.
+            gun = (virtualSamples > 28 && virtualGunError[GUN_AVERAGED] + 6.0 < virtualGunError[GUN_CIRCULAR])
+                    ? GUN_AVERAGED : GUN_CIRCULAR;
         } else if (sampleWallsEnemy()) {
             // sample.Walls drives long straight cardinal legs around the border; offline
             // replay on the current traces ranks full linear lead ahead of averaged/wallavg.
