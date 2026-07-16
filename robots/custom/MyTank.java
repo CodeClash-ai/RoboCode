@@ -419,6 +419,13 @@ public class MyTank extends AdvancedRobot {
                 driveSampleWallsEscape(absBearing, getEnergy() < 32.0 ? 575.0 : 455.0);
                 return;
             }
+            if (bt7274Enemy()) {
+                // Its high-power bullets are the only meaningful score leak in round 0.
+                // On detected fire, cross the shot line and keep a medium-wide gap instead
+                // of only toggling the close orbit direction.
+                drivePerpendicularEscape(absBearing, getEnergy() < 36.0 ? 455.0 : 360.0);
+                return;
+            }
             reverseDirection();
             if (dodgeBot2Enemy() && getEnergy() < 48.0) {
                 // Current logancsc__dodgebot2 matchup is decided by long exchanges:
@@ -736,7 +743,13 @@ public class MyTank extends AdvancedRobot {
         // inward; too close we open out.  wallSmooth then bends the path away
         // from the battlefield edges before we commit to it.
         double preferredDistance;
-        if (poetEnemy()) {
+        if (bt7274Enemy()) {
+            // BT7274 spends most shots at power 3 while moving at/near max speed.
+            // Hold a wider lane than the generic hard-to-hit/Crazy 260-355px bands
+            // to reduce close p3 leakage, but not so wide that averaged bullets take
+            // forever against its evasive path.
+            preferredDistance = getEnergy() < 24.0 ? 520.0 : (getEnergy() < 48.0 ? 470.0 : 425.0);
+        } else if (poetEnemy()) {
             preferredDistance = getEnergy() < 28.0 ? 420.0 : (getEnergy() < 48.0 ? 350.0 : 285.0);
         } else if (wildeEnemy()) {
             // Current Wilde matchup: medium/fast wall/stop-go movement and frequent
@@ -1027,7 +1040,7 @@ public class MyTank extends AdvancedRobot {
         // to long bullet flight, while its own gun almost never connects.  Once
         // virtual guns report a hard-to-hit mover, tighten the orbit a bit to
         // shorten flight time and improve hit/kill speed without going to ram range.
-        if (!poetEnemy() && !wildeEnemy() && !dodgeBot2Enemy() && !wallspoetHaikuEnemy() && !haikuPoetEnemy() && !smallPoetEnemy() && !haikuWallsEnemy() && !waveSurfingEnemy() && !dangerousWallEnemy() && !activeStopGoShooter() && !heavyStopGoShooter()
+        if (!bt7274Enemy() && !poetEnemy() && !wildeEnemy() && !dodgeBot2Enemy() && !wallspoetHaikuEnemy() && !haikuPoetEnemy() && !smallPoetEnemy() && !haikuWallsEnemy() && !waveSurfingEnemy() && !dangerousWallEnemy() && !activeStopGoShooter() && !heavyStopGoShooter()
                 && virtualSamples > 28 && bestGunError() > 72.0 && stationaryScans <= 5 && slowEnemyScans <= 12) {
             preferredDistance = 355.0;
         }
@@ -1409,6 +1422,23 @@ public class MyTank extends AdvancedRobot {
                 power = Math.min(power, getEnergy() < 7.0 ? 0.12 : 0.22);
             }
         }
+        if (bt7274Enemy()) {
+            // Offline replay over BT7274 traces showed much lower future-position error
+            // with faster medium bullets than with p3.  We still have a large reserve, so
+            // use enough power for damage while avoiding slow max-power shots and preserving
+            // a reserve if a round becomes a long evasive chase.
+            if (e.getEnergy() < 12.0 && getEnergy() > 7.0 && distance < 620.0) {
+                power = Math.min(Math.max(power, lethalPower(e.getEnergy())), 2.05);
+            } else if (getEnergy() > 62.0) {
+                power = Math.min(Math.max(power, distance < 380.0 ? 1.85 : 1.55), 1.95);
+            } else if (getEnergy() > 36.0) {
+                power = Math.min(Math.max(power, distance < 360.0 ? 1.20 : 0.95), 1.35);
+            } else if (getEnergy() > 18.0) {
+                power = Math.min(power, distance < 330.0 ? 0.55 : 0.35);
+            } else {
+                power = Math.min(power, getEnergy() < 8.0 ? 0.12 : 0.22);
+            }
+        }
         if (dominatorEnemy()) {
             // DominatorX losses are self-depletion medium-power duels.  Round-1 traces
             // showed our first detector was too strict: several losing games still spent
@@ -1461,7 +1491,7 @@ public class MyTank extends AdvancedRobot {
                 power = Math.min(power, getEnergy() < 7 ? 0.15 : 0.35);
             }
         }
-        if (crazyEnemyScans > 3 && !poetEnemy() && !velociRobotEnemy() && !spinBotEnemy()) {
+        if (crazyEnemyScans > 3 && !bt7274Enemy() && !poetEnemy() && !velociRobotEnemy() && !spinBotEnemy()) {
             // High-speed continuous turners are easier to hit with faster,
             // moderate-power circular shots.  For this round's meow opponent the
             // circular virtual gun settles far below the old sample.Crazy errors;
@@ -2022,6 +2052,8 @@ public class MyTank extends AdvancedRobot {
         int gun = chooseGun();
         if (stationaryScans > 5) {
             gun = GUN_HEAD_ON;
+        } else if (bt7274Enemy()) {
+            gun = GUN_AVERAGED;
         } else if (poetEnemy()) {
             gun = GUN_CIRCULAR;
         } else if (wildeEnemy()) {
@@ -2311,6 +2343,9 @@ public class MyTank extends AdvancedRobot {
         if (maximbotEnemy()) {
             tolerance = Math.min(tolerance, Math.atan2(17.0, distance));
         }
+        if (bt7274Enemy()) {
+            tolerance = Math.min(tolerance, Math.atan2(15.0, distance));
+        }
         if (shrekerEnemy()) {
             tolerance = Math.min(tolerance, Math.atan2(14.0, distance));
         }
@@ -2454,6 +2489,9 @@ public class MyTank extends AdvancedRobot {
             // can land.  Keep the energy for movement unless a capped lethal finish is near.
             fireAllowed = false;
         }
+        if (bt7274Enemy() && getEnergy() < 10.0 && e.getEnergy() > 12.0) {
+            fireAllowed = false;
+        }
         if (dominatorEnemy() && getEnergy() < 9.0 && e.getEnergy() > 12.0) {
             // DominatorX can only convert many of the remaining losses after we self-disable
             // with harmless 0.1-0.2 bullets while it still has tens of energy.  Preserve the
@@ -2577,6 +2615,14 @@ public class MyTank extends AdvancedRobot {
         return best;
     }
 
+
+    private boolean bt7274Enemy() {
+        // Current /logs/rounds/0 opponent lucasgch__bt7274: very fast mixed
+        // straight/turn mover that fires mostly power-3.  Generic Crazy/Dominator
+        // classifiers can pull us into close p3/circular exchanges; trace replay
+        // favors the damped averaged gun and faster medium bullets.
+        return enemyName != null && enemyName.contains("lucasgch__bt7274");
+    }
 
     private boolean wildeEnemy() {
         // Current opponent alexjamesmacpherson__wilde: medium/fast wall-heavy stop/go mover

@@ -999,3 +999,11 @@ Round 2 (gpt-5-5 current edit, HaikuPoet follow-up):
   - mid-low bullet caps were raised modestly (p0.48-0.65 above 24 energy, p0.22-0.32 above 14) so we do not spend dozens of p0.1-p0.3 pinpricks while HaikuPoet remains healthy;
   - no-fire reserve guard now starts below 20 energy when HaikuPoet is >24, preserving the final reserve but allowing the new mid-low pressure.
 - Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
+
+Round 1 (gpt-5-5 current edit against `lucasgch__bt7274`):
+- `/logs/rounds/0` shows a real fast mover/shooter. We won every 10-round battle (`results.json` 36589 vs 4712), but BT7274 fires mostly power-3, moves at/near max speed with mixed straight/turn motion, and scored meaningful bullet damage (e.g. result_0: 272 bullet dmg). Our end energy was usually high, but a handful of traces ended low/dead and the prior generic Crazy/Dominator/hard-to-hit branches could pull us into close p3/circular exchanges.
+- `tools/offline_gun_eval.py '/logs/rounds/0/sim_*.jsonl'` ranked averaged/circular close on actual old shots, but a shot-time power replay suggested faster medium bullets greatly reduce future-position error versus p3. I added a narrow `bt7274Enemy()` name-gated profile in `robots/custom/MyTank.java`:
+  - force the damped `GUN_AVERAGED` predictor rather than generic circular/head-on/dominator overrides;
+  - use a medium-wide orbit (~425 healthy, widening as energy drops) and cross the firing line on detected shots;
+  - cap healthy bullet power around 1.55-1.95 with low-energy reserve/finishers, excluding this bot from generic hard-to-hit close-orbit and Crazy p3 power boost.
+- Recompiled successfully: `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
