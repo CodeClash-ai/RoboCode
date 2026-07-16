@@ -358,6 +358,13 @@ public class MyTank extends AdvancedRobot {
                 drivePerpendicularEscape(absBearing, 230.0);
                 return;
             }
+            if (maximbotEnemy()) {
+                // Maximbot fires medium/high bullets while moving in arcs.  Do not only
+                // reverse along the same close curve; step across its shot line, especially
+                // because the rare loss traces were close-range exchanges.
+                drivePerpendicularEscape(absBearing, getEnergy() < 36.0 ? 330.0 : 270.0);
+                return;
+            }
             if (shrekerEnemy()) {
                 // Shreker fires mostly power-3 from stop/go/straight positions.  A simple
                 // orbit reversal left us eating long p3 streams in the losing traces; cross
@@ -481,6 +488,13 @@ public class MyTank extends AdvancedRobot {
             drivePerpendicularEscape(absBearing, 380.0);
             return;
         }
+        if (maximbotEnemy() && e.getDistance() < (getEnergy() < 32.0 ? 310.0 : 255.0)) {
+            // The only recorded Maximbot losses were close, high-power exchanges.  Keep
+            // enough room for lateral circular-gun shots instead of letting its simple gun
+            // trade at 100-170px.
+            drivePerpendicularEscape(absBearing, getEnergy() < 32.0 ? 360.0 : 300.0);
+            return;
+        }
         if (shrekerEnemy() && getEnergy() < 24.0 && e.getDistance() < 240.0) {
             // Only force a direct reopen from true knife range.  The wider old 360px guard
             // pushed us out past 500px in endgames, where our head-on pinpricks arrived too
@@ -570,7 +584,12 @@ public class MyTank extends AdvancedRobot {
         // inward; too close we open out.  wallSmooth then bends the path away
         // from the battlefield edges before we commit to it.
         double preferredDistance;
-        if (pikachuEnemy()) {
+        if (maximbotEnemy()) {
+            // Current Maximbot is very hittable by circular aim, but its medium/high gun
+            // leaks damage at knife range.  Use a compact circular-shot band while healthy
+            // and widen modestly before reserve mode.
+            preferredDistance = getEnergy() < 24.0 ? 430.0 : (getEnergy() < 45.0 ? 370.0 : 320.0);
+        } else if (pikachuEnemy()) {
             // kcanida__pikachu fires a stream of tiny bullets while making short stop/turn
             // dodges.  The old generic stop-go logic hugged ~220px and spent power-2/3
             // shots until self-disable.  Hold a moderately wide band: close enough for fast
@@ -765,7 +784,7 @@ public class MyTank extends AdvancedRobot {
             preferredDistance = getEnergy() < 28.0 ? 500.0 : (getEnergy() < 55.0 ? 450.0 : 390.0);
         } else if (dangerousWallEnemy()) {
             preferredDistance = 335.0;
-        } else if (straightEnemyScans > 16 && harmlessLowFireEnemy() && wallEnemyScans <= 4) {
+        } else if (!maximbotEnemy() && straightEnemyScans > 16 && harmlessLowFireEnemy() && wallEnemyScans <= 4) {
             preferredDistance = 335.0;
         } else if (straightEnemyScans > 4 && harmlessLowFireEnemy()) {
             preferredDistance = 275.0;
@@ -880,23 +899,23 @@ public class MyTank extends AdvancedRobot {
                 // small margin that decided several TrackFire loss/draw traces.
                 power = Math.min(power, lethalPower(e.getEnergy()));
             }
-        } else if (wallEnemyScans > 4 && !dangerousWallEnemy() && getEnergy() > 14 && distance < 820) {
+        } else if (!maximbotEnemy() && wallEnemyScans > 4 && !dangerousWallEnemy() && getEnergy() > 14 && distance < 820) {
             // Wall-huggers have very limited escape room; use max-power
             // head-on/near-head-on shots to finish them before they can spend
             // energy on stray bullets (which lowers our available bullet score).
             power = 3.0;
-        } else if (straightEnemyScans > 2 && harmlessLowFireEnemy() && getEnergy() > 14 && distance < 760) {
+        } else if (!maximbotEnemy() && straightEnemyScans > 2 && harmlessLowFireEnemy() && getEnergy() > 14 && distance < 760) {
             // Straight runners are easy for the linear gun, even when they are
             // not close enough to the wall to trip wallEnemyScans.  Use max
             // power to shorten antiwalls-style rounds once the line is clear.
             power = 3.0;
-        } else if (!waveSurfingEnemy() && headOnGunIsBest() && getEnergy() > 18 && distance < 720) {
+        } else if (!maximbotEnemy() && !waveSurfingEnemy() && headOnGunIsBest() && getEnergy() > 18 && distance < 720) {
             // The current DeepThought opponent dodges/reverses enough that a
             // head-on gun wins the virtual-gun race.  Once detected, spend more
             // energy on heavier bullets: its own hit rate is tiny, and the
             // shorter rounds are worth the slightly slower bullet speed.
             power = Math.max(power, distance < 360 ? 3.0 : (distance < 520 ? 2.8 : 2.35));
-        } else if (!waveSurfingEnemy() && (slowEnemyScans > 8 || activeStopGoEnemy()) && !highPowerStopGoDodger() && getEnergy() > 12 && distance < 720) {
+        } else if (!maximbotEnemy() && !waveSurfingEnemy() && (slowEnemyScans > 8 || activeStopGoEnemy()) && !highPowerStopGoDodger() && getEnergy() > 12 && distance < 720) {
             // Slow and stop/go opponents give up enough predictable time that
             // heavier bullets trade a little travel time for much faster damage and
             // a larger bullet bonus.  Fast/unknown movers keep the safer ladder.
@@ -928,7 +947,7 @@ public class MyTank extends AdvancedRobot {
                 power = Math.min(power, 0.10);
             }
         }
-        if (straightEnemyScans > 16 && harmlessLowFireEnemy() && wallEnemyScans <= 4) {
+        if (!maximbotEnemy() && straightEnemyScans > 16 && harmlessLowFireEnemy() && wallEnemyScans <= 4) {
             // Sustained non-wall straight runners are harmless enough for heavy
             // bullets; the averaged gun still handles their stops/reverses.
             // Keep pressure high while the slightly wider orbit reduces rare
@@ -1191,6 +1210,21 @@ public class MyTank extends AdvancedRobot {
             } else {
                 power = Math.min(power, getEnergy() < 7 ? 0.10 : 0.12);
             }
+        } else if (maximbotEnemy()) {
+            // With circular aim Maximbot is much easier than the generic Dominator branch
+            // thinks.  Keep strong pressure while our reserve is healthy, but use faster
+            // medium shots and lethal finishers in the few long close exchanges.
+            if (e.getEnergy() < 9.5 && getEnergy() > 6.0) {
+                power = Math.min(Math.max(power, lethalPower(e.getEnergy())), 1.65);
+            } else if (getEnergy() > 58.0 && distance < 700.0) {
+                power = Math.min(Math.max(power, distance < 420.0 ? 2.65 : 2.25), 2.75);
+            } else if (getEnergy() > 34.0) {
+                power = Math.min(Math.max(power, distance < 360.0 ? 1.65 : 1.30), 1.85);
+            } else if (getEnergy() > 18.0) {
+                power = Math.min(power, distance < 330.0 ? 0.70 : 0.48);
+            } else {
+                power = Math.min(power, getEnergy() < 8.0 ? 0.14 : 0.25);
+            }
         } else if (juggernautEnemy()) {
             // Current Juggernaut traces differ from Ultron: it turns/stops enough that
             // the averaged gun beats head-on, and excessive 0.6-1.4 power pinpricks
@@ -1382,7 +1416,7 @@ public class MyTank extends AdvancedRobot {
                 power = Math.min(power, 0.75);
             }
         }
-        if (activeHighPowerShooter()) {
+        if (activeHighPowerShooter() && !maximbotEnemy()) {
             // A few Ultron losses/draws still came from falling out of the narrow
             // highPowerStopGoDodger() signature late in a round, then spending 2+
             // energy slow-target shots while already below ~12 energy.  Any opponent
@@ -1448,6 +1482,10 @@ public class MyTank extends AdvancedRobot {
         int gun = chooseGun();
         if (stationaryScans > 5) {
             gun = GUN_HEAD_ON;
+        } else if (maximbotEnemy()) {
+            // Trace replay for mgalushka__maximbot strongly favors circular prediction
+            // over the generic Dominator head-on branch.
+            gun = GUN_CIRCULAR;
         } else if (waveSurfingEnemy()) {
             // Full linear/circular over-lead this surfer.  The rolling GF gun has a worse
             // mean error, but replay of round-1 shots showed a much larger fraction of
@@ -1684,6 +1722,9 @@ public class MyTank extends AdvancedRobot {
         if (waveSurfingEnemy()) {
             tolerance = Math.min(tolerance, Math.atan2(13.0, distance));
         }
+        if (maximbotEnemy()) {
+            tolerance = Math.min(tolerance, Math.atan2(17.0, distance));
+        }
         if (shrekerEnemy()) {
             tolerance = Math.min(tolerance, Math.atan2(14.0, distance));
         }
@@ -1750,6 +1791,11 @@ public class MyTank extends AdvancedRobot {
             // the enemy is already in capped-lethal range.
             fireAllowed = false;
         }
+        if (maximbotEnemy() && getEnergy() < 10.0 && e.getEnergy() > 11.0) {
+            // Preserve the last movement reserve if Maximbot is not close to death; tiny
+            // circular bullets cannot finish it before another medium/high shot lands.
+            fireAllowed = false;
+        }
         if (dominatorEnemy() && getEnergy() < 9.0 && e.getEnergy() > 12.0) {
             // DominatorX can only convert many of the remaining losses after we self-disable
             // with harmless 0.1-0.2 bullets while it still has tens of energy.  Preserve the
@@ -1794,6 +1840,14 @@ public class MyTank extends AdvancedRobot {
         return best;
     }
 
+
+    private boolean maximbotEnemy() {
+        // Current round opponent mgalushka__maximbot: medium/fast mover with shallow
+        // continuous turns and repeated medium/high-power fire.  Round-0 replay shows
+        // circular prediction is clearly best; the broader Dominator/stop-go signatures
+        // can otherwise steal it and force head-on plus long self-depletion duels.
+        return enemyName != null && enemyName.contains("mgalushka__maximbot");
+    }
 
     private boolean pikachuEnemy() {
         return enemyName != null && enemyName.contains("kcanida__pikachu");
@@ -1862,7 +1916,7 @@ public class MyTank extends AdvancedRobot {
         // wall-bound and replay favors the averaged wall gun/caps rather than Shreker's
         // compact head-on branch.  If both sticky counters were seeded in the opening,
         // let the more specific Wallspoet classifier win.
-        return !gntestStopDuel() && !wallsPoetEnemy() && (shrekerScans > 0 || shrekerSignatureRaw());
+        return !maximbotEnemy() && !gntestStopDuel() && !wallsPoetEnemy() && (shrekerScans > 0 || shrekerSignatureRaw());
     }
 
     private boolean shrekerSignatureRaw() {
@@ -1897,7 +1951,8 @@ public class MyTank extends AdvancedRobot {
         // wall/corner stops, and enough turning/reversing that head-on beats full lead.
         // Keep this ahead of NPCSniper/Tanner wall-cruiser signatures, which would force
         // averaged/linear guns and produced many self-depletion losses in round 0.
-        return enemyFireCount > 2
+        return !maximbotEnemy()
+                && enemyFireCount > 2
                 && enemyFirePowerSamples > 1
                 && enemyFirePowerAvg > 1.20
                 && enemyFirePowerAvg <= 2.85
@@ -2265,6 +2320,7 @@ public class MyTank extends AdvancedRobot {
         // repeated high-power fire plus low-turn moderate-speed motion to keep this
         // branch active before the generic slow-target max-power ladder takes over.
         return activeHighPowerShooter()
+                && !maximbotEnemy()
                 && !wallsPoetEnemy()
                 && (stopGoEnemyScans > 4 || enemyFireCount > 3)
                 && enemySpeedAvg > 2.65
@@ -2279,7 +2335,8 @@ public class MyTank extends AdvancedRobot {
     }
 
     private boolean activeHighPowerShooter() {
-        return enemyFireCount > 1
+        return !maximbotEnemy()
+                && enemyFireCount > 1
                 && enemyFirePowerSamples > 0
                 && enemyFirePowerAvg > 2.18
                 && stationaryScans <= 5
@@ -2419,7 +2476,8 @@ public class MyTank extends AdvancedRobot {
         // losses that left it alive on 10-15 energy.  Keep this narrow so Ian/
         // Tarektank/MyFirstKiller weak oscillators and Exterminador power-3 cases
         // stay in their specialized branches.
-        return stopGoEnemyScans > 8
+        return !maximbotEnemy()
+                && stopGoEnemyScans > 8
                 && enemyFireCount > 2
                 && enemyFirePowerSamples > 1
                 && enemyFirePowerAvg > 1.45
@@ -2439,7 +2497,8 @@ public class MyTank extends AdvancedRobot {
         // straight forward/back along that heading, and fires weak power-1 shots.
         // This is much easier to farm with head-on/max-pressure fire than the
         // broader activeStopGoShooter class, where max-power caused self-depletion.
-        return stopGoEnemyScans > 8
+        return !maximbotEnemy()
+                && stopGoEnemyScans > 8
                 && enemyFireCount > 1
                 && (enemyFirePowerSamples == 0 || enemyFirePowerAvg <= 2.35)
                 && crazyEnemyScans <= 4
@@ -2455,7 +2514,8 @@ public class MyTank extends AdvancedRobot {
         // it can span well over a tight ~135px oscillator, so do not force the learned midpoint; use a
         // tiny drift projection and somewhat heavier bullets instead of the very
         // conservative activeStopGoShooter mode.
-        return stopGoEnemyScans > 8
+        return !maximbotEnemy()
+                && stopGoEnemyScans > 8
                 && enemyFireCount > 1
                 && (enemyFirePowerSamples == 0 || enemyFirePowerAvg <= 2.35)
                 && crazyEnemyScans <= 4
