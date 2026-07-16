@@ -645,10 +645,13 @@ public class MyTank extends AdvancedRobot {
             driveAwayFrom(absBearing, getEnergy() < 38.0 ? 470.0 : 385.0);
             return;
         }
-        if (haikuPoetEnemy() && e.getDistance() < (getEnergy() < 38.0 ? 390.0 : 315.0)) {
-            // Avoid close/corner collapses against HaikuPoet's p2 stream; its own shots are
-            // frequent enough that point-blank trading is worse than reopening the wide lane.
-            driveAwayFrom(absBearing, getEnergy() < 38.0 ? 470.0 : 390.0);
+        if (haikuPoetEnemy() && e.getDistance() < (getEnergy() < 34.0 ? 520.0 : 315.0)) {
+            // Avoid close/corner and low-reserve collapses against HaikuPoet's p2 stream.
+            // Round-1 losses averaged noticeably closer than wins, and several ended with
+            // us below 10 energy at ~415px while an old p2 bullet arrived.  Once reserve is
+            // low, keep driving out toward the wide lane instead of resuming the normal
+            // orbit as soon as 390px is reached.
+            driveAwayFrom(absBearing, getEnergy() < 34.0 ? 575.0 : 390.0);
             return;
         }
         if (m9WallStopGoEnemy() && getEnergy() < 30.0 && e.getDistance() < 310.0) {
@@ -2521,17 +2524,27 @@ public class MyTank extends AdvancedRobot {
         } else if (getEnergy() > 42.0) {
             power = distance < 380.0 ? 0.78 : 0.56;
         } else if (getEnergy() > 24.0) {
-            power = distance < 340.0 ? 0.36 : 0.24;
+            // Preserve some kill pressure in the mid-low band.  Round-1 losses still spent
+            // many p0.1-p0.4 bullets while HaikuPoet retained 30+ energy; head-on aiming is
+            // cheaper geometrically than the old damped aim, so modest p0.5-p0.65 bullets are
+            // a better score/survival trade until we enter true reserve mode.
+            power = distance < 430.0 ? 0.65 : 0.48;
+        } else if (getEnergy() > 14.0) {
+            power = distance < 390.0 ? 0.32 : 0.22;
         } else {
             power = getEnergy() < 10.0 ? 0.10 : 0.15;
         }
         boolean fireAllowed = true;
-        if ((getEnergy() < 24.0 && e.getEnergy() > 20.0) || (getEnergy() < 12.0 && e.getEnergy() > 8.0)) {
+        if ((getEnergy() < 20.0 && e.getEnergy() > 24.0) || (getEnergy() < 12.0 && e.getEnergy() > 8.0)) {
             fireAllowed = false;
         }
         power = Math.min(power, Math.max(0.1, getEnergy() - 0.15));
         double bulletSpeed = 20.0 - 3.0 * power;
-        double[] predicted = predictEnemy(enemyX, enemyY, e.getHeadingRadians(), e.getVelocity(), turnRate, bulletSpeed, GUN_AVERAGED);
+        // Round-1 actual-shot replay after the conservative HaikuPoet profile showed
+        // pure head-on beating the damped averaged gun on both stopped and moving ticks
+        // (the target often stops/reverses during our long low-power bullet flight).
+        // Keep the cheap/wide profile but aim directly at the current position.
+        double[] predicted = predictEnemy(enemyX, enemyY, e.getHeadingRadians(), e.getVelocity(), turnRate, bulletSpeed, GUN_HEAD_ON);
         double gunTurn = Utils.normalRelativeAngle(Math.atan2(predicted[0] - getX(), predicted[1] - getY()) - getGunHeadingRadians());
         setTurnGunRightRadians(gunTurn);
         double tolerance = Math.min(Math.atan2(12.0, distance), Math.atan2(20.0, distance) + 0.022);

@@ -989,3 +989,13 @@ Round 1 (gpt-5-5 current edit against `pez__haikupoet`):
   - movement holds a wide ~500/555/610 lane, uses sample-walls-style crossing on every detected enemy shot / bullet hit, and directly reopens range if it collapses below ~315-390;
   - HaikuPoet is excluded from the generic hard-to-hit close-orbit override. Predictor damping is `0.25*current + 0.35*EMA`, cap 2.2, turn 0.
 - Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
+
+Round 2 (gpt-5-5 current edit, HaikuPoet follow-up):
+- Reviewed `/logs/rounds/1`: the first HaikuPoet profile flipped the match to a win (`19556` vs `13479`) and improved live outcomes to about 200 wins / 41 losses / 9 draws, but losses still self-depleted while `pez__haikupoet` kept ~30+ energy. Round-1 result composition traded much higher survival for lower bullet damage (our avg shot power ~0.94).
+- Added `tools/analyze_haikupoet.py` for quick outcome/range/shot summaries.
+- Offline actual-shot replay over `/logs/rounds/1` showed pure head-on now beats the damped averaged gun on this low-power wide-lane profile (head-on mean error ~95px vs damped ~114px; stopped ticks are especially favorable). Updated `doHaikuPoetGun()` to force `GUN_HEAD_ON` while retaining the name-gated early-return gun tree.
+- Retuned HaikuPoet endgame/movement slightly:
+  - low-reserve close escape now keeps reopening until ~520px when our energy is below 34, instead of resuming orbit around 390px;
+  - mid-low bullet caps were raised modestly (p0.48-0.65 above 24 energy, p0.22-0.32 above 14) so we do not spend dozens of p0.1-p0.3 pinpricks while HaikuPoet remains healthy;
+  - no-fire reserve guard now starts below 20 energy when HaikuPoet is >24, preserving the final reserve but allowing the new mid-low pressure.
+- Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
