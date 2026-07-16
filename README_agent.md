@@ -1007,3 +1007,8 @@ Round 1 (gpt-5-5 current edit against `lucasgch__bt7274`):
   - use a medium-wide orbit (~425 healthy, widening as energy drops) and cross the firing line on detected shots;
   - cap healthy bullet power around 1.55-1.95 with low-energy reserve/finishers, excluding this bot from generic hard-to-hit close-orbit and Crazy p3 power boost.
 - Recompiled successfully: `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
+
+Round 2 (gpt-5-5 current edit, BT7274 follow-up):
+- Reviewed `/logs/rounds/1`: the first name-gated `lucasgch__bt7274` conservative profile was a clear regression, flipping the matchup from a large round-0 win (`36589` vs `4712`, ~246/250 live wins) to a score loss (`16749` vs `22952`, only ~110/250 live wins in quick trace parsing). It widened range, forced damped averaged aim, and capped bullets too low; losses showed our bot self-depleting while BT7274 kept ~40+ energy and continued p3 fire.
+- Rolled back that specialization by disabling `bt7274Enemy()` in `robots/custom/MyTank.java`. This lets BT7274 fall back to the proven generic fast-mover handling from round 0 (virtual/circular/averaged guns, closer range, heavier bullets) instead of the round-1 medium/cheap profile.
+- Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.

@@ -2617,11 +2617,13 @@ public class MyTank extends AdvancedRobot {
 
 
     private boolean bt7274Enemy() {
-        // Current /logs/rounds/0 opponent lucasgch__bt7274: very fast mixed
-        // straight/turn mover that fires mostly power-3.  Generic Crazy/Dominator
-        // classifiers can pull us into close p3/circular exchanges; trace replay
-        // favors the damped averaged gun and faster medium bullets.
-        return enemyName != null && enemyName.contains("lucasgch__bt7274");
+        // The first name-gated BT7274 profile (wide orbit + damped averaged +
+        // medium/cheap bullets) was a severe regression in /logs/rounds/1: score
+        // flipped from a large win (generic round 0) to a loss, mostly because it
+        // reduced kill pressure and let the opponent's frequent p3 gun outscore us.
+        // Disable the profile so BT7274 falls back to the proven generic fast-mover
+        // handling (close orbit, virtual/circular/averaged guns, heavier bullets).
+        return false;
     }
 
     private boolean wildeEnemy() {
