@@ -47,6 +47,7 @@ public class MyTank extends AdvancedRobot {
     private int tannerWallScans = 0;
     private int waveSurfScans = 0;
     private int juggernautScans = 0;
+    private int wallsPoetScans = 0;
     private double enemyVelocityAvg = 0.0;
     private double enemySpeedAvg = 0.0;
     private double enemyTurnRateAvg = 0.0;
@@ -276,6 +277,11 @@ public class MyTank extends AdvancedRobot {
             // signature is narrow (repeated p3 fire plus fast turning bursts), so a
             // permanent confirmation is safer than falling out during late parked phases.
             juggernautScans = Math.max(1, juggernautScans - 1);
+        }
+        if (wallsPoetSignatureRaw(e)) {
+            wallsPoetScans = Math.min(120, wallsPoetScans + 6);
+        } else {
+            wallsPoetScans = Math.max(0, wallsPoetScans - 1);
         }
 
         updateVirtualGuns(enemyX, enemyY);
@@ -703,6 +709,12 @@ public class MyTank extends AdvancedRobot {
             // stay near its usual 320-350px exchange band instead of drifting
             // wide into long, low-damage self-depletion rounds.
             preferredDistance = 340.0;
+        } else if (wallsPoetEnemy()) {
+            // WallsPoet is a high-power wall/stop-go bot.  It hits hard enough that the
+            // old close 335px DroidPoet pressure band lost many survival points, but
+            // going very wide would lengthen already-hard shots.  Hold a mid band and
+            // open it once our energy reserve drops.
+            preferredDistance = getEnergy() < 28.0 ? 500.0 : (getEnergy() < 55.0 ? 450.0 : 390.0);
         } else if (dangerousWallEnemy()) {
             preferredDistance = 335.0;
         } else if (straightEnemyScans > 16 && harmlessLowFireEnemy() && wallEnemyScans <= 4) {
@@ -1192,7 +1204,23 @@ public class MyTank extends AdvancedRobot {
                 power = Math.min(power, getEnergy() < 9 ? 0.15 : 0.45);
             }
         }
-        if (dangerousWallEnemy() && crazyEnemyScans <= 4 && !activeStopGoShooter() && !dominatorEnemy()) {
+        if (wallsPoetEnemy()) {
+            // Current pez__wallspoet traces: opponent is wall-bound/stop-go, fires almost
+            // all power-3 bullets, and offline shot replay shows much faster low/medium
+            // bullets have far less future-position error than power-3.  Avoid the generic
+            // dangerous-wall max-power override that self-depletes while still missing.
+            if (e.getEnergy() < 8.5 && getEnergy() > 6.0 && distance < 560.0) {
+                power = Math.min(Math.max(power, lethalPower(e.getEnergy())), 1.45);
+            } else if (getEnergy() > 62.0) {
+                power = Math.min(Math.max(power, distance < 360 ? 1.75 : 1.35), 1.85);
+            } else if (getEnergy() > 34.0) {
+                power = Math.min(Math.max(power, distance < 330 ? 1.05 : 0.75), 1.20);
+            } else if (getEnergy() > 16.0) {
+                power = Math.min(power, distance < 300 ? 0.42 : 0.28);
+            } else {
+                power = Math.min(power, getEnergy() < 8.0 ? 0.12 : 0.20);
+            }
+        } else if (dangerousWallEnemy() && crazyEnemyScans <= 4 && !activeStopGoShooter() && !dominatorEnemy()) {
             // DroidPoet-style active wall runners are dangerous, but round-1
             // logs showed the previous wide/low-power survival tune gave away
             // too much bullet damage and even lost a couple of 10-round sets.
@@ -1428,6 +1456,10 @@ public class MyTank extends AdvancedRobot {
             // circular, or averaged prediction; lower-power bullets handle the
             // target's small dodges without over-leading.
             gun = GUN_HEAD_ON;
+        } else if (wallsPoetEnemy()) {
+            // Wallspoet's stop/go wall movement is best handled by the normal averaged
+            // predictor; head-on under-leads and full linear/circular over-lead stops.
+            gun = GUN_AVERAGED;
         } else if (dangerousWallEnemy()) {
             // Against the active wall runner in the current logs, trace replay
             // favors the normal averaged stop/reversal predictor over head-on,
@@ -2041,6 +2073,7 @@ public class MyTank extends AdvancedRobot {
         // repeated high-power fire plus low-turn moderate-speed motion to keep this
         // branch active before the generic slow-target max-power ladder takes over.
         return activeHighPowerShooter()
+                && !wallsPoetEnemy()
                 && (stopGoEnemyScans > 4 || enemyFireCount > 3)
                 && enemySpeedAvg > 2.65
                 && enemySpeedAvg < 5.8
@@ -2076,6 +2109,7 @@ public class MyTank extends AdvancedRobot {
         // capped us to low-power head-on shots after the fourth detected fire; this
         // signature keeps high-pressure damped-averaged farming enabled.
         return stopGoEnemyScans > 8
+                && !wallsPoetEnemy()
                 && enemyFireCount > 3
                 && enemyFirePowerSamples > 2
                 && enemyFirePowerAvg > 2.2
@@ -2252,11 +2286,38 @@ public class MyTank extends AdvancedRobot {
                 && (virtualSamples < 28 || bestGunError() < 70.0 || slowEnemyScans > 8);
     }
 
+    private boolean wallsPoetEnemy() {
+        return wallsPoetScans > 0 || wallsPoetSignatureRaw(null);
+    }
+
+    private boolean wallsPoetSignatureRaw(ScannedRobotEvent e) {
+        // pez__wallspoet: very wall-bound, about half stopped / half max-speed bursts,
+        // near-zero average body turn, and repeated power-3 fire.  Keep the predicate
+        // broad enough to engage early, but require the high-power fire + wall/stop-go
+        // combination so prior harmless wall farmers and Crazy/SpinBot are unaffected.
+        return wallEnemyScans > 4
+                && enemyFireCount > 2
+                && enemyFirePowerSamples > 0
+                && enemyFirePowerAvg > 2.55
+                && stopGoEnemyScans > 4
+                && enemySpeedAvg > 1.2
+                && enemySpeedAvg < 5.2
+                && Math.abs(enemyTurnRateAvg) < 0.030
+                && crazyEnemyScans <= 4
+                && !spinBotEnemy()
+                && !fixedHeadingHighPowerShooter()
+                && !fixedHeadingStopGoEnemy()
+                && !fixedHeadingLineEnemy()
+                && !shrekerEnemy()
+                && !juggernautEnemy();
+    }
+
     private boolean dangerousWallEnemy() {
         // Current DroidPoet logs: a high-speed wall/perimeter runner that fires
         // often.  Do not wait for many virtual-wave samples before switching out
         // of the old "harmless wall target" max-power close-orbit mode.
         return wallEnemyScans > 4 && enemyFireCount > 3 && stopGoEnemyScans <= 12
+                && !wallsPoetEnemy()
                 && !highPowerStopGoDodger()
                 && !heavyStopGoShooter() && !m9WallStopGoEnemy() && !mediumStopGoShooter() && !quadWallEnemy() && !mediumPowerWallCruiser() && !fastWallCruiser() && !npcSniperEnemy();
     }

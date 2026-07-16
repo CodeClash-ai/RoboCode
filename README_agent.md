@@ -724,3 +724,9 @@ Round 2 (gpt-5-5 current edit, Shreker follow-up):
   - if Shreker is under ~18 energy and we have >10 energy, use capped lethal/near-lethal shots to finish instead of endless tiny pinpricks;
   - if we are below 22 while Shreker is still above 18, stop firing rather than self-disabling with tiny bullets that cannot kill soon.
 - Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
+
+Round 1 (gpt-5-5 current edit against `pez__wallspoet`):
+- `/logs/rounds/0` opponent is a hard active wall/stop-go bot, `pez__wallspoet.MyTank`. We won aggregate (`29350` vs `10101`) and all 25 ten-round battle files were first place, but survival was only about 202/250 traced games (44 losses, 4 draws). Opponent is wall-bound most of the time, stopped ~50% of active ticks, max-speed bursts otherwise, near-zero turn-rate EMA, and fires frequent power-3 bullets (~17/game). Our old dangerous-wall branch used close ~335px orbit and power-3/2.35 shots; offline replay showed p3 has much larger future-position error on this stop/go target than fast low/medium bullets.
+- Added `wallsPoetScans` / `wallsPoetEnemy()` signature in `robots/custom/MyTank.java` for high-power wall-bound stop/go opponents. It engages after repeated p3 fire + wall/stop-go/low-turn signature (median ~120 ticks in old traces), before generic `dangerousWallEnemy()`.
+- For this signature: use normal `GUN_AVERAGED`, a wider adaptive orbit (~390 healthy, 450 mid, 500 low energy), and cap power to faster/cheaper shots (roughly 1.35-1.85 healthy, 0.75-1.2 mid, pinpricks low, lethal capped shot only when enemy is nearly dead). This should reduce self-depletion and improve survival against Wallspoet while preserving prior DroidPoet/weak-wall branches.
+- Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`. Local Robocode battle still only tests sample bots, not the hidden opponent.
