@@ -639,11 +639,12 @@ public class MyTank extends AdvancedRobot {
             // get trapped in late wall/corner scrambles while trying to finish.
             preferredDistance = getEnergy() < 26.0 ? 430.0 : 295.0;
         } else if (crawlerEnemy()) {
-            // Current txeverson__crawler is a predictable medium-speed circular mover.
-            // We have a large survival surplus in round 0, so tighten slightly versus
-            // the generic SpinBot band to shorten exact circular bullet flight and cut
-            // down the number of p2 shots it can fire.
-            preferredDistance = getEnergy() < 45.0 ? 335.0 : 285.0;
+            // txeverson__crawler is a predictable medium-speed circular mover.  The first
+            // name-gated pass over-tightened to ~285px and slightly regressed score versus
+            // the older SpinBot-style behavior, likely by increasing exposure to its p2 gun
+            // and forcing circular even when averaged is virtually ahead.  Use the proven
+            // circular-farming band instead: still close, but not quite knife-range.
+            preferredDistance = (virtualSamples > 10 && virtualGunError[GUN_CIRCULAR] < 55.0) ? 305.0 : 340.0;
         } else if (spinBotEnemy()) {
             // SpinBot follows a compact, very predictable circle.  Round 1 showed
             // the circular/max-power specialization is very safe (large end-energy
@@ -1023,16 +1024,14 @@ public class MyTank extends AdvancedRobot {
             power = Math.max(power, distance < 620 ? 3.0 : 2.65);
         }
         if (crawlerEnemy()) {
-            // Name-gated current round: offline replay of round-0 traces strongly favors
-            // circular aim (about half the mean error of head-on and far better than linear).
-            // Spend max power while healthy to end rounds faster; retain a small reserve cap
-            // only for unexpected long/endgame cases.
-            if (getEnergy() > 22.0 && distance < 780.0) {
-                power = Math.max(power, distance < 700.0 ? 3.0 : 2.65);
-            } else if (getEnergy() > 10.0) {
-                power = Math.min(Math.max(power, 1.35), 2.0);
-            } else {
-                power = Math.min(power, 0.45);
+            // Crawler replay favors circular, but round-1 results slipped when every healthy
+            // shot stayed max-power out to very long range.  Match the safer SpinBot pressure
+            // profile: max-power where bullet flight is short, moderate power at long range,
+            // and only defensive caps in unexpected reserve phases.
+            if (getEnergy() > 16 && distance < 760) {
+                power = Math.max(power, distance < 680 ? 3.0 : 2.55);
+            } else if (getEnergy() < 10) {
+                power = Math.min(power, 0.55);
             }
         }
         if (spinBotEnemy()) {
@@ -1606,7 +1605,11 @@ public class MyTank extends AdvancedRobot {
             gun = (virtualSamples > 18 && virtualGunError[GUN_HEAD_ON] + 2.5 < virtualGunError[GUN_AVERAGED])
                     ? GUN_HEAD_ON : GUN_AVERAGED;
         } else if (crawlerEnemy()) {
-            gun = GUN_CIRCULAR;
+            // Mostly an exact circular target, but allow the normal averaged predictor on a
+            // clear virtual margin.  The previous hard circular override was a small score
+            // regression versus the pre-name-gated SpinBot-style handling.
+            gun = (virtualSamples > 20 && virtualGunError[GUN_AVERAGED] + 6.0 < virtualGunError[GUN_CIRCULAR])
+                    ? GUN_AVERAGED : GUN_CIRCULAR;
         } else if (spinBotEnemy()) {
             // Pure circular is normally exact for sample.SpinBot, but near walls the
             // damped averaged predictor can occasionally score better.  Let virtual
