@@ -400,6 +400,15 @@ public class MyTank extends AdvancedRobot {
                 return;
             }
             reverseDirection();
+            if (dodgeBot2Enemy() && getEnergy() < 48.0) {
+                // Current logancsc__dodgebot2 matchup is decided by long exchanges:
+                // its bullets are only medium/weak, but when our reserve falls the normal
+                // orbit reversal can keep us on a repeating close lane.  On detected fire
+                // ticks, step cleanly across the shot line and reopen a moderate gap while
+                // the cheap head-on gun below preserves energy.
+                drivePerpendicularEscape(absBearing, getEnergy() < 24.0 ? 430.0 : 350.0);
+                return;
+            }
             if (gntestStopDuel() && getEnergy() < 50.0) {
                 // In the current GNTest loss traces the slow/parked phase becomes a
                 // long medium-bullet duel.  Cross its simple firing line when our
@@ -671,7 +680,13 @@ public class MyTank extends AdvancedRobot {
         // inward; too close we open out.  wallSmooth then bends the path away
         // from the battlefield edges before we commit to it.
         double preferredDistance;
-        if (mb2Enemy()) {
+        if (dodgeBot2Enemy()) {
+            // DodgeBot2 is a full-speed evasive mover with a modest p1-p1.6 gun.  Our
+            // round-0 losses happened mostly in close, long self-depletion chases.  Hold
+            // a little more room than the generic slow/wall/head-on branches (which can
+            // pull to 275-335px) so its simple gun has less close-range leverage.
+            preferredDistance = getEnergy() < 24.0 ? 455.0 : (getEnergy() < 48.0 ? 405.0 : 365.0);
+        } else if (mb2Enemy()) {
             // MB2's p1 gun is weak, and our old ~340px orbit already dodged it well.
             // Keep a compact band to shorten the damped predictor's flight time, only
             // widening modestly if an unexpected long exchange burns our reserve.
@@ -938,7 +953,7 @@ public class MyTank extends AdvancedRobot {
         // to long bullet flight, while its own gun almost never connects.  Once
         // virtual guns report a hard-to-hit mover, tighten the orbit a bit to
         // shorten flight time and improve hit/kill speed without going to ram range.
-        if (!smallPoetEnemy() && !haikuWallsEnemy() && !waveSurfingEnemy() && !dangerousWallEnemy() && !activeStopGoShooter() && !heavyStopGoShooter()
+        if (!dodgeBot2Enemy() && !smallPoetEnemy() && !haikuWallsEnemy() && !waveSurfingEnemy() && !dangerousWallEnemy() && !activeStopGoShooter() && !heavyStopGoShooter()
                 && virtualSamples > 28 && bestGunError() > 72.0 && stationaryScans <= 5 && slowEnemyScans <= 12) {
             preferredDistance = 355.0;
         }
@@ -1056,6 +1071,24 @@ public class MyTank extends AdvancedRobot {
         boolean finishingFixedHighPower = fixedHeadingHighPowerShooter() && e.getEnergy() < 17.0 && distance < 460.0 && getEnergy() > 6.0;
         boolean finishingFixedMedium = fixedHeadingMediumShooter() && e.getEnergy() < 17.0 && distance < 540.0 && getEnergy() > 6.0;
         boolean hardToHitMover = virtualSamples > 28 && bestGunError() > 72.0 && stationaryScans <= 5 && slowEnemyScans <= 12;
+        if (dodgeBot2Enemy()) {
+            // Name-gated for the current close matchup.  Offline replay of the traces says
+            // pure head-on is best and faster low/medium bullets reduce future-position
+            // error by ~15-20% versus p3.  The opponent usually fires weak/medium bullets;
+            // our losing mode is spending p2.5/p3 shots down to zero while it still has a
+            // large energy reserve.  Use efficient fast bullets and preserve a real reserve.
+            if (e.getEnergy() < 7.5 && getEnergy() > 5.0 && distance < 520.0) {
+                power = Math.min(Math.max(power, lethalPower(e.getEnergy())), 1.35);
+            } else if (getEnergy() > 62.0) {
+                power = Math.min(Math.max(power, distance < 330.0 ? 1.85 : 1.55), 1.90);
+            } else if (getEnergy() > 38.0) {
+                power = Math.min(Math.max(power, distance < 310.0 ? 1.25 : 1.05), 1.35);
+            } else if (getEnergy() > 18.0) {
+                power = Math.min(power, distance < 290.0 ? 0.55 : 0.38);
+            } else {
+                power = Math.min(power, getEnergy() < 8.0 ? 0.10 : 0.16);
+            }
+        }
         if (mb2Enemy()) {
             // Offline replay on round-0 traces: p1.5-p2.2 damped shots reduce future
             // position error by ~15-30px versus p3 while still doing enough damage to
@@ -1733,6 +1766,20 @@ public class MyTank extends AdvancedRobot {
                 power = Math.min(power, getEnergy() < 8.0 ? 0.12 : 0.22);
             }
         }
+        if (dodgeBot2Enemy()) {
+            // Re-apply after broad head-on/slow/wall branches that may have raised power.
+            if (e.getEnergy() < 7.5 && getEnergy() > 5.0 && distance < 520.0) {
+                power = Math.min(power, Math.min(Math.max(lethalPower(e.getEnergy()), 0.30), 1.35));
+            } else if (getEnergy() > 62.0) {
+                power = Math.min(power, distance < 330.0 ? 1.85 : 1.55);
+            } else if (getEnergy() > 38.0) {
+                power = Math.min(power, distance < 310.0 ? 1.25 : 1.05);
+            } else if (getEnergy() > 18.0) {
+                power = Math.min(power, distance < 290.0 ? 0.55 : 0.38);
+            } else {
+                power = Math.min(power, getEnergy() < 8.0 ? 0.10 : 0.16);
+            }
+        }
         if (hardToHitMover) {
             if (getEnergy() < 12) {
                 power = Math.min(power, 0.15);
@@ -1805,6 +1852,11 @@ public class MyTank extends AdvancedRobot {
 
         int gun = chooseGun();
         if (stationaryScans > 5) {
+            gun = GUN_HEAD_ON;
+        } else if (dodgeBot2Enemy()) {
+            // Trace replay strongly favors head-on for DodgeBot2; linear/circular/avg
+            // over-lead its dodge/reversal movement.  Force it instead of letting noisy
+            // virtual waves promote full-lead guns during long rounds.
             gun = GUN_HEAD_ON;
         } else if (mb2Enemy()) {
             gun = GUN_AVERAGED;
@@ -2120,6 +2172,15 @@ public class MyTank extends AdvancedRobot {
             tolerance = Math.min(tolerance, Math.atan2(weakFixedAxisOscillator() ? 34.0 : 18.0, distance));
         }
         boolean fireAllowed = true;
+        if (dodgeBot2Enemy()) {
+            tolerance = Math.min(tolerance, Math.atan2(13.0, distance));
+            if ((getEnergy() < 14.0 && e.getEnergy() > 18.0) || (getEnergy() < 8.0 && e.getEnergy() > 8.0)) {
+                // Last-reserve pinpricks cannot erase a healthy DodgeBot2 before another
+                // bullet arrives; bank energy for movement/survival unless it is already
+                // close enough for the capped lethal branch above.
+                fireAllowed = false;
+            }
+        }
         if (waveSurfingEnemy() && getEnergy() < 14.0 && e.getEnergy() > 5.0) {
             // Do not repeat the observed surfer losses where we kept firing tiny bullets
             // down to 0.2 energy, became disabled, and handed the opponent survival points
@@ -2236,6 +2297,14 @@ public class MyTank extends AdvancedRobot {
         return best;
     }
 
+
+    private boolean dodgeBot2Enemy() {
+        // Current round opponent: logancsc__dodgebot2.  It is a strong evasive mover with
+        // mostly weak/medium fire; aggregate score was close because our generic wall/slow
+        // boosts spent heavy slow bullets in long chases.  Name-gate the conservative
+        // head-on/fast-bullet profile so historical specialized opponents are unchanged.
+        return enemyName != null && enemyName.contains("logancsc__dodgebot2");
+    }
 
     private boolean roleksiiEnemy() {
         return enemyName != null && enemyName.contains("miradoconsulting__roleksii");
@@ -3305,6 +3374,14 @@ public class MyTank extends AdvancedRobot {
         if (smallPoetEnemy()) {
             reverseDirection();
             driveSampleWallsEscape(lastEnemyAbsBearing, getEnergy() < 34.0 ? 610.0 : 500.0);
+            return;
+        }
+        if (dodgeBot2Enemy()) {
+            // After an actual hit from DodgeBot2, change lanes more decisively than the
+            // generic short reversal.  This is intentionally milder than the p3 wall-poet
+            // escapes; DodgeBot2 fires weaker bullets but wins close repeated-hit strings.
+            reverseDirection();
+            drivePerpendicularEscape(lastEnemyAbsBearing, getEnergy() < 28.0 ? 455.0 : 365.0);
             return;
         }
         if (roleksiiEnemy()) {
