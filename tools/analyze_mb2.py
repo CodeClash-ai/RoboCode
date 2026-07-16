@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 import glob,json,math,statistics,sys,os
-files=glob.glob(sys.argv[1] if len(sys.argv)>1 else '/logs/rounds/0/sim_*.jsonl')
+arg = sys.argv[1] if len(sys.argv)>1 else '/logs/rounds/0/sim_*.jsonl'
+if os.path.isdir(arg):
+    arg = os.path.join(arg, 'sim_*.jsonl')
+files=glob.glob(arg)
 N=0; wins=loss=draw=0
 vals=[]; fireps=[]; dist=[]; wallticks=stops=straight=turns=0; ticks=0; speeds=[]; trates=[]; myhits=[]; enemyhits=[]; lens=[]; endEs=[]
 for f in files:

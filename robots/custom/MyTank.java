@@ -3064,9 +3064,11 @@ public class MyTank extends AdvancedRobot {
             return projectClamped(enemyX, enemyY, heading, drift, bulletSpeed, 70);
         }
         if (gunType == GUN_AVERAGED && mb2Enemy()) {
-            // MB2 mixes stops and shallow turns; the round-0 replay favored the older
-            // wallavg-style damped velocity with no circular turn carry.
-            velocity = limit(-2.2, 0.25 * velocity + 0.35 * enemyVelocityAvg, 2.2);
+            // MB2 mixes stops, shallow turns, and medium-speed legs.  Round-1 shot-time
+            // replay showed the original wallavg damping under-led its continued rolls;
+            // carrying more current/EMA velocity sharply reduced future-position error
+            // while still avoiding full linear/circular over-lead through stops.
+            velocity = limit(-3.5, 0.45 * velocity + 0.65 * enemyVelocityAvg, 3.5);
             turnRate = 0.0;
         } else if (gunType == GUN_AVERAGED && smallPoetEnemy()) {
             // Round-0 replay for SmallPoet preferred a little more current/EMA carry
