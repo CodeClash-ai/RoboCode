@@ -372,6 +372,13 @@ public class MyTank extends AdvancedRobot {
                 drivePerpendicularEscape(absBearing, getEnergy() < 24.0 ? 430.0 : 315.0);
                 return;
             }
+            if (berendBotjeEnemy()) {
+                // BerendBotje lands enough medium/high bullets that merely reversing the
+                // close orbit loses survival.  Cross the shot line and reopen a wider lane
+                // on every detected fire tick while the cheap averaged gun preserves energy.
+                drivePerpendicularEscape(absBearing, getEnergy() < 34.0 ? 520.0 : 420.0);
+                return;
+            }
             if (megaborstenEnemy()) {
                 // Megaborsten is a fast wall/perimeter runner with frequent p1-p1.5 fire
                 // and occasional p3 shots.  The generic response merely reverses orbit and
@@ -743,6 +750,12 @@ public class MyTank extends AdvancedRobot {
             driveAwayFrom(absBearing, 285.0);
             return;
         }
+        if (berendBotjeEnemy() && e.getDistance() < (getEnergy() < 38.0 ? 360.0 : 285.0)) {
+            // Loss traces average much closer than our desired lane; open direct distance
+            // before resuming the orbit so its p2/p3 bullets are not point-blank.
+            driveAwayFrom(absBearing, getEnergy() < 38.0 ? 455.0 : 360.0);
+            return;
+        }
         if (hunterEnemy() && e.getDistance() < (getEnergy() < 45.0 ? 370.0 : 300.0)) {
             // Current mcd8604__hunter is a compact circular p3 shooter.  We hit it
             // easily with circular p3, but the generic Crazy/close branches sometimes
@@ -817,6 +830,11 @@ public class MyTank extends AdvancedRobot {
             // p3.  A medium compact orbit preserves our kill speed while avoiding the
             // generic Crazy 260px knife-range pull-in that donated most of its score.
             preferredDistance = getEnergy() < 24.0 ? 455.0 : (getEnergy() < 48.0 ? 405.0 : 355.0);
+        } else if (berendBotjeEnemy()) {
+            // BerendBotje beat us by surviving close exchanges, not by avoiding all hits.
+            // Hold a wider lane than the generic 230-300px fast-mover orbit so its p2/p3
+            // shots have longer flight time, but do not go to extreme wall-poet ranges.
+            preferredDistance = getEnergy() < 24.0 ? 540.0 : (getEnergy() < 48.0 ? 485.0 : 430.0);
         } else if (poetEnemy()) {
             preferredDistance = getEnergy() < 28.0 ? 420.0 : (getEnergy() < 48.0 ? 350.0 : 285.0);
         } else if (wildeEnemy()) {
@@ -1186,6 +1204,10 @@ public class MyTank extends AdvancedRobot {
         }
         if (hunterEnemy()) {
             doHunterGun(e, absBearing, enemyX, enemyY, turnRate);
+            return;
+        }
+        if (berendBotjeEnemy()) {
+            doBerendBotjeGun(e, absBearing, enemyX, enemyY, turnRate);
             return;
         }
         double power;
@@ -2175,6 +2197,8 @@ public class MyTank extends AdvancedRobot {
             // Trace replay for alexjamesmacpherson__wilde favors normal/wall-damped averaged
             // prediction; full linear/circular over-lead its stops and border reversals.
             gun = GUN_AVERAGED;
+        } else if (berendBotjeEnemy()) {
+            gun = GUN_AVERAGED;
         } else if (dodgeBot2Enemy()) {
             // Trace replay strongly favors head-on for DodgeBot2; linear/circular/avg
             // over-lead its dodge/reversal movement.  Force it instead of letting noisy
@@ -2681,6 +2705,59 @@ public class MyTank extends AdvancedRobot {
     }
 
 
+    private void doBerendBotjeGun(ScannedRobotEvent e, double absBearing, double enemyX, double enemyY, double turnRate) {
+        double distance = e.getDistance();
+        double power;
+        // Round-0 vs johan_adriaans__berendbotje: our generic bot dealt more bullet
+        // damage but lost survival 189-61 because it traded close p2 shots until energy
+        // zero while BerendBotje kept a large reserve.  Offline replay favors the normal
+        // averaged predictor; lower/faster bullets should reduce self-depletion and hit
+        // sooner than the old p2-p3 stream.
+        if (e.getEnergy() < 18.0 && getEnergy() > 9.0 && distance < 620.0) {
+            power = Math.min(Math.max(lethalPower(e.getEnergy()), 0.35), e.getEnergy() < 9.0 ? 1.65 : 2.25);
+        } else if (getEnergy() > 68.0) {
+            power = distance < 360.0 ? 1.85 : 1.55;
+        } else if (getEnergy() > 44.0) {
+            power = distance < 340.0 ? 1.18 : 0.92;
+        } else if (getEnergy() > 24.0) {
+            power = distance < 320.0 ? 0.48 : 0.34;
+        } else if (getEnergy() > 12.0) {
+            power = distance < 300.0 ? 0.22 : 0.15;
+        } else {
+            power = getEnergy() < 8.0 ? 0.10 : 0.12;
+        }
+        boolean fireAllowed = true;
+        if ((getEnergy() < 18.0 && e.getEnergy() > 22.0) || (getEnergy() < 9.0 && e.getEnergy() > 8.0)) {
+            fireAllowed = false;
+        }
+        power = Math.min(power, Math.max(0.1, getEnergy() - 0.15));
+        double bulletSpeed = 20.0 - 3.0 * power;
+
+        double[][] candidates = new double[GUN_COUNT][2];
+        candidates[GUN_HEAD_ON] = predictEnemy(enemyX, enemyY, e.getHeadingRadians(), e.getVelocity(), 0.0, bulletSpeed, GUN_HEAD_ON);
+        candidates[GUN_LINEAR] = predictEnemy(enemyX, enemyY, e.getHeadingRadians(), e.getVelocity(), 0.0, bulletSpeed, GUN_LINEAR);
+        candidates[GUN_CIRCULAR] = predictEnemy(enemyX, enemyY, e.getHeadingRadians(), e.getVelocity(), turnRate, bulletSpeed, GUN_CIRCULAR);
+        candidates[GUN_AVERAGED] = predictEnemy(enemyX, enemyY, e.getHeadingRadians(), e.getVelocity(), turnRate, bulletSpeed, GUN_AVERAGED);
+        candidates[GUN_GUESS_FACTOR] = predictGuessFactor(absBearing, distance, bulletSpeed);
+        candidates[GUN_DRIFT_HEAD_ON] = predictEnemy(enemyX, enemyY, e.getHeadingRadians(), e.getVelocity(), 0.0, bulletSpeed, GUN_DRIFT_HEAD_ON);
+        addVirtualWave(candidates, bulletSpeed, absBearing);
+
+        int gun = GUN_AVERAGED;
+        // Averaged is best overall, but circular is close in some fast-turn buckets.  Allow
+        // virtual evidence to take circular only on a clear margin; never fall to full
+        // linear/head-on, which over-led badly in trace replay.
+        if (virtualSamples > 24 && virtualGunError[GUN_CIRCULAR] + 4.0 < virtualGunError[GUN_AVERAGED]) {
+            gun = GUN_CIRCULAR;
+        }
+        double aim = Math.atan2(candidates[gun][0] - getX(), candidates[gun][1] - getY());
+        setTurnGunRightRadians(Utils.normalRelativeAngle(aim - getGunHeadingRadians()));
+        double tolerance = Math.min(Math.atan2(15.0, distance), Math.atan2(24.0, distance) + 0.020);
+        if (getGunHeat() == 0 && Math.abs(getGunTurnRemainingRadians()) < tolerance && getEnergy() > 0.25 && fireAllowed) {
+            setFire(power);
+        }
+    }
+
+
     private void doPropiAvancatGun(ScannedRobotEvent e, double absBearing, double enemyX, double enemyY, double turnRate) {
         double distance = e.getDistance();
         double power;
@@ -2882,6 +2959,14 @@ public class MyTank extends AdvancedRobot {
         // firing mostly p3.  Generic handling already wins; this narrow profile keeps
         // circular/max-pressure aim but avoids overly close Crazy-style orbits.
         return enemyName != null && enemyName.contains("mcd8604__hunter");
+    }
+
+    private boolean berendBotjeEnemy() {
+        // Current opponent johan_adriaans__berendbotje: medium/fast turning mover with
+        // frequent p2-p3 fire.  Round-0 logs are a score loss despite our higher bullet
+        // damage because close p2 exchanges and p2-ish return shots leave it surviving
+        // most rounds.  Name-gate a wider averaged-gun / fast-bullet conservation profile.
+        return enemyName != null && enemyName.contains("johan_adriaans__berendbotje");
     }
 
     private boolean bt7274Enemy() {
@@ -4001,6 +4086,11 @@ public class MyTank extends AdvancedRobot {
     }
 
     public void onHitByBullet(HitByBulletEvent e) {
+        if (berendBotjeEnemy()) {
+            reverseDirection();
+            drivePerpendicularEscape(lastEnemyAbsBearing, getEnergy() < 34.0 ? 560.0 : 455.0);
+            return;
+        }
         if (poetEnemy()) {
             reverseDirection();
             drivePerpendicularEscape(lastEnemyAbsBearing, getEnergy() < 32.0 ? 455.0 : 330.0);
@@ -4142,6 +4232,8 @@ public class MyTank extends AdvancedRobot {
             // ticks trying to rotate to an ideal escape angle; immediately back/ahead
             // along the current body axis away from the collision normal.
             emergencyStraightAwayFrom(robotBearing, 360.0);
+        } else if (berendBotjeEnemy()) {
+            driveAwayFrom(robotBearing, 430.0);
         } else if (dodgeBot2Enemy()) {
             // Do not stay tangled with DodgeBot2: a few round-1 non-win traces ended with
             // both bots nearly overlapped while our reserve was too low for another long
