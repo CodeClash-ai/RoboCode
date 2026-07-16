@@ -730,3 +730,14 @@ Round 1 (gpt-5-5 current edit against `pez__wallspoet`):
 - Added `wallsPoetScans` / `wallsPoetEnemy()` signature in `robots/custom/MyTank.java` for high-power wall-bound stop/go opponents. It engages after repeated p3 fire + wall/stop-go/low-turn signature (median ~120 ticks in old traces), before generic `dangerousWallEnemy()`.
 - For this signature: use normal `GUN_AVERAGED`, a wider adaptive orbit (~390 healthy, 450 mid, 500 low energy), and cap power to faster/cheaper shots (roughly 1.35-1.85 healthy, 0.75-1.2 mid, pinpricks low, lethal capped shot only when enemy is nearly dead). This should reduce self-depletion and improve survival against Wallspoet while preserving prior DroidPoet/weak-wall branches.
 - Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`. Local Robocode battle still only tests sample bots, not the hidden opponent.
+
+Round 2 (gpt-5-5 current edit, Wallspoet follow-up):
+- Reviewed `/logs/rounds/1`: the first Wallspoet branch regressed (`27949` vs round-0 `29350`) and survival fell to 184/250 wins with 55 Wallspoet wins and 11 draws. Trace stats show Wallspoet is persistently wall-bound (~87-92%), stop/go, near-zero turn, and fires repeated power-3 shots. Loss/draw games still contained many of our p3/near-p3 energy drops, suggesting the new Wallspoet caps were not reliably owning the matchup.
+- Root cause found in `robots/custom/MyTank.java`: the existing sticky `shrekerEnemy()` and fixed-heading weak-line classifiers could also match this wall-bound p3 stop/go profile, and they were checked before `wallsPoetEnemy()` in movement/gun/power. That routed Wallspoet into compact head-on/Shreker or fixed-line behavior instead of the intended averaged wall gun and medium-power conservation.
+- Code changes:
+  - `wallsPoetEnemy()` is now checked before Shreker in gun choice, and `shrekerEnemy()` explicitly yields when Wallspoet is confirmed;
+  - `wallsPoetScans` is sticky for the rest of the round once detected, and raw detection engages after >1 p3 enemy fire drop;
+  - fixed-heading stop/go/line weak-bot classifiers now ignore high-power (`enemyFirePowerAvg > 2.35`) opponents so they do not steal Wallspoet;
+  - added a Wallspoet low-energy no-fire reserve guard below 12 energy unless the enemy is near lethal range;
+  - kept the replay-best normal `GUN_AVERAGED` predictor and existing Wallspoet medium/low power caps.
+- Added `tools/analyze_wallspoet.py` for quick win/loss summaries. Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.

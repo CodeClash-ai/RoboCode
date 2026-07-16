@@ -280,8 +280,11 @@ public class MyTank extends AdvancedRobot {
         }
         if (wallsPoetSignatureRaw(e)) {
             wallsPoetScans = Math.min(120, wallsPoetScans + 6);
-        } else {
-            wallsPoetScans = Math.max(0, wallsPoetScans - 1);
+        } else if (wallsPoetScans > 0) {
+            // Once the high-power wall/stop-go profile appears, keep the Wallspoet caps for
+            // the rest of the round.  Round-1 losses came from late parked/wall-transition
+            // phases falling back into generic Shreker/slow-wall max-power behavior.
+            wallsPoetScans = Math.max(1, wallsPoetScans - 1);
         }
 
         updateVirtualGuns(enemyX, enemyY);
@@ -1343,6 +1346,12 @@ public class MyTank extends AdvancedRobot {
             // advantage from round 1 remains intact.
             gun = (virtualSamples > 20 && virtualGunError[GUN_AVERAGED] + 6.0 < virtualGunError[GUN_CIRCULAR])
                     ? GUN_AVERAGED : GUN_CIRCULAR;
+        } else if (wallsPoetEnemy()) {
+            // Wallspoet is also a repeated power-3 stop/go opponent, but unlike Shreker it
+            // is persistently wall-bound.  Round-1 traces showed the older Shreker branch
+            // could steal this matchup and force head-on/p3-ish behavior; keep Wallspoet on
+            // the replay-best normal averaged wall gun.
+            gun = GUN_AVERAGED;
         } else if (shrekerEnemy()) {
             // Offline replay on alexbay218__shreker favors pure head-on, with the damped
             // wall/stop-go averaged gun second; full linear/circular badly over-lead its
@@ -1456,10 +1465,6 @@ public class MyTank extends AdvancedRobot {
             // circular, or averaged prediction; lower-power bullets handle the
             // target's small dodges without over-leading.
             gun = GUN_HEAD_ON;
-        } else if (wallsPoetEnemy()) {
-            // Wallspoet's stop/go wall movement is best handled by the normal averaged
-            // predictor; head-on under-leads and full linear/circular over-lead stops.
-            gun = GUN_AVERAGED;
         } else if (dangerousWallEnemy()) {
             // Against the active wall runner in the current logs, trace replay
             // favors the normal averaged stop/reversal predictor over head-on,
@@ -1603,6 +1608,12 @@ public class MyTank extends AdvancedRobot {
             // it is actually in lethal/near-lethal range.
             fireAllowed = false;
         }
+        if (wallsPoetEnemy() && getEnergy() < 12.0 && e.getEnergy() > 10.0) {
+            // Wallspoet's p3 stream wins when we spend the last few energy points on
+            // 0.1-0.2 bullets that cannot finish it.  Keep the reserve for movement unless
+            // the enemy is already in capped-lethal range.
+            fireAllowed = false;
+        }
         if (dominatorEnemy() && getEnergy() < 9.0 && e.getEnergy() > 12.0) {
             // DominatorX can only convert many of the remaining losses after we self-disable
             // with harmless 0.1-0.2 bullets while it still has tens of energy.  Preserve the
@@ -1673,7 +1684,11 @@ public class MyTank extends AdvancedRobot {
     }
 
     private boolean shrekerEnemy() {
-        return shrekerScans > 0 || shrekerSignatureRaw();
+        // Wallspoet has a superficially similar p3 stop/go profile, but is persistently
+        // wall-bound and replay favors the averaged wall gun/caps rather than Shreker's
+        // compact head-on branch.  If both sticky counters were seeded in the opening,
+        // let the more specific Wallspoet classifier win.
+        return !wallsPoetEnemy() && (shrekerScans > 0 || shrekerSignatureRaw());
     }
 
     private boolean shrekerSignatureRaw() {
@@ -1689,6 +1704,8 @@ public class MyTank extends AdvancedRobot {
                 && (stopGoEnemyScans > 5 || straightEnemyScans > 8 || wallEnemyScans > 5)
                 && enemyAbsTurnRateAvg < 0.045
                 && crazyEnemyScans <= 4
+                && !(wallEnemyScans > 8 && stopGoEnemyScans > 4
+                    && enemyFirePowerAvg > 2.55 && Math.abs(enemyTurnRateAvg) < 0.030)
                 && !stationaryShooter()
                 && !spinBotEnemy()
                 && !fixedHeadingHighPowerShooter()
@@ -2248,6 +2265,7 @@ public class MyTank extends AdvancedRobot {
         // broader activeStopGoShooter class, where max-power caused self-depletion.
         return stopGoEnemyScans > 8
                 && enemyFireCount > 1
+                && (enemyFirePowerSamples == 0 || enemyFirePowerAvg <= 2.35)
                 && crazyEnemyScans <= 4
                 && Math.abs(enemyVelocityAvg) < 3.8
                 && Math.abs(enemyTurnRateAvg) < 0.004
@@ -2263,6 +2281,7 @@ public class MyTank extends AdvancedRobot {
         // conservative activeStopGoShooter mode.
         return stopGoEnemyScans > 8
                 && enemyFireCount > 1
+                && (enemyFirePowerSamples == 0 || enemyFirePowerAvg <= 2.35)
                 && crazyEnemyScans <= 4
                 && Math.abs(enemyVelocityAvg) < 4.2
                 && Math.abs(enemyTurnRateAvg) < 0.004
@@ -2296,7 +2315,7 @@ public class MyTank extends AdvancedRobot {
         // broad enough to engage early, but require the high-power fire + wall/stop-go
         // combination so prior harmless wall farmers and Crazy/SpinBot are unaffected.
         return wallEnemyScans > 4
-                && enemyFireCount > 2
+                && enemyFireCount > 1
                 && enemyFirePowerSamples > 0
                 && enemyFirePowerAvg > 2.55
                 && stopGoEnemyScans > 4
@@ -2308,7 +2327,6 @@ public class MyTank extends AdvancedRobot {
                 && !fixedHeadingHighPowerShooter()
                 && !fixedHeadingStopGoEnemy()
                 && !fixedHeadingLineEnemy()
-                && !shrekerEnemy()
                 && !juggernautEnemy();
     }
 
