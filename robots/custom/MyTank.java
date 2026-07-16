@@ -2669,7 +2669,7 @@ public class MyTank extends AdvancedRobot {
         candidates[GUN_DRIFT_HEAD_ON] = predictEnemy(enemyX, enemyY, e.getHeadingRadians(), e.getVelocity(), 0.0, bulletSpeed, GUN_DRIFT_HEAD_ON);
         addVirtualWave(candidates, bulletSpeed, absBearing);
 
-        int gun = (virtualSamples > 18 && virtualGunError[GUN_AVERAGED] + 3.0 < virtualGunError[GUN_CIRCULAR])
+        int gun = (virtualSamples > 18 && virtualGunError[GUN_AVERAGED] + 0.75 < virtualGunError[GUN_CIRCULAR])
                 ? GUN_AVERAGED : GUN_CIRCULAR;
         double aim = Math.atan2(candidates[gun][0] - getX(), candidates[gun][1] - getY());
         setTurnGunRightRadians(Utils.normalRelativeAngle(aim - getGunHeadingRadians()));
