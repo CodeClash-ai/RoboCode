@@ -1324,9 +1324,14 @@ public class MyTank extends AdvancedRobot {
             if (e.getEnergy() < 6.0 && getEnergy() > 5.0 && distance < 520.0) {
                 power = Math.min(Math.max(power, lethalPower(e.getEnergy())), 1.20);
             } else if (getEnergy() > 72.0) {
-                power = Math.min(Math.max(power, distance < 390 ? 1.30 : 1.10), 1.35);
+                // Round-1 logs after the Pikachu conservation branch were a full 250/250
+                // sweep with very high remaining energy (~86 avg).  Spend a little more
+                // while the reserve is huge: p1.5-ish bullets are only slightly slower
+                // than the old p1.3 shots but do much more damage/bonus, and the lower
+                // energy tiers below still prevent the original self-depletion failure mode.
+                power = Math.min(Math.max(power, distance < 390 ? 1.55 : 1.40), 1.60);
             } else if (getEnergy() > 50.0) {
-                power = Math.min(Math.max(power, distance < 380 ? 0.95 : 0.75), 1.00);
+                power = Math.min(Math.max(power, distance < 380 ? 1.05 : 0.85), 1.10);
             } else if (getEnergy() > 30.0) {
                 power = Math.min(Math.max(power, distance < 350 ? 0.55 : 0.40), 0.62);
             } else if (getEnergy() > 14.0) {

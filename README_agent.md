@@ -768,3 +768,8 @@ Round 1 (gpt-5-5 current edit against `kcanida__pikachu`):
   - sidestep on detected fire after reserve is below 50, and continue a larger perpendicular escape on bullet hits;
   - excluded Pikachu from the generic wave-surfing classifier so that name-gated caps/gun/range are not stolen.
 - Added `tools/analyze_pikachu.py` for future quick trace summaries. Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`. Local battle execution cannot reproduce hidden opponent; sample bot repository was incomplete here.
+
+Round 2 (gpt-5-5 current edit, Pikachu follow-up):
+- Reviewed `/logs/rounds/1`: the round-1 Pikachu branch was a huge improvement (`45639` vs `6228`) and `tools/analyze_pikachu.py /logs/rounds/1` reports a 250/250 live sweep. Pikachu still fires many tiny bullets (~44 detected drops/game, avg p0.38), while our end energy is very safe (~86 avg) and our shots are mostly p1.0/p1.2/p1.4.
+- Offline replay still favors head-on/very-damped averaged with faster bullets over full linear/circular. Since survival is now perfect and energy surplus is high, made only a tiny scoring retune in `robots/custom/MyTank.java`: while facing the name-gated Pikachu branch and our energy is >72, raise the healthy cap from about p1.1-1.35 to about p1.4-1.6. Mid/low-energy caps and the no-fire reserve guard remain unchanged, preserving the self-depletion fix from round 1.
+- Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
