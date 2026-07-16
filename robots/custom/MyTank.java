@@ -763,7 +763,7 @@ public class MyTank extends AdvancedRobot {
             // low/medium-power linear bullets.  Hold a moderate-wide lane: wider than the
             // generic 300px fast-wall chase that leaked medium/p3 hits, but not so far that
             // cheap linear shots arrive too late.
-            preferredDistance = getEnergy() < 24.0 ? 520.0 : (getEnergy() < 48.0 ? 460.0 : 400.0);
+            preferredDistance = getEnergy() < 24.0 ? 500.0 : (getEnergy() < 48.0 ? 435.0 : 365.0);
         } else if (bt7274Enemy()) {
             // BT7274 spends most shots at power 3 while moving at/near max speed.
             // Hold a wider lane than the generic hard-to-hit/Crazy 260-355px bands
@@ -2628,9 +2628,9 @@ public class MyTank extends AdvancedRobot {
         if (e.getEnergy() < 18.0 && getEnergy() > 8.0 && distance < 650.0) {
             power = Math.min(Math.max(lethalPower(e.getEnergy()), 0.35), e.getEnergy() < 9.0 ? 1.70 : 2.35);
         } else if (getEnergy() > 66.0) {
-            power = distance < 430.0 ? 1.75 : 1.45;
+            power = distance < 430.0 ? 1.85 : 1.55;
         } else if (getEnergy() > 42.0) {
-            power = distance < 390.0 ? 1.20 : 0.95;
+            power = distance < 390.0 ? 1.28 : 1.02;
         } else if (getEnergy() > 24.0) {
             power = distance < 360.0 ? 0.65 : 0.45;
         } else if (getEnergy() > 12.0) {
