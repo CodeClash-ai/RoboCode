@@ -522,6 +522,17 @@ public class MyTank extends AdvancedRobot {
             return;
         }
 
+        if (dodgeBot2Enemy() && e.getDistance() < (getEnergy() < 38.0 ? 285.0 : 175.0)) {
+            // Round-1 follow-up losses against DodgeBot2 still had a common failure mode:
+            // the wide head-on/cheap-bullet profile would occasionally collapse into
+            // 60-120px scrambles, where even its weak/medium gun and collisions could drain
+            // us before the tiny reserve bullets finished.  Reopen direct separation from
+            // true knife range (and a little earlier once our reserve is low), then resume
+            // the normal 365/405/455 orbit.
+            driveAwayFrom(absBearing, getEnergy() < 38.0 ? 390.0 : 300.0);
+            return;
+        }
+
         if (stationaryHeavyShooter() && e.getDistance() < 430.0) {
             // TrackFire follow-up traces showed that a pure perpendicular command can
             // alternate around the same point (~285px) and let a stationary power-3 gun
@@ -1077,8 +1088,10 @@ public class MyTank extends AdvancedRobot {
             // error by ~15-20% versus p3.  The opponent usually fires weak/medium bullets;
             // our losing mode is spending p2.5/p3 shots down to zero while it still has a
             // large energy reserve.  Use efficient fast bullets and preserve a real reserve.
-            if (e.getEnergy() < 7.5 && getEnergy() > 5.0 && distance < 520.0) {
-                power = Math.min(Math.max(power, lethalPower(e.getEnergy())), 1.35);
+            // Follow-up losses often left DodgeBot2 in the 10-18 energy band at close range;
+            // allow a bounded stronger finisher there instead of only p0.5 pinpricks.
+            if (e.getEnergy() < 18.0 && getEnergy() > 8.0 && distance < 420.0) {
+                power = Math.min(Math.max(power, lethalPower(e.getEnergy())), e.getEnergy() < 8.0 ? 1.45 : 2.35);
             } else if (getEnergy() > 62.0) {
                 power = Math.min(Math.max(power, distance < 330.0 ? 1.85 : 1.55), 1.90);
             } else if (getEnergy() > 38.0) {
@@ -1768,8 +1781,8 @@ public class MyTank extends AdvancedRobot {
         }
         if (dodgeBot2Enemy()) {
             // Re-apply after broad head-on/slow/wall branches that may have raised power.
-            if (e.getEnergy() < 7.5 && getEnergy() > 5.0 && distance < 520.0) {
-                power = Math.min(power, Math.min(Math.max(lethalPower(e.getEnergy()), 0.30), 1.35));
+            if (e.getEnergy() < 18.0 && getEnergy() > 8.0 && distance < 420.0) {
+                power = Math.min(power, Math.min(Math.max(lethalPower(e.getEnergy()), 0.35), e.getEnergy() < 8.0 ? 1.45 : 2.35));
             } else if (getEnergy() > 62.0) {
                 power = Math.min(power, distance < 330.0 ? 1.85 : 1.55);
             } else if (getEnergy() > 38.0) {
@@ -3469,11 +3482,16 @@ public class MyTank extends AdvancedRobot {
             // ticks trying to rotate to an ideal escape angle; immediately back/ahead
             // along the current body axis away from the collision normal.
             emergencyStraightAwayFrom(robotBearing, 360.0);
+        } else if (dodgeBot2Enemy()) {
+            // Do not stay tangled with DodgeBot2: a few round-1 non-win traces ended with
+            // both bots nearly overlapped while our reserve was too low for another long
+            // exchange.  Bias collision recovery toward a full separation command.
+            driveAwayFrom(robotBearing, 380.0);
         } else {
             driveAwayFrom(robotBearing, 220.0);
         }
         if (getGunHeat() == 0 && getEnergy() > 3) {
-            setFire(3.0);
+            setFire(dodgeBot2Enemy() && getEnergy() < 18.0 ? 1.2 : 3.0);
         }
     }
 
