@@ -316,6 +316,17 @@ public class MyTank extends AdvancedRobot {
         // as bullets made close stationary-spawn fights reverse every tick and
         // could pin us in a Fire-style ram loop.  Ignore that ram signature.
         boolean likelyRamDrop = e.getDistance() < 90.0 && enemyDrop > 0.52 && enemyDrop < 0.68;
+        if (leachPmcEnemy() && e.getDistance() < 105.0) {
+            // Very close LeachPMC spawns are the only remaining blemish in the logs.
+            // The normal absolute-angle escape can be too slow while the tanks overlap:
+            // Robocode stops our movement on every HIT_ROBOT event and scan-time wall
+            // smoothing may choose a lateral/corner-safe path that keeps us touching.
+            // Before doing any orbit/dodge logic, just drive straight along our current
+            // axis in the direction that immediately increases center distance.  Once a
+            // small gap is open, the normal wide stationary-heavy orbit takes over.
+            emergencyStraightAwayFrom(absBearing, 360.0);
+            return;
+        }
         if (enemyDrop > 0.09 && enemyDrop <= 3.01 && !likelyRamDrop) {      // likely enemy bullet
             enemyFireCount++;
             enemyFirePowerAvg = enemyFirePowerSamples == 0
@@ -336,7 +347,7 @@ public class MyTank extends AdvancedRobot {
                 // Do not use the old close stationary-farm stop/short dodge; open a wider
                 // diagonal lane from the first detected shot so its simple p3 gun stops
                 // landing while our exact head-on p3 shots finish it.
-                driveStationaryHeavyEscape(absBearing, getEnergy() < 35.0 ? 520.0 : 470.0);
+                driveStationaryHeavyEscape(absBearing, getEnergy() < 35.0 ? 505.0 : 445.0);
                 return;
             }
             if (stationaryScans > 5 && enemyDrop > 2.20) {
@@ -473,13 +484,18 @@ public class MyTank extends AdvancedRobot {
         if (stationaryScans > 5 && e.getDistance() < 260.0) {
             // If we spawned close to a stationary shooter near a corner, the true
             // "away" vector can point straight into the wall and leave us oscillating
-            // in its gun line.  Sidestep when the direct escape projection is unsafe;
-            // otherwise open a slightly larger gap before resuming the farming orbit.
-            double away = absBearing + Math.PI;
-            if (!insideBattlefield(projectX(getX(), away, 170.0), projectY(getY(), away, 170.0), 24.0)) {
-                drivePerpendicularEscape(absBearing, 300.0);
+            // in its gun line.  For LeachPMC specifically, round-1's only draw came
+            // from the perpendicular fallback keeping us pinned at ~37px, so prefer
+            // separation-biased driveAwayFrom all the way until the gap is open.
+            if (leachPmcEnemy()) {
+                driveAwayFrom(absBearing, 340.0);
             } else {
-                driveAwayFrom(absBearing, 300.0);
+                double away = absBearing + Math.PI;
+                if (!insideBattlefield(projectX(getX(), away, 170.0), projectY(getY(), away, 170.0), 24.0)) {
+                    drivePerpendicularEscape(absBearing, 300.0);
+                } else {
+                    driveAwayFrom(absBearing, 300.0);
+                }
             }
             return;
         }
@@ -681,7 +697,7 @@ public class MyTank extends AdvancedRobot {
             // LeachPMC is stationary like TrackFire but starts as a p3 shooter before our
             // enemy-fire counter has settled.  Hold an even wider band to keep lateral
             // speed high against its head-on p3 stream; exact p3 shots still land.
-            preferredDistance = getEnergy() < 35.0 ? 535.0 : 490.0;
+            preferredDistance = getEnergy() < 35.0 ? 505.0 : 455.0;
         } else if (stationaryHeavyShooter()) {
             // TrackFire is stationary like NagiSphere, but its repeated power-3 head-on
             // bullets punished the old close 330px farming band when orbit reversals
@@ -2981,7 +2997,14 @@ public class MyTank extends AdvancedRobot {
         // overwritten by the stationary-target stop branch and leave us pinned
         // against close-spawn stationary shooters, causing needless ram loops
         // and the occasional draw.
-        driveAwayFrom(robotBearing, 220.0);
+        if (leachPmcEnemy()) {
+            // When overlapped with the stationary power-3 shooter, do not spend several
+            // ticks trying to rotate to an ideal escape angle; immediately back/ahead
+            // along the current body axis away from the collision normal.
+            emergencyStraightAwayFrom(robotBearing, 360.0);
+        } else {
+            driveAwayFrom(robotBearing, 220.0);
+        }
         if (getGunHeat() == 0 && getEnergy() > 3) {
             setFire(3.0);
         }
@@ -3022,6 +3045,17 @@ public class MyTank extends AdvancedRobot {
         lastDirectionChangeTime = getTime();
     }
 
+
+    private void emergencyStraightAwayFrom(double threatBearing, double distance) {
+        // Absolute threat bearing from us to the other robot.  Pick forward/backward
+        // based on the current body axis so the first movement tick increases range;
+        // do not request a large turn first, because while overlapping Robocode can
+        // cancel movement repeatedly before the turn completes.
+        double rel = Utils.normalRelativeAngle(threatBearing - getHeadingRadians());
+        setMaxVelocity(8.0);
+        setTurnRightRadians(0.0);
+        setAhead(Math.cos(rel) > 0.0 ? -distance : distance);
+    }
 
     private void driveStationaryHeavyEscape(double threatBearing, double distance) {
         double away = threatBearing + Math.PI;

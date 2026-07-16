@@ -829,3 +829,9 @@ Round 1 (gpt-5-5 current edit against `pez__leachpmc`):
   - on detected p3 fire, immediately uses the diagonal `driveStationaryHeavyEscape()` with a wider target distance;
   - prefers a wider ~490/535px stationary orbit even before the generic stationary-heavy detector is fully settled.
 - Gun/power remain exact head-on max-power for stationary targets, so kill speed should stay high while reducing p3 hit leakage. Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
+
+Round 2 (gpt-5-5 current edit, LeachPMC follow-up):
+- Reviewed `/logs/rounds/1`: still a 249/250 win plus one tie against stationary p3 shooter `pez__leachpmc`; average score regressed slightly from round 0. The only draw (`sim_62`) was a close spawn: our bot drove into/overlapped the stationary enemy at ~37px and stayed in `HIT_ROBOT`, taking repeated 0.6 ram drops plus point-blank bullets until both died.
+- Added a narrow LeachPMC close-overlap escape in `robots/custom/MyTank.java`: below ~105px it immediately drives straight forward/back along the current body axis in the direction that increases separation, rather than trying to rotate to a perfect absolute escape angle while collision events cancel movement. `onHitRobot` uses the same emergency escape for LeachPMC.
+- For LeachPMC close stationary targets, prefer separation-biased `driveAwayFrom()` instead of the perpendicular fallback that pinned the round-1 draw. Slightly relaxed LeachPMC wide orbit from 490/535 to 455/505 to recover some normal-range kill speed while keeping wider-than-generic p3 dodging.
+- Recompiled successfully with `javac -cp libs/robocode.jar robots/custom/MyTank.java`.
