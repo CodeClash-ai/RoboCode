@@ -364,6 +364,14 @@ public class MyTank extends AdvancedRobot {
                 drivePerpendicularEscape(absBearing, getEnergy() < 24.0 ? 430.0 : 315.0);
                 return;
             }
+            if (megaborstenEnemy()) {
+                // Megaborsten is a fast wall/perimeter runner with frequent p1-p1.5 fire
+                // and occasional p3 shots.  The generic response merely reverses orbit and
+                // can settle into long same-lane exchanges; cross the firing line and keep
+                // a little more room, especially once our reserve starts falling.
+                driveSampleWallsEscape(absBearing, getEnergy() < 34.0 ? 565.0 : 450.0);
+                return;
+            }
             if (sampleWallsEnemy()) {
                 // sample.Walls fires accurate head-on/near-head-on bullets while racing
                 // around the border.  Reversing exactly on its fire tick made us cross back
@@ -568,6 +576,13 @@ public class MyTank extends AdvancedRobot {
             return;
         }
 
+        if (megaborstenEnemy() && e.getDistance() < (getEnergy() < 38.0 ? 360.0 : 260.0)) {
+            // Avoid the few losing traces where the wall chase compressed into a shorter
+            // medium-power trade.  Reopen a direct gap before resuming the linear-gun lane.
+            driveAwayFrom(absBearing, getEnergy() < 38.0 ? 455.0 : 350.0);
+            return;
+        }
+
         if (stationaryHeavyShooter() && e.getDistance() < 430.0) {
             // TrackFire follow-up traces showed that a pure perpendicular command can
             // alternate around the same point (~285px) and let a stationary power-3 gun
@@ -743,7 +758,13 @@ public class MyTank extends AdvancedRobot {
         // inward; too close we open out.  wallSmooth then bends the path away
         // from the battlefield edges before we commit to it.
         double preferredDistance;
-        if (bt7274Enemy()) {
+        if (megaborstenEnemy()) {
+            // denssle__megaborsten is a fast wall runner that our traces hit best with
+            // low/medium-power linear bullets.  Hold a moderate-wide lane: wider than the
+            // generic 300px fast-wall chase that leaked medium/p3 hits, but not so far that
+            // cheap linear shots arrive too late.
+            preferredDistance = getEnergy() < 24.0 ? 520.0 : (getEnergy() < 48.0 ? 460.0 : 400.0);
+        } else if (bt7274Enemy()) {
             // BT7274 spends most shots at power 3 while moving at/near max speed.
             // Hold a wider lane than the generic hard-to-hit/Crazy 260-355px bands
             // to reduce close p3 leakage, but not so wide that averaged bullets take
@@ -1040,7 +1061,7 @@ public class MyTank extends AdvancedRobot {
         // to long bullet flight, while its own gun almost never connects.  Once
         // virtual guns report a hard-to-hit mover, tighten the orbit a bit to
         // shorten flight time and improve hit/kill speed without going to ram range.
-        if (!bt7274Enemy() && !poetEnemy() && !wildeEnemy() && !dodgeBot2Enemy() && !wallspoetHaikuEnemy() && !haikuPoetEnemy() && !smallPoetEnemy() && !haikuWallsEnemy() && !waveSurfingEnemy() && !dangerousWallEnemy() && !activeStopGoShooter() && !heavyStopGoShooter()
+        if (!megaborstenEnemy() && !bt7274Enemy() && !poetEnemy() && !wildeEnemy() && !dodgeBot2Enemy() && !wallspoetHaikuEnemy() && !haikuPoetEnemy() && !smallPoetEnemy() && !haikuWallsEnemy() && !waveSurfingEnemy() && !dangerousWallEnemy() && !activeStopGoShooter() && !heavyStopGoShooter()
                 && virtualSamples > 28 && bestGunError() > 72.0 && stationaryScans <= 5 && slowEnemyScans <= 12) {
             preferredDistance = 355.0;
         }
@@ -1101,6 +1122,10 @@ public class MyTank extends AdvancedRobot {
         }
         if (haikuPoetEnemy()) {
             doHaikuPoetGun(e, absBearing, enemyX, enemyY, turnRate);
+            return;
+        }
+        if (megaborstenEnemy()) {
+            doMegaborstenGun(e, absBearing, enemyX, enemyY, turnRate);
             return;
         }
         double power;
@@ -2592,6 +2617,43 @@ public class MyTank extends AdvancedRobot {
     }
 
 
+    private void doMegaborstenGun(ScannedRobotEvent e, double absBearing, double enemyX, double enemyY, double turnRate) {
+        double distance = e.getDistance();
+        double power;
+        // Round-0 logs for denssle__megaborsten: fast wall/perimeter motion (linear replay
+        // clearly best) plus frequent weak/medium bullets and occasional p3.  The generic
+        // fast-wall tree won, but the remaining losses were self-depletion after p2/p3 misses
+        // while Megaborsten kept a large energy stack.  Keep all gun decisions here so broad
+        // wall/slow branches cannot re-raise power.
+        if (e.getEnergy() < 18.0 && getEnergy() > 8.0 && distance < 650.0) {
+            power = Math.min(Math.max(lethalPower(e.getEnergy()), 0.35), e.getEnergy() < 9.0 ? 1.70 : 2.35);
+        } else if (getEnergy() > 66.0) {
+            power = distance < 430.0 ? 1.75 : 1.45;
+        } else if (getEnergy() > 42.0) {
+            power = distance < 390.0 ? 1.20 : 0.95;
+        } else if (getEnergy() > 24.0) {
+            power = distance < 360.0 ? 0.65 : 0.45;
+        } else if (getEnergy() > 12.0) {
+            power = distance < 330.0 ? 0.24 : 0.16;
+        } else {
+            power = getEnergy() < 8.0 ? 0.10 : 0.13;
+        }
+        boolean fireAllowed = true;
+        if ((getEnergy() < 18.0 && e.getEnergy() > 22.0) || (getEnergy() < 9.0 && e.getEnergy() > 8.0)) {
+            fireAllowed = false;
+        }
+        power = Math.min(power, Math.max(0.1, getEnergy() - 0.15));
+        double bulletSpeed = 20.0 - 3.0 * power;
+        double[] predicted = predictEnemy(enemyX, enemyY, e.getHeadingRadians(), e.getVelocity(), 0.0, bulletSpeed, GUN_LINEAR);
+        double gunTurn = Utils.normalRelativeAngle(Math.atan2(predicted[0] - getX(), predicted[1] - getY()) - getGunHeadingRadians());
+        setTurnGunRightRadians(gunTurn);
+        double tolerance = Math.min(Math.atan2(13.0, distance), Math.atan2(21.0, distance) + 0.020);
+        if (getGunHeat() == 0 && Math.abs(getGunTurnRemainingRadians()) < tolerance && getEnergy() > 0.25 && fireAllowed) {
+            setFire(power);
+        }
+    }
+
+
     private int chooseGun() {
         int best = GUN_HEAD_ON;
         if (slowEnemyScans > 12) {
@@ -2615,6 +2677,13 @@ public class MyTank extends AdvancedRobot {
         return best;
     }
 
+
+    private boolean megaborstenEnemy() {
+        // Current opponent denssle__megaborsten: high-speed wall/perimeter runner with
+        // mostly p1-p1.5 fire and occasional p3.  Name-gate a linear/fast-bullet profile
+        // to reduce the generic fast-wall p2/p3 self-depletion losses.
+        return enemyName != null && enemyName.contains("denssle__megaborsten");
+    }
 
     private boolean bt7274Enemy() {
         // The first name-gated BT7274 profile (wide orbit + damped averaged +
@@ -3742,6 +3811,11 @@ public class MyTank extends AdvancedRobot {
         if (shrekerEnemy()) {
             reverseDirection();
             drivePerpendicularEscape(lastEnemyAbsBearing, getEnergy() < 42.0 ? 430.0 : 310.0);
+            return;
+        }
+        if (megaborstenEnemy()) {
+            reverseDirection();
+            driveSampleWallsEscape(lastEnemyAbsBearing, getEnergy() < 34.0 ? 590.0 : 470.0);
             return;
         }
         if (wallspoetHaikuEnemy()) {
